@@ -1,6 +1,6 @@
 # Hello World — React + .NET 8 + PostgreSQL
 
-Responsive full-stack starter. Runs locally with Docker Compose; deploys to Railway via GitHub Actions.
+Responsive full-stack starter. Runs locally with Docker Compose; deploys to Fly.io via GitHub Actions.
 
 ## Stack
 
@@ -9,8 +9,8 @@ Responsive full-stack starter. Runs locally with Docker Compose; deploys to Rail
 | Frontend   | React 18 + Vite             |
 | Backend    | .NET 8 Minimal API          |
 | Database   | PostgreSQL 16               |
-| Deploy     | Railway (free tier)         |
-| CI/CD      | GitHub Actions → GHCR       |
+| Deploy     | Fly.io + managed Postgres   |
+| CI/CD      | GitHub Actions              |
 
 ---
 
@@ -52,29 +52,28 @@ npm run dev
 
 ---
 
-## Deploy to Railway
+## Deploy to Fly.io
 
-### 1 — Create a Railway project
+### 1 — Create Fly apps
 
-1. Sign up at https://railway.app (free tier available)
-2. Create a new project → **Empty project**
-3. Add services:
-   - **PostgreSQL** (from Railway plugin) — copy the `DATABASE_URL`
-   - **Backend** — connect your GitHub repo, set root directory `backend/HelloWorld.Api`
-   - **Frontend** — connect your GitHub repo, set root directory `frontend`
+1. Sign up at https://fly.io
+2. Install `flyctl` and authenticate:
+  ```bash
+  fly auth login
+  ```
+3. Create two Fly apps (names must be globally unique):
+  - one for backend API
+  - one for frontend web
 
-### 2 — Set environment variables in Railway
+### 2 — Set backend secrets on Fly
 
-**Backend service**
+Set these on your backend app:
+
 ```
-DATABASE_URL=<from Railway Postgres plugin>
-AllowedOrigins__0=https://<your-frontend-domain>.railway.app
+fly secrets set DATABASE_URL=<postgres-connection-string> AllowedOrigins__0=https://<your-frontend-app>.fly.dev -a <your-backend-app>
 ```
 
-**Frontend service**
-```
-VITE_API_URL=https://<your-backend-domain>.railway.app
-```
+Use Fly Postgres or any managed Postgres provider and place its connection string in `DATABASE_URL`.
 
 ### 3 — Add GitHub secrets
 
@@ -82,16 +81,15 @@ In your repo → Settings → Secrets and variables → Actions:
 
 | Secret            | Value                          |
 |-------------------|--------------------------------|
-| `RAILWAY_TOKEN`   | From Railway → Account → Tokens |
+| `FLY_API_TOKEN`   | From Fly.io account token       |
 
-If deploy fails with `Invalid RAILWAY_TOKEN`, regenerate a token in Railway,
-replace the GitHub secret value, and re-run the failed workflow.
+Add as **Variables** (not secrets):
 
-Add as a **Variable** (not secret):
-
-| Variable        | Value                                           |
-|-----------------|-------------------------------------------------|
-| `VITE_API_URL`  | `https://<your-backend-domain>.railway.app`     |
+| Variable            | Value                                         |
+|---------------------|-----------------------------------------------|
+| `FLY_BACKEND_APP`   | your backend Fly app name                     |
+| `FLY_FRONTEND_APP`  | your frontend Fly app name                    |
+| `VITE_API_URL`      | `https://<your-backend-app>.fly.dev`          |
 
 ### 4 — Push to main
 
@@ -104,8 +102,8 @@ git push origin main
 GitHub Actions will:
 1. Build & test the .NET project
 2. Build the Vite frontend
-3. Push Docker images to GHCR
-4. Deploy both services to Railway
+3. Deploy backend to Fly.io
+4. Deploy frontend to Fly.io
 
 ---
 
@@ -125,17 +123,18 @@ GitHub Actions will:
 .
 ├── .github/
 │   └── workflows/
-│       └── ci-deploy.yml     # CI + Railway deploy
+│       └── ci-deploy.yml     # CI + Fly.io deploy
 ├── backend/
 │   └── HelloWorld.Api/
 │       ├── Program.cs          # Minimal API + EF Core
 │       ├── Dockerfile
-│       └── railway.toml
+│       └── fly.toml
 ├── frontend/
 │   ├── src/
 │   │   ├── main.jsx
 │   │   └── App.jsx             # Responsive UI
 │   ├── Dockerfile
+│   ├── fly.toml
 │   ├── nginx.conf
 │   └── vite.config.js
 └── docker-compose.yml          # Local dev
