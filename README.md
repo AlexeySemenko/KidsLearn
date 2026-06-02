@@ -1,6 +1,6 @@
 # Hello World — React + .NET 8 + PostgreSQL
 
-Responsive full-stack starter. Runs locally with Docker Compose; deploys to Fly.io via GitHub Actions.
+Responsive full-stack starter. Runs locally with Docker Compose; deploys to a single Fly.io app via GitHub Actions.
 
 ## Stack
 
@@ -9,7 +9,7 @@ Responsive full-stack starter. Runs locally with Docker Compose; deploys to Fly.
 | Frontend   | React 18 + Vite             |
 | Backend    | .NET 8 Minimal API          |
 | Database   | PostgreSQL 16               |
-| Deploy     | Fly.io + managed Postgres   |
+| Deploy     | Fly.io (single app)         |
 | CI/CD      | GitHub Actions              |
 
 ---
@@ -54,23 +54,21 @@ npm run dev
 
 ## Deploy to Fly.io
 
-### 1 — Create Fly apps
+### 1 — Create one Fly app
 
 1. Sign up at https://fly.io
 2. Install `flyctl` and authenticate:
   ```bash
   fly auth login
   ```
-3. Create two Fly apps (names must be globally unique):
-  - one for backend API
-  - one for frontend web
+3. Create one Fly app (name must be globally unique).
 
 ### 2 — Set backend secrets on Fly
 
-Set these on your backend app:
+Set these on your Fly app:
 
 ```
-fly secrets set DATABASE_URL=<postgres-connection-string> AllowedOrigins__0=https://<your-frontend-app>.fly.dev -a <your-backend-app>
+fly secrets set DATABASE_URL=<postgres-connection-string> AllowedOrigins__0=https://<your-app>.fly.dev -a <your-app>
 ```
 
 Use Fly Postgres or any managed Postgres provider and place its connection string in `DATABASE_URL`.
@@ -87,9 +85,7 @@ Add as **Variables** (not secrets):
 
 | Variable            | Value                                         |
 |---------------------|-----------------------------------------------|
-| `FLY_BACKEND_APP`   | your backend Fly app name                     |
-| `FLY_FRONTEND_APP`  | your frontend Fly app name                    |
-| `VITE_API_URL`      | `https://<your-backend-app>.fly.dev`          |
+| `FLY_BACKEND_APP`   | your Fly app name                             |
 
 ### 4 — Push to main
 
@@ -102,8 +98,8 @@ git push origin main
 GitHub Actions will:
 1. Build & test the .NET project
 2. Build the Vite frontend
-3. Deploy backend to Fly.io
-4. Deploy frontend to Fly.io
+3. Build a single image that includes frontend + backend
+4. Deploy one Fly.io app
 
 ---
 
@@ -127,14 +123,13 @@ GitHub Actions will:
 ├── backend/
 │   └── HelloWorld.Api/
 │       ├── Program.cs          # Minimal API + EF Core
-│       ├── Dockerfile
+│       ├── Dockerfile          # Builds frontend + backend in one image
 │       └── fly.toml
 ├── frontend/
 │   ├── src/
 │   │   ├── main.jsx
 │   │   └── App.jsx             # Responsive UI
 │   ├── Dockerfile
-│   ├── fly.toml
 │   ├── nginx.conf
 │   └── vite.config.js
 └── docker-compose.yml          # Local dev

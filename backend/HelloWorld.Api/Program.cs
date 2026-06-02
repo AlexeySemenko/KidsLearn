@@ -33,6 +33,8 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseCors("AllowFrontend");
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 // Health check
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
@@ -57,6 +59,8 @@ app.MapPost("/api/hello", async (AppDbContext db, GreetingRequest req) =>
     await db.SaveChangesAsync();
     return Results.Created($"/api/hello", greeting);
 });
+
+app.MapFallbackToFile("index.html");
 
 app.Run();
 

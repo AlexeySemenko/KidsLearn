@@ -59,8 +59,6 @@ jobs:
 
       - name: Build
         run: npm run build
-        env:
-          VITE_API_URL: ${{ vars.VITE_API_URL || '' }}
 
   # ─────────────────────────────────────────────────────────────
   # 3. Deploy to Fly.io (only on main)
@@ -86,15 +84,14 @@ jobs:
             echo "Set it in GitHub: Settings -> Secrets and variables -> Actions -> New repository secret."
             exit 1
           fi
-          if [ -z "${FLY_BACKEND_APP}" ] || [ -z "${FLY_FRONTEND_APP}" ]; then
-            echo "FLY_BACKEND_APP and FLY_FRONTEND_APP repository variables are required."
+          if [ -z "${FLY_BACKEND_APP}" ]; then
+            echo "FLY_BACKEND_APP repository variable is required."
             echo "Set them in GitHub: Settings -> Secrets and variables -> Actions -> Variables."
             exit 1
           fi
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_BACKEND_APP: ${{ vars.FLY_BACKEND_APP || '' }}
-          FLY_FRONTEND_APP: ${{ vars.FLY_FRONTEND_APP || '' }}
 
       - name: Verify Fly.io authentication
         run: flyctl auth whoami
@@ -102,14 +99,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Deploy backend
-        run: flyctl deploy --remote-only --config backend/HelloWorld.Api/fly.toml --dockerfile backend/HelloWorld.Api/Dockerfile --app "${FLY_BACKEND_APP}"
+        run: flyctl deploy --remote-only --config backend/HelloWorld.Api/fly.toml --app "${FLY_BACKEND_APP}"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_BACKEND_APP: ${{ vars.FLY_BACKEND_APP }}
-
-      - name: Deploy frontend
-        run: flyctl deploy --remote-only --config frontend/fly.toml --dockerfile frontend/Dockerfile --app "${FLY_FRONTEND_APP}" --build-arg VITE_API_URL="${VITE_API_URL}"
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FLY_FRONTEND_APP: ${{ vars.FLY_FRONTEND_APP }}
-          VITE_API_URL: ${{ vars.VITE_API_URL || '' }}

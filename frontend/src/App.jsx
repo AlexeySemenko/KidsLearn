@@ -93,7 +93,7 @@ export default function App() {
               </div>
               <div className="card">
                 <div className="card-label">Deploy</div>
-                <div className="card-value">Railway</div>
+                <div className="card-value">Fly.io</div>
               </div>
             </div>
           </section>
@@ -122,7 +122,7 @@ export default function App() {
         </main>
 
         <footer className="footer">
-          <span>Built with React · .NET 8 · PostgreSQL · Railway</span>
+          <span>Built with React · .NET 8 · PostgreSQL · Fly.io</span>
           <button className="refresh-btn" onClick={fetchGreeting}>↻ Refresh</button>
         </footer>
       </div>

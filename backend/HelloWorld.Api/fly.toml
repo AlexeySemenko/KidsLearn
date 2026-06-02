@@ -2,7 +2,7 @@ app = "replace-with-your-backend-fly-app"
 primary_region = "iad"
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = "backend/HelloWorld.Api/Dockerfile"
 
 [http_service]
   internal_port = 8080
