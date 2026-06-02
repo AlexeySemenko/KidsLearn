@@ -10,6 +10,7 @@ env:
   REGISTRY: ghcr.io
   BACKEND_IMAGE: ghcr.io/alexeysemenko/kidslearn/backend
   FRONTEND_IMAGE: ghcr.io/alexeysemenko/kidslearn/frontend
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   # ─────────────────────────────────────────────────────────────
@@ -51,10 +52,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Install
         run: npm install
@@ -116,6 +117,21 @@ jobs:
 
       - name: Install Railway CLI
         run: npm install -g @railway/cli
+
+      - name: Validate Railway token is configured
+        run: |
+          if [ -z "${RAILWAY_TOKEN}" ]; then
+            echo "RAILWAY_TOKEN is empty or missing."
+            echo "Set it in GitHub: Settings -> Secrets and variables -> Actions -> New repository secret."
+            exit 1
+          fi
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      - name: Verify Railway authentication
+        run: railway whoami
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
       - name: Deploy backend
         run: railway up --service backend --detach

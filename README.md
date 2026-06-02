@@ -84,6 +84,9 @@ In your repo → Settings → Secrets and variables → Actions:
 |-------------------|--------------------------------|
 | `RAILWAY_TOKEN`   | From Railway → Account → Tokens |
 
+If deploy fails with `Invalid RAILWAY_TOKEN`, regenerate a token in Railway,
+replace the GitHub secret value, and re-run the failed workflow.
+
 Add as a **Variable** (not secret):
 
 | Variable        | Value                                           |
