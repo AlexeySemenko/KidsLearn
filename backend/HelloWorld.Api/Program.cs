@@ -16,9 +16,21 @@ builder.Services.AddCors(options =>
 });
 
 // PostgreSQL via EF Core
-var connectionString = builder.Configuration.GetConnectionString("Postgres")
-    ?? Environment.GetEnvironmentVariable("DATABASE_URL")
-    ?? "Host=localhost;Database=helloworld;Username=postgres;Password=postgres";
+var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
+    ?? builder.Configuration.GetConnectionString("Postgres");
+
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    if (builder.Environment.IsDevelopment())
+    {
+        connectionString = "Host=localhost;Database=helloworld;Username=postgres;Password=postgres";
+    }
+    else
+    {
+        throw new InvalidOperationException(
+            "Missing database connection string. Set ConnectionStrings__Postgres or DATABASE_URL.");
+    }
+}
 
 builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseNpgsql(connectionString));
