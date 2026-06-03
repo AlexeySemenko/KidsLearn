@@ -8,6 +8,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  FLY_APP_NAME: "kidslearn"
 
 jobs:
   # ─────────────────────────────────────────────────────────────
@@ -85,16 +86,13 @@ jobs:
             exit 1
           fi
 
-          if [ -z "${FLY_BACKEND_APP}" ]; then
-            APP_FROM_TOML=$(grep -E '^app\s*=' backend/HelloWorld.Api/fly.toml | head -n1 | sed -E 's/app\s*=\s*"([^"]+)"/\1/')
-            if [ -z "${APP_FROM_TOML}" ] || [ "${APP_FROM_TOML}" = "replace-with-your-backend-fly-app" ]; then
-              echo "Set FLY_BACKEND_APP in GitHub Variables, or set a real app name in backend/HelloWorld.Api/fly.toml."
-              exit 1
-            fi
+          if [ -z "${FLY_APP_NAME}" ]; then
+            echo "FLY_APP_NAME is empty or missing in workflow env."
+            exit 1
           fi
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FLY_BACKEND_APP: ${{ vars.FLY_BACKEND_APP || '' }}
+          FLY_APP_NAME: ${{ env.FLY_APP_NAME }}
 
       - name: Verify Fly.io authentication
         run: flyctl auth whoami
@@ -102,12 +100,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Deploy backend
-        run: |
-          APP_NAME="${FLY_BACKEND_APP}"
-          if [ -z "${APP_NAME}" ]; then
-            APP_NAME=$(grep -E '^app\s*=' backend/HelloWorld.Api/fly.toml | head -n1 | sed -E 's/app\s*=\s*"([^"]+)"/\1/')
-          fi
-          flyctl deploy --remote-only --config backend/HelloWorld.Api/fly.toml --app "${APP_NAME}"
+        run: flyctl deploy --remote-only --config backend/HelloWorld.Api/fly.toml --app "${FLY_APP_NAME}"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FLY_BACKEND_APP: ${{ vars.FLY_BACKEND_APP || '' }}
+          FLY_APP_NAME: ${{ env.FLY_APP_NAME }}
