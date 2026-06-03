@@ -1,4 +1,4 @@
-# Hello World — React + .NET 8 + PostgreSQL
+# KidsLearn — React + .NET 8 + PostgreSQL
 
 Responsive full-stack starter. Runs locally with Docker Compose; deploys to a single Fly.io app via GitHub Actions.
 
@@ -30,13 +30,13 @@ docker compose up --build
 
 **PostgreSQL**
 ```bash
-docker run -e POSTGRES_DB=helloworld -e POSTGRES_USER=postgres \
+docker run -e POSTGRES_DB=kidslearn -e POSTGRES_USER=postgres \
   -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:16-alpine
 ```
 
 **Backend**
 ```bash
-cd backend/HelloWorld.Api
+cd backend/KidsLearn.Api
 dotnet run
 # Listens on http://localhost:8080
 ```
@@ -81,11 +81,7 @@ In your repo → Settings → Secrets and variables → Actions:
 |-------------------|--------------------------------|
 | `FLY_API_TOKEN`   | From Fly.io account token       |
 
-Add as **Variables** (not secrets):
-
-| Variable            | Value                                         |
-|---------------------|-----------------------------------------------|
-| `FLY_BACKEND_APP`   | your Fly app name                             |
+The Fly app name is configured in workflow env as `FLY_APP_NAME` in `.github/workflows/ci-deploy.yml`.
 
 ### 4 — Push to main
 
@@ -121,7 +117,7 @@ GitHub Actions will:
 │   └── workflows/
 │       └── ci-deploy.yml     # CI + Fly.io deploy
 ├── backend/
-│   └── HelloWorld.Api/
+│   └── KidsLearn.Api/
 │       ├── Program.cs          # Minimal API + EF Core
 │       ├── Dockerfile          # Builds frontend + backend in one image
 │       └── fly.toml

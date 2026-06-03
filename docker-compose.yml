@@ -4,7 +4,7 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: helloworld
+      POSTGRES_DB: kidslearn
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
@@ -17,11 +17,11 @@ services:
       retries: 5
 
   backend:
-    build: ./backend/HelloWorld.Api
+    build: ./backend/KidsLearn.Api
     ports:
       - "8080:8080"
     environment:
-      ConnectionStrings__Postgres: "Host=postgres;Database=helloworld;Username=postgres;Password=postgres"
+      ConnectionStrings__Postgres: "Host=postgres;Database=kidslearn;Username=postgres;Password=postgres"
       AllowedOrigins__0: "http://localhost:5173"
       AllowedOrigins__1: "http://localhost:3000"
     depends_on:

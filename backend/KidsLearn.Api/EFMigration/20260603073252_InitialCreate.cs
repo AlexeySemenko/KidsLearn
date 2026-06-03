@@ -4,7 +4,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace HelloWorld.Api.EFMigration
+namespace KidsLearn.Api.EFMigration
 {
     /// <inheritdoc />
     public partial class InitialCreate : Migration

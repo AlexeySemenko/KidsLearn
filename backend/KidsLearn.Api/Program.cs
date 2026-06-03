@@ -23,7 +23,7 @@ if (string.IsNullOrWhiteSpace(connectionString))
 {
     if (builder.Environment.IsDevelopment())
     {
-        connectionString = "Host=localhost;Database=helloworld;Username=postgres;Password=postgres";
+        connectionString = "Host=localhost;Database=kidslearn;Username=postgres;Password=postgres";
     }
     else
     {

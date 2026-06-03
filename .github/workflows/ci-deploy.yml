@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: backend/HelloWorld.Api
+        working-directory: backend/KidsLearn.Api
     steps:
       - uses: actions/checkout@v6
 
@@ -100,7 +100,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Deploy backend
-        run: flyctl deploy --remote-only --config backend/HelloWorld.Api/fly.toml --app "${FLY_APP_NAME}"
+        run: flyctl deploy --remote-only --config backend/KidsLearn.Api/fly.toml --app "${FLY_APP_NAME}"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_APP_NAME: ${{ env.FLY_APP_NAME }}
