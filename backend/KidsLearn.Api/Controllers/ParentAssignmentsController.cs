@@ -7,19 +7,18 @@ public static class ParentAssignmentsController
     {
         parentApi.MapPost("/assignments", async (AppDbContext db, ClaimsPrincipal user, CreateAssignmentRequest request) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var child = await db.Children.FirstOrDefaultAsync(x => x.Id == request.ChildId && x.ParentId == parentId.Value);
+            var child = await db.Children.FirstOrDefaultAsync(x => x.Id == request.ChildId && x.ParentId == parentId);
             if (child is null)
             {
                 return Results.BadRequest(new { error = "Child does not belong to current parent." });
             }
 
-            var lesson = await db.Lessons.FirstOrDefaultAsync(x => x.Id == request.LessonId && x.CreatedBy == parentId.Value);
+            var lesson = await db.Lessons.FirstOrDefaultAsync(x => x.Id == request.LessonId && x.CreatedBy == parentId);
             if (lesson is null)
             {
                 return Results.BadRequest(new { error = "Lesson does not belong to current parent." });
@@ -48,64 +47,61 @@ public static class ParentAssignmentsController
 
         parentApi.MapGet("/assignments", async (IAssignmentReadService assignmentReadService, ClaimsPrincipal user, Guid? childId) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var assignments = await assignmentReadService.ListForParentAsync(parentId.Value, childId);
+            var assignments = await assignmentReadService.ListForParentAsync(parentId, childId);
             return Results.Ok(assignments);
         });
 
         parentApi.MapGet("/assignments/{assignmentId:guid}/for-solving", async (IAssignmentSolvingService solvingService, ClaimsPrincipal user, Guid assignmentId) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var result = await solvingService.GetForSolvingAsync(AssignmentAccessScope.Parent, parentId.Value, assignmentId);
+            var result = await solvingService.GetForSolvingAsync(AssignmentAccessScope.Parent, parentId, assignmentId);
             return ApiEndpointHelpers.ToHttpResult(result);
         });
 
         parentApi.MapPost("/assignments/{assignmentId:guid}/answers", async (IAssignmentSolvingService solvingService, ClaimsPrincipal user, Guid assignmentId, SubmitAssignmentAnswersRequest request) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var result = await solvingService.SubmitAnswersAsync(AssignmentAccessScope.Parent, parentId.Value, assignmentId, request);
+            var result = await solvingService.SubmitAnswersAsync(AssignmentAccessScope.Parent, parentId, assignmentId, request);
             return ApiEndpointHelpers.ToHttpResult(result);
         });
 
         parentApi.MapPost("/assignments/{assignmentId:guid}/complete", async (IAssignmentSolvingService solvingService, ClaimsPrincipal user, Guid assignmentId) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var result = await solvingService.CompleteAsync(AssignmentAccessScope.Parent, parentId.Value, assignmentId);
+            var result = await solvingService.CompleteAsync(AssignmentAccessScope.Parent, parentId, assignmentId);
             return ApiEndpointHelpers.ToHttpResult(result);
         });
 
         parentApi.MapGet("/results/{resultId:guid}", async (IAssignmentSolvingService solvingService, ClaimsPrincipal user, Guid resultId) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var result = await solvingService.GetResultAsync(AssignmentAccessScope.Parent, parentId.Value, resultId);
+            var result = await solvingService.GetResultAsync(AssignmentAccessScope.Parent, parentId, resultId);
             return ApiEndpointHelpers.ToHttpResult(result);
         });
 
         return parentApi;
     }
 }
+
+

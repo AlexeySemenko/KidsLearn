@@ -7,14 +7,13 @@ public static class ParentChildrenController
     {
         parentApi.MapGet("/children", async (AppDbContext db, ClaimsPrincipal user) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
             var children = await db.Children
-                .Where(x => x.ParentId == parentId.Value)
+                .Where(x => x.ParentId == parentId)
                 .Select(x => new ChildResponse(x.Id, x.ParentId, x.Name, x.Grade))
                 .ToListAsync();
 
@@ -23,8 +22,7 @@ public static class ParentChildrenController
 
         parentApi.MapPost("/children", async (AppDbContext db, ClaimsPrincipal user, IPasswordHasherService passwordHasher, CreateChildRequest request) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
@@ -39,7 +37,7 @@ public static class ParentChildrenController
                 return Results.BadRequest(new { error = "Grade must be between 1 and 12." });
             }
 
-            var parentExists = await db.Users.AnyAsync(x => x.Id == parentId.Value && x.Role == UserRole.Parent);
+            var parentExists = await db.Users.AnyAsync(x => x.Id == parentId && x.Role == UserRole.Parent);
             if (!parentExists)
             {
                 return Results.NotFound(new { error = "Parent was not found." });
@@ -64,7 +62,7 @@ public static class ParentChildrenController
 
             var child = new Child
             {
-                ParentId = parentId.Value,
+                ParentId = parentId,
                 User = childUser,
                 Name = request.Name.Trim(),
                 Grade = request.Grade
@@ -80,13 +78,12 @@ public static class ParentChildrenController
 
         parentApi.MapPatch("/children/{childId:guid}", async (AppDbContext db, ClaimsPrincipal user, IPasswordHasherService passwordHasher, Guid childId, UpdateChildRequest request) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var child = await db.Children.FirstOrDefaultAsync(x => x.Id == childId && x.ParentId == parentId.Value);
+            var child = await db.Children.FirstOrDefaultAsync(x => x.Id == childId && x.ParentId == parentId);
             if (child is null)
             {
                 return Results.NotFound();
@@ -135,13 +132,12 @@ public static class ParentChildrenController
 
         parentApi.MapPost("/children/{childId:guid}/access-code/reset", async (AppDbContext db, ClaimsPrincipal user, IPasswordHasherService passwordHasher, Guid childId) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var child = await db.Children.FirstOrDefaultAsync(x => x.Id == childId && x.ParentId == parentId.Value);
+            var child = await db.Children.FirstOrDefaultAsync(x => x.Id == childId && x.ParentId == parentId);
             if (child is null || !child.UserId.HasValue)
             {
                 return Results.NotFound();
@@ -162,13 +158,12 @@ public static class ParentChildrenController
 
         parentApi.MapDelete("/children/{childId:guid}", async (AppDbContext db, ClaimsPrincipal user, Guid childId) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var child = await db.Children.FirstOrDefaultAsync(x => x.Id == childId && x.ParentId == parentId.Value);
+            var child = await db.Children.FirstOrDefaultAsync(x => x.Id == childId && x.ParentId == parentId);
             if (child is null)
             {
                 return Results.NotFound();
@@ -194,3 +189,5 @@ public static class ParentChildrenController
         return parentApi;
     }
 }
+
+

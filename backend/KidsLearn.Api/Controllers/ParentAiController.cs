@@ -6,28 +6,27 @@ public static class ParentAiController
     {
         parentApi.MapPost("/ai/lessons/generate", async (IAiLessonGenerationService aiLessonGenerationService, ClaimsPrincipal user, GenerateAiLessonRequest request, CancellationToken cancellationToken) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var result = await aiLessonGenerationService.GenerateAndPersistAsync(parentId.Value, request, cancellationToken);
+            var result = await aiLessonGenerationService.GenerateAndPersistAsync(parentId, request, cancellationToken);
             return ApiEndpointHelpers.ToHttpResult(result);
         });
 
         parentApi.MapPost("/ai/lessons/{lessonId:guid}/edit", async (IAiLessonEditingService aiLessonEditingService, ClaimsPrincipal user, Guid lessonId, EditAiLessonRequest request, CancellationToken cancellationToken) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var result = await aiLessonEditingService.EditAsync(parentId.Value, lessonId, request, cancellationToken);
+            var result = await aiLessonEditingService.EditAsync(parentId, lessonId, request, cancellationToken);
             return ApiEndpointHelpers.ToHttpResult(result);
         });
 
         return parentApi;
     }
 }
+

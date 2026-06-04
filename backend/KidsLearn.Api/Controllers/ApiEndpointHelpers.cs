@@ -13,6 +13,19 @@ public static class ApiEndpointHelpers
         return Guid.TryParse(candidate, out var userId) ? userId : null;
     }
 
+    public static bool TryResolveUserId(ClaimsPrincipal user, out Guid userId)
+    {
+        var resolvedUserId = ResolveUserId(user);
+        if (!resolvedUserId.HasValue)
+        {
+            userId = Guid.Empty;
+            return false;
+        }
+
+        userId = resolvedUserId.Value;
+        return true;
+    }
+
     public static string GenerateAccessCode()
     {
         return Random.Shared.Next(100000, 999999).ToString();
@@ -51,3 +64,4 @@ public static class ApiEndpointHelpers
         };
     }
 }
+

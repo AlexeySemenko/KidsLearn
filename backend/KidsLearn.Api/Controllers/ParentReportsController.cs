@@ -8,13 +8,12 @@ public static class ParentReportsController
     {
         parentApi.MapGet("/reports/children/{childId:guid}", async (AppDbContext db, ClaimsPrincipal user, Guid childId, DateTime? from, DateTime? to) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var childExists = await db.Children.AnyAsync(x => x.Id == childId && x.ParentId == parentId.Value);
+            var childExists = await db.Children.AnyAsync(x => x.Id == childId && x.ParentId == parentId);
             if (!childExists)
             {
                 return Results.NotFound(new { error = "Child not found." });
@@ -87,13 +86,12 @@ public static class ParentReportsController
 
         parentApi.MapGet("/reports/children/{childId:guid}/export", async (AppDbContext db, ClaimsPrincipal user, Guid childId, string? format, DateTime? from, DateTime? to) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var childExists = await db.Children.AnyAsync(x => x.Id == childId && x.ParentId == parentId.Value);
+            var childExists = await db.Children.AnyAsync(x => x.Id == childId && x.ParentId == parentId);
             if (!childExists)
             {
                 return Results.NotFound(new { error = "Child not found." });
@@ -163,3 +161,5 @@ public static class ParentReportsController
         return parentApi;
     }
 }
+
+

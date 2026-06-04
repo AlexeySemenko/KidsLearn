@@ -7,8 +7,7 @@ public static class ParentLessonsController
     {
         parentApi.MapPost("/lessons", async (AppDbContext db, ClaimsPrincipal user, CreateLessonRequest request) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
@@ -33,7 +32,7 @@ public static class ParentLessonsController
                 Grade = request.Grade,
                 Topic = request.Topic.Trim(),
                 Difficulty = string.IsNullOrWhiteSpace(request.Difficulty) ? "Medium" : request.Difficulty.Trim(),
-                CreatedBy = parentId.Value,
+                CreatedBy = parentId,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -96,8 +95,7 @@ public static class ParentLessonsController
 
         parentApi.MapGet("/lessons", async (AppDbContext db, ClaimsPrincipal user, string? subject, int? grade, string? topic, int page = 1, int pageSize = 20) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
@@ -107,7 +105,7 @@ public static class ParentLessonsController
 
             var query = db.Lessons
                 .AsNoTracking()
-                .Where(x => x.CreatedBy == parentId.Value);
+                .Where(x => x.CreatedBy == parentId);
 
             if (!string.IsNullOrWhiteSpace(subject))
             {
@@ -145,8 +143,7 @@ public static class ParentLessonsController
 
         parentApi.MapGet("/lessons/{lessonId:guid}", async (AppDbContext db, ClaimsPrincipal user, Guid lessonId) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
@@ -155,7 +152,7 @@ public static class ParentLessonsController
                 .AsNoTracking()
                 .Include(x => x.Questions.OrderBy(q => q.Order))
                 .ThenInclude(q => q.Answers.OrderBy(a => a.Order))
-                .FirstOrDefaultAsync(x => x.Id == lessonId && x.CreatedBy == parentId.Value);
+                .FirstOrDefaultAsync(x => x.Id == lessonId && x.CreatedBy == parentId);
 
             if (lesson is null)
             {
@@ -188,8 +185,7 @@ public static class ParentLessonsController
 
         parentApi.MapPost("/lessons/{lessonId:guid}/duplicate", async (AppDbContext db, ClaimsPrincipal user, Guid lessonId) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
@@ -198,7 +194,7 @@ public static class ParentLessonsController
                 .AsNoTracking()
                 .Include(x => x.Questions.OrderBy(q => q.Order))
                 .ThenInclude(q => q.Answers.OrderBy(a => a.Order))
-                .FirstOrDefaultAsync(x => x.Id == lessonId && x.CreatedBy == parentId.Value);
+                .FirstOrDefaultAsync(x => x.Id == lessonId && x.CreatedBy == parentId);
 
             if (sourceLesson is null)
             {
@@ -212,7 +208,7 @@ public static class ParentLessonsController
                 Grade = sourceLesson.Grade,
                 Topic = sourceLesson.Topic,
                 Difficulty = sourceLesson.Difficulty,
-                CreatedBy = parentId.Value,
+                CreatedBy = parentId,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -267,13 +263,12 @@ public static class ParentLessonsController
 
         parentApi.MapPatch("/lessons/{lessonId:guid}", async (AppDbContext db, ClaimsPrincipal user, Guid lessonId, UpdateLessonRequest request) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var lesson = await db.Lessons.FirstOrDefaultAsync(x => x.Id == lessonId && x.CreatedBy == parentId.Value);
+            var lesson = await db.Lessons.FirstOrDefaultAsync(x => x.Id == lessonId && x.CreatedBy == parentId);
             if (lesson is null)
             {
                 return Results.NotFound();
@@ -344,13 +339,12 @@ public static class ParentLessonsController
 
         parentApi.MapDelete("/lessons/{lessonId:guid}", async (AppDbContext db, ClaimsPrincipal user, Guid lessonId) =>
         {
-            var parentId = ApiEndpointHelpers.ResolveUserId(user);
-            if (!parentId.HasValue)
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var lesson = await db.Lessons.FirstOrDefaultAsync(x => x.Id == lessonId && x.CreatedBy == parentId.Value);
+            var lesson = await db.Lessons.FirstOrDefaultAsync(x => x.Id == lessonId && x.CreatedBy == parentId);
             if (lesson is null)
             {
                 return Results.NotFound();
@@ -370,3 +364,5 @@ public static class ParentLessonsController
         return parentApi;
     }
 }
+
+
