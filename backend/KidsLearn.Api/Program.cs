@@ -48,6 +48,7 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
 builder.Services.AddScoped<IPasswordHasherService, PasswordHasherService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAssignmentSolvingService, AssignmentSolvingService>();
+builder.Services.AddScoped<IAssignmentReadService, AssignmentReadService>();
 
 var jwtKey = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrWhiteSpace(jwtKey) && builder.Environment.IsDevelopment())
@@ -93,8 +94,12 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+    if (!db.Database.IsRelational())
+    {
+        db.Database.EnsureCreated();
+    }
     // If there are no migration files, create schema directly.
-    if (db.Database.GetMigrations().Any())
+    else if (db.Database.GetMigrations().Any())
     {
         db.Database.Migrate();
     }
@@ -869,7 +874,7 @@ parentApi.MapPost("/assignments", async (AppDbContext db, ClaimsPrincipal user, 
         assignment.Status));
 });
 
-parentApi.MapGet("/assignments", async (AppDbContext db, ClaimsPrincipal user, Guid? childId) =>
+parentApi.MapGet("/assignments", async (IAssignmentReadService assignmentReadService, ClaimsPrincipal user, Guid? childId) =>
 {
     var parentId = ResolveUserId(user);
     if (!parentId.HasValue)
@@ -877,26 +882,7 @@ parentApi.MapGet("/assignments", async (AppDbContext db, ClaimsPrincipal user, G
         return Results.Unauthorized();
     }
 
-    var query = db.Assignments
-        .AsNoTracking()
-        .Where(x => x.Child.ParentId == parentId.Value);
-
-    if (childId.HasValue)
-    {
-        query = query.Where(x => x.ChildId == childId.Value);
-    }
-
-    var assignments = await query
-        .OrderByDescending(x => x.AssignedAt)
-        .Select(x => new AssignmentResponse(
-            x.Id,
-            x.ChildId,
-            x.LessonId,
-            x.AssignedAt,
-            x.DueDate,
-            x.Status))
-        .ToListAsync();
-
+    var assignments = await assignmentReadService.ListForParentAsync(parentId.Value, childId);
     return Results.Ok(assignments);
 });
 
@@ -951,7 +937,7 @@ parentApi.MapGet("/results/{resultId:guid}", async (IAssignmentSolvingService so
 var childApi = apiV1.MapGroup("/child")
     .RequireAuthorization("ChildOnly");
 
-childApi.MapGet("/assignments", async (AppDbContext db, ClaimsPrincipal user) =>
+childApi.MapGet("/assignments", async (AppDbContext db, IAssignmentReadService assignmentReadService, ClaimsPrincipal user) =>
 {
     var childId = await ResolveChildIdAsync(db, user);
     if (!childId.HasValue)
@@ -959,19 +945,7 @@ childApi.MapGet("/assignments", async (AppDbContext db, ClaimsPrincipal user) =>
         return Results.Unauthorized();
     }
 
-    var assignments = await db.Assignments
-        .AsNoTracking()
-        .Where(x => x.ChildId == childId.Value)
-        .OrderByDescending(x => x.AssignedAt)
-        .Select(x => new AssignmentResponse(
-            x.Id,
-            x.ChildId,
-            x.LessonId,
-            x.AssignedAt,
-            x.DueDate,
-            x.Status))
-        .ToListAsync();
-
+    var assignments = await assignmentReadService.ListForChildAsync(childId.Value);
     return Results.Ok(assignments);
 });
 
@@ -1047,3 +1021,5 @@ app.MapPost("/api/hello", async (AppDbContext db, GreetingRequest req) =>
 app.MapFallbackToFile("index.html");
 
 app.Run();
+
+public partial class Program;
