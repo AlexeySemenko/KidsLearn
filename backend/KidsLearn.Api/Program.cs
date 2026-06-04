@@ -731,6 +731,85 @@ parentApi.MapGet("/lessons/{lessonId:guid}", async (AppDbContext db, ClaimsPrinc
     return Results.Ok(response);
 });
 
+parentApi.MapPost("/lessons/{lessonId:guid}/duplicate", async (AppDbContext db, ClaimsPrincipal user, Guid lessonId) =>
+{
+    var parentId = ResolveUserId(user);
+    if (!parentId.HasValue)
+    {
+        return Results.Unauthorized();
+    }
+
+    var sourceLesson = await db.Lessons
+        .AsNoTracking()
+        .Include(x => x.Questions.OrderBy(q => q.Order))
+        .ThenInclude(q => q.Answers.OrderBy(a => a.Order))
+        .FirstOrDefaultAsync(x => x.Id == lessonId && x.CreatedBy == parentId.Value);
+
+    if (sourceLesson is null)
+    {
+        return Results.NotFound();
+    }
+
+    var duplicatedLesson = new Lesson
+    {
+        Title = $"{sourceLesson.Title} (Copy)",
+        Subject = sourceLesson.Subject,
+        Grade = sourceLesson.Grade,
+        Topic = sourceLesson.Topic,
+        Difficulty = sourceLesson.Difficulty,
+        CreatedBy = parentId.Value,
+        CreatedAt = DateTime.UtcNow
+    };
+
+    foreach (var sourceQuestion in sourceLesson.Questions.OrderBy(q => q.Order))
+    {
+        var duplicatedQuestion = new Question
+        {
+            QuestionText = sourceQuestion.QuestionText,
+            Explanation = sourceQuestion.Explanation,
+            Order = sourceQuestion.Order
+        };
+
+        foreach (var sourceAnswer in sourceQuestion.Answers.OrderBy(a => a.Order))
+        {
+            duplicatedQuestion.Answers.Add(new AnswerOption
+            {
+                AnswerText = sourceAnswer.AnswerText,
+                IsCorrect = sourceAnswer.IsCorrect,
+                Order = sourceAnswer.Order
+            });
+        }
+
+        duplicatedLesson.Questions.Add(duplicatedQuestion);
+    }
+
+    db.Lessons.Add(duplicatedLesson);
+    await db.SaveChangesAsync();
+
+    var response = new LessonDetailResponse(
+        duplicatedLesson.Id,
+        duplicatedLesson.Title,
+        duplicatedLesson.Subject,
+        duplicatedLesson.Grade,
+        duplicatedLesson.Topic,
+        duplicatedLesson.Difficulty,
+        duplicatedLesson.CreatedAt,
+        duplicatedLesson.Questions
+            .OrderBy(q => q.Order)
+            .Select(q => new QuestionResponse(
+                q.Id,
+                q.QuestionText,
+                q.Explanation,
+                q.Order,
+                q.Answers
+                    .OrderBy(a => a.Order)
+                    .Select(a => new AnswerOptionResponse(a.Id, a.AnswerText, a.IsCorrect, a.Order))
+                    .ToList()))
+            .ToList());
+
+    return Results.Created($"/api/v1/lessons/{duplicatedLesson.Id}", response);
+});
+
 parentApi.MapPatch("/lessons/{lessonId:guid}", async (AppDbContext db, ClaimsPrincipal user, Guid lessonId, UpdateLessonRequest request) =>
 {
     var parentId = ResolveUserId(user);
