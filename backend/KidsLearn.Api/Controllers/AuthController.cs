@@ -1,202 +1,70 @@
-using Microsoft.EntityFrameworkCore;
+using MediatR;
 
 public static class AuthController
 {
     public static RouteGroupBuilder MapAuthController(this RouteGroupBuilder apiV1, IConfiguration configuration)
     {
-        apiV1.MapPost("/auth/register", async (AppDbContext db, IPasswordHasherService passwordHasher, RegisterRequest request) =>
+        apiV1.MapPost("/auth/register", async (ISender sender, RegisterRequest request) =>
         {
-            if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
+            var result = await sender.Send(new RegisterParentCommand(request));
+            return result.StatusCode switch
             {
-                return Results.BadRequest(new { error = "Email and password are required." });
-            }
-
-            var email = request.Email.Trim().ToLowerInvariant();
-            if (!email.Contains('@'))
-            {
-                return Results.BadRequest(new { error = "Email format is invalid." });
-            }
-
-            if (request.Password.Length < 8)
-            {
-                return Results.BadRequest(new { error = "Password must be at least 8 characters." });
-            }
-
-            var exists = await db.Users.AnyAsync(x => x.Email == email);
-            if (exists)
-            {
-                return Results.Conflict(new { error = "User with this email already exists." });
-            }
-
-            var user = new AppUser
-            {
-                Email = email,
-                PasswordHash = passwordHasher.HashPassword(request.Password),
-                Role = UserRole.Parent,
-                CreatedAt = DateTime.UtcNow
+                StatusCodes.Status201Created when result.User is not null
+                    => Results.Created($"/api/v1/users/{result.User.Id}", result.User),
+                StatusCodes.Status400BadRequest
+                    => Results.BadRequest(new { error = result.Error ?? "Bad request." }),
+                StatusCodes.Status409Conflict
+                    => Results.Conflict(new { error = result.Error ?? "Conflict." }),
+                _ => Results.Problem(result.Error ?? "Unexpected error.")
             };
-
-            db.Users.Add(user);
-            await db.SaveChangesAsync();
-
-            return Results.Created($"/api/v1/users/{user.Id}", new AuthUserResponse(user.Id, user.Email, user.Role.ToString()));
         });
 
-        apiV1.MapPost("/auth/login", async (AppDbContext db, IPasswordHasherService passwordHasher, IJwtTokenService tokenService, LoginRequest request) =>
+        apiV1.MapPost("/auth/login", async (ISender sender, LoginRequest request) =>
         {
-            if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
+            var result = await sender.Send(new LoginParentCommand(request));
+            return result.StatusCode switch
             {
-                return Results.BadRequest(new { error = "Email and password are required." });
-            }
-
-            var email = request.Email.Trim().ToLowerInvariant();
-            var user = await db.Users.FirstOrDefaultAsync(x => x.Email == email);
-            if (user is null || string.IsNullOrWhiteSpace(user.PasswordHash) || !passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
-            {
-                return Results.Unauthorized();
-            }
-
-            var accessToken = tokenService.CreateAccessToken(user);
-            var refreshToken = tokenService.CreateRefreshToken();
-            var refreshExpiresDays = int.TryParse(configuration["Jwt:RefreshTokenExpirationDays"], out var refreshDays)
-                ? refreshDays
-                : 14;
-
-            db.RefreshTokens.Add(new RefreshToken
-            {
-                UserId = user.Id,
-                Token = refreshToken,
-                CreatedAt = DateTime.UtcNow,
-                ExpiresAt = DateTime.UtcNow.AddDays(refreshExpiresDays)
-            });
-
-            await db.SaveChangesAsync();
-
-            var expiresIn = int.TryParse(configuration["Jwt:AccessTokenExpirationMinutes"], out var accessMinutes)
-                ? accessMinutes * 60
-                : 1800;
-
-            return Results.Ok(new AuthTokenResponse(
-                accessToken,
-                refreshToken,
-                expiresIn,
-                new AuthUserResponse(user.Id, user.Email, user.Role.ToString())));
+                StatusCodes.Status200OK when result.Response is not null => Results.Ok(result.Response),
+                StatusCodes.Status400BadRequest => Results.BadRequest(new { error = result.Error ?? "Bad request." }),
+                StatusCodes.Status401Unauthorized => Results.Unauthorized(),
+                _ => Results.Problem(result.Error ?? "Unexpected error.")
+            };
         });
 
-        apiV1.MapPost("/auth/child-login", async (AppDbContext db, IPasswordHasherService passwordHasher, IJwtTokenService tokenService, ChildLoginRequest request) =>
+        apiV1.MapPost("/auth/child-login", async (ISender sender, ChildLoginRequest request) =>
         {
-            if (request.ChildId == Guid.Empty || string.IsNullOrWhiteSpace(request.AccessCode))
+            var result = await sender.Send(new LoginChildCommand(request));
+            return result.StatusCode switch
             {
-                return Results.BadRequest(new { error = "ChildId and access code are required." });
-            }
-
-            var child = await db.Children
-                .Include(x => x.User)
-                .FirstOrDefaultAsync(x => x.Id == request.ChildId);
-
-            if (child?.User is null || child.User.Role != UserRole.Child)
-            {
-                return Results.Unauthorized();
-            }
-
-            if (string.IsNullOrWhiteSpace(child.User.PasswordHash)
-                || !passwordHasher.VerifyPassword(request.AccessCode.Trim(), child.User.PasswordHash))
-            {
-                return Results.Unauthorized();
-            }
-
-            var accessToken = tokenService.CreateAccessToken(child.User);
-            var refreshToken = tokenService.CreateRefreshToken();
-            var refreshExpiresDays = int.TryParse(configuration["Jwt:RefreshTokenExpirationDays"], out var refreshDays)
-                ? refreshDays
-                : 14;
-
-            db.RefreshTokens.Add(new RefreshToken
-            {
-                UserId = child.User.Id,
-                Token = refreshToken,
-                CreatedAt = DateTime.UtcNow,
-                ExpiresAt = DateTime.UtcNow.AddDays(refreshExpiresDays)
-            });
-
-            await db.SaveChangesAsync();
-
-            var expiresIn = int.TryParse(configuration["Jwt:AccessTokenExpirationMinutes"], out var accessMinutes)
-                ? accessMinutes * 60
-                : 1800;
-
-            return Results.Ok(new AuthTokenResponse(
-                accessToken,
-                refreshToken,
-                expiresIn,
-                new AuthUserResponse(child.User.Id, child.Name, child.User.Role.ToString())));
+                StatusCodes.Status200OK when result.Response is not null => Results.Ok(result.Response),
+                StatusCodes.Status400BadRequest => Results.BadRequest(new { error = result.Error ?? "Bad request." }),
+                StatusCodes.Status401Unauthorized => Results.Unauthorized(),
+                _ => Results.Problem(result.Error ?? "Unexpected error.")
+            };
         });
 
-        apiV1.MapPost("/auth/refresh", async (AppDbContext db, IJwtTokenService tokenService, RefreshRequest request) =>
+        apiV1.MapPost("/auth/refresh", async (ISender sender, RefreshRequest request) =>
         {
-            if (string.IsNullOrWhiteSpace(request.RefreshToken))
+            var result = await sender.Send(new RefreshAuthTokenCommand(request));
+            return result.StatusCode switch
             {
-                return Results.BadRequest(new { error = "Refresh token is required." });
-            }
-
-            var existing = await db.RefreshTokens
-                .Include(x => x.User)
-                .FirstOrDefaultAsync(x => x.Token == request.RefreshToken);
-
-            if (existing is null || existing.RevokedAt.HasValue || existing.ExpiresAt <= DateTime.UtcNow)
-            {
-                return Results.Unauthorized();
-            }
-
-            existing.RevokedAt = DateTime.UtcNow;
-
-            var newRefreshToken = tokenService.CreateRefreshToken();
-            var refreshExpiresDays = int.TryParse(configuration["Jwt:RefreshTokenExpirationDays"], out var refreshDays)
-                ? refreshDays
-                : 14;
-
-            db.RefreshTokens.Add(new RefreshToken
-            {
-                UserId = existing.UserId,
-                Token = newRefreshToken,
-                CreatedAt = DateTime.UtcNow,
-                ExpiresAt = DateTime.UtcNow.AddDays(refreshExpiresDays)
-            });
-
-            var accessToken = tokenService.CreateAccessToken(existing.User);
-            await db.SaveChangesAsync();
-
-            var expiresIn = int.TryParse(configuration["Jwt:AccessTokenExpirationMinutes"], out var accessMinutes)
-                ? accessMinutes * 60
-                : 1800;
-
-            return Results.Ok(new AuthTokenResponse(
-                accessToken,
-                newRefreshToken,
-                expiresIn,
-                new AuthUserResponse(existing.User.Id, existing.User.Email, existing.User.Role.ToString())));
+                StatusCodes.Status200OK when result.Response is not null => Results.Ok(result.Response),
+                StatusCodes.Status400BadRequest => Results.BadRequest(new { error = result.Error ?? "Bad request." }),
+                StatusCodes.Status401Unauthorized => Results.Unauthorized(),
+                _ => Results.Problem(result.Error ?? "Unexpected error.")
+            };
         });
 
-        apiV1.MapPost("/auth/revoke", async (AppDbContext db, RevokeRequest request) =>
+        apiV1.MapPost("/auth/revoke", async (ISender sender, RevokeRequest request) =>
         {
-            if (string.IsNullOrWhiteSpace(request.RefreshToken))
+            var result = await sender.Send(new RevokeAuthTokenCommand(request));
+            return result.StatusCode switch
             {
-                return Results.BadRequest(new { error = "Refresh token is required." });
-            }
-
-            var existing = await db.RefreshTokens.FirstOrDefaultAsync(x => x.Token == request.RefreshToken);
-            if (existing is null)
-            {
-                return Results.NotFound();
-            }
-
-            if (!existing.RevokedAt.HasValue)
-            {
-                existing.RevokedAt = DateTime.UtcNow;
-                await db.SaveChangesAsync();
-            }
-
-            return Results.NoContent();
+                StatusCodes.Status204NoContent => Results.NoContent(),
+                StatusCodes.Status400BadRequest => Results.BadRequest(new { error = result.Error ?? "Bad request." }),
+                StatusCodes.Status404NotFound => Results.NotFound(),
+                _ => Results.Problem(result.Error ?? "Unexpected error.")
+            };
         });
 
         return apiV1;
