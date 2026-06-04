@@ -129,6 +129,8 @@ GitHub Actions will:
 | POST   | /api/v1/assignments/{assignmentId}/answers | Submit answers and get instant check |
 | POST   | /api/v1/assignments/{assignmentId}/complete | Complete assignment and calculate score |
 | GET    | /api/v1/results/{resultId} | Get result with correctness breakdown |
+| GET    | /api/v1/reports/children/{childId}?from=&to= | Parent child progress summary |
+| GET    | /api/v1/reports/children/{childId}/export?format=csv&from=&to= | Parent child report CSV export |
 | GET    | /api/v1/child/assignments | Child list of own assignments |
 | GET    | /api/v1/child/assignments/{assignmentId}/for-solving | Child gets own assignment for solving |
 | POST   | /api/v1/child/assignments/{assignmentId}/answers | Child submits answers and gets instant check |
