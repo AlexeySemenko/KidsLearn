@@ -1,191 +1,89 @@
 using System.Security.Claims;
-using Microsoft.EntityFrameworkCore;
+using MediatR;
 
 public static class ParentChildrenController
 {
     public static RouteGroupBuilder MapParentChildrenEndpoints(this RouteGroupBuilder parentApi)
     {
-        parentApi.MapGet("/children", async (AppDbContext db, ClaimsPrincipal user) =>
+        parentApi.MapGet("/children", async (ISender sender, ClaimsPrincipal user) =>
         {
             if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var children = await db.Children
-                .Where(x => x.ParentId == parentId)
-                .Select(x => new ChildResponse(x.Id, x.ParentId, x.Name, x.Grade))
-                .ToListAsync();
+            var children = await sender.Send(new GetParentChildrenQuery(parentId));
 
             return Results.Ok(children);
         });
 
-        parentApi.MapPost("/children", async (AppDbContext db, ClaimsPrincipal user, IPasswordHasherService passwordHasher, CreateChildRequest request) =>
+        parentApi.MapPost("/children", async (ISender sender, ClaimsPrincipal user, CreateChildRequest request) =>
         {
             if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var nameValidation = ApiEndpointHelpers.ValidateRequiredNonEmpty(request.Name, "Name is required.");
-            if (nameValidation is not null)
+            var result = await sender.Send(new CreateParentChildCommand(parentId, request));
+            return result.StatusCode switch
             {
-                return nameValidation;
-            }
-
-            if (!ApiEndpointHelpers.IsGradeInRange(request.Grade))
-            {
-                return Results.BadRequest(new { error = "Grade must be between 1 and 12." });
-            }
-
-            var parentExists = await db.Users.AnyAsync(x => x.Id == parentId && x.Role == UserRole.Parent);
-            if (!parentExists)
-            {
-                return Results.NotFound(new { error = "Parent was not found." });
-            }
-
-            var accessCode = string.IsNullOrWhiteSpace(request.AccessCode)
-                ? ApiEndpointHelpers.GenerateAccessCode()
-                : request.AccessCode.Trim();
-
-            if (accessCode.Length < 4)
-            {
-                return Results.BadRequest(new { error = "Access code must contain at least 4 characters." });
-            }
-
-            var childUser = new AppUser
-            {
-                Email = $"child-{Guid.NewGuid():N}@kidslearn.local",
-                PasswordHash = passwordHasher.HashPassword(accessCode),
-                Role = UserRole.Child,
-                CreatedAt = DateTime.UtcNow
+                StatusCodes.Status201Created when result.Response is not null
+                    => Results.Created($"/api/v1/children/{result.Response.Child.Id}", result.Response),
+                StatusCodes.Status400BadRequest
+                    => Results.BadRequest(new { error = result.Error ?? "Bad request." }),
+                StatusCodes.Status404NotFound
+                    => Results.NotFound(new { error = result.Error ?? "Not found." }),
+                _ => Results.Problem(result.Error ?? "Unexpected error.")
             };
+        });
 
-            var child = new Child
+        parentApi.MapPatch("/children/{childId:guid}", async (ISender sender, ClaimsPrincipal user, Guid childId, UpdateChildRequest request) =>
+        {
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
-                ParentId = parentId,
-                User = childUser,
-                Name = request.Name.Trim(),
-                Grade = request.Grade
+                return Results.Unauthorized();
+            }
+
+            var result = await sender.Send(new UpdateParentChildCommand(parentId, childId, request));
+            return result.StatusCode switch
+            {
+                StatusCodes.Status200OK when result.Response is not null => Results.Ok(result.Response),
+                StatusCodes.Status400BadRequest => Results.BadRequest(new { error = result.Error ?? "Bad request." }),
+                StatusCodes.Status404NotFound => Results.NotFound(),
+                _ => Results.Problem(result.Error ?? "Unexpected error.")
             };
-
-            db.Children.Add(child);
-            await db.SaveChangesAsync();
-
-            return Results.Created(
-                $"/api/v1/children/{child.Id}",
-                new CreatedChildResponse(new ChildResponse(child.Id, child.ParentId, child.Name, child.Grade), accessCode));
         });
 
-        parentApi.MapPatch("/children/{childId:guid}", async (AppDbContext db, ClaimsPrincipal user, IPasswordHasherService passwordHasher, Guid childId, UpdateChildRequest request) =>
+        parentApi.MapPost("/children/{childId:guid}/access-code/reset", async (ISender sender, ClaimsPrincipal user, Guid childId) =>
         {
             if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var child = await db.Children.FirstOrDefaultAsync(x => x.Id == childId && x.ParentId == parentId);
-            if (child is null)
+            var result = await sender.Send(new ResetParentChildAccessCodeCommand(parentId, childId));
+            return result.StatusCode switch
             {
-                return Results.NotFound();
-            }
-
-            var optionalNameValidation = ApiEndpointHelpers.ValidateOptionalNonEmpty(request.Name, "Name cannot be empty.");
-            if (optionalNameValidation is not null)
-            {
-                return optionalNameValidation;
-            }
-
-            if (request.Name is not null)
-            {
-                child.Name = request.Name.Trim();
-            }
-
-            if (request.Grade.HasValue)
-            {
-                if (!ApiEndpointHelpers.IsGradeInRange(request.Grade.Value))
-                {
-                    return Results.BadRequest(new { error = "Grade must be between 1 and 12." });
-                }
-
-                child.Grade = request.Grade.Value;
-            }
-
-            if (request.AccessCode is not null)
-            {
-                if (string.IsNullOrWhiteSpace(request.AccessCode) || request.AccessCode.Trim().Length < 4)
-                {
-                    return Results.BadRequest(new { error = "Access code must contain at least 4 characters." });
-                }
-
-                if (child.UserId.HasValue)
-                {
-                    var childUser = await db.Users.FirstOrDefaultAsync(x => x.Id == child.UserId.Value && x.Role == UserRole.Child);
-                    if (childUser is not null)
-                    {
-                        childUser.PasswordHash = passwordHasher.HashPassword(request.AccessCode.Trim());
-                    }
-                }
-            }
-
-            await db.SaveChangesAsync();
-            return Results.Ok(new ChildResponse(child.Id, child.ParentId, child.Name, child.Grade));
+                StatusCodes.Status200OK when result.Response is not null => Results.Ok(result.Response),
+                StatusCodes.Status404NotFound => Results.NotFound(),
+                _ => Results.Problem("Unexpected error.")
+            };
         });
 
-        parentApi.MapPost("/children/{childId:guid}/access-code/reset", async (AppDbContext db, ClaimsPrincipal user, IPasswordHasherService passwordHasher, Guid childId) =>
+        parentApi.MapDelete("/children/{childId:guid}", async (ISender sender, ClaimsPrincipal user, Guid childId) =>
         {
             if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var child = await db.Children.FirstOrDefaultAsync(x => x.Id == childId && x.ParentId == parentId);
-            if (child is null || !child.UserId.HasValue)
+            var result = await sender.Send(new DeleteParentChildCommand(parentId, childId));
+            return result.StatusCode switch
             {
-                return Results.NotFound();
-            }
-
-            var childUser = await db.Users.FirstOrDefaultAsync(x => x.Id == child.UserId.Value && x.Role == UserRole.Child);
-            if (childUser is null)
-            {
-                return Results.NotFound();
-            }
-
-            var newCode = ApiEndpointHelpers.GenerateAccessCode();
-            childUser.PasswordHash = passwordHasher.HashPassword(newCode);
-            await db.SaveChangesAsync();
-
-            return Results.Ok(new ResetChildAccessCodeResponse(child.Id, newCode));
-        });
-
-        parentApi.MapDelete("/children/{childId:guid}", async (AppDbContext db, ClaimsPrincipal user, Guid childId) =>
-        {
-            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
-            {
-                return Results.Unauthorized();
-            }
-
-            var child = await db.Children.FirstOrDefaultAsync(x => x.Id == childId && x.ParentId == parentId);
-            if (child is null)
-            {
-                return Results.NotFound();
-            }
-
-            AppUser? childUser = null;
-            if (child.UserId.HasValue)
-            {
-                childUser = await db.Users.FirstOrDefaultAsync(x => x.Id == child.UserId.Value && x.Role == UserRole.Child);
-            }
-
-            db.Children.Remove(child);
-            if (childUser is not null)
-            {
-                db.Users.Remove(childUser);
-            }
-
-            await db.SaveChangesAsync();
-
-            return Results.NoContent();
+                StatusCodes.Status204NoContent => Results.NoContent(),
+                StatusCodes.Status404NotFound => Results.NotFound(),
+                _ => Results.Problem("Unexpected error.")
+            };
         });
 
         return parentApi;
