@@ -158,28 +158,22 @@ public static class ParentLessonsController
             return Results.Ok(result.Lesson);
         });
 
-        parentApi.MapDelete("/lessons/{lessonId:guid}", async (AppDbContext db, ClaimsPrincipal user, Guid lessonId) =>
+        parentApi.MapDelete("/lessons/{lessonId:guid}", async (ISender sender, ClaimsPrincipal user, Guid lessonId) =>
         {
             if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var lesson = await db.Lessons.FirstOrDefaultAsync(x => x.Id == lessonId && x.CreatedBy == parentId);
-            if (lesson is null)
+            var result = await sender.Send(new DeleteParentLessonCommand(parentId, lessonId));
+            return result.StatusCode switch
             {
-                return Results.NotFound();
-            }
-
-            var hasAssignments = await db.Assignments.AnyAsync(x => x.LessonId == lesson.Id);
-            if (hasAssignments)
-            {
-                return Results.Conflict(new { error = "Cannot delete a lesson with assignments." });
-            }
-
-            db.Lessons.Remove(lesson);
-            await db.SaveChangesAsync();
-            return Results.NoContent();
+                StatusCodes.Status400BadRequest => Results.BadRequest(new { error = result.Error ?? "Bad request." }),
+                StatusCodes.Status404NotFound => Results.NotFound(new { error = result.Error ?? "Not found." }),
+                StatusCodes.Status409Conflict => Results.Conflict(new { error = result.Error ?? "Conflict." }),
+                StatusCodes.Status204NoContent => Results.NoContent(),
+                _ => Results.Problem(result.Error ?? "Unexpected error.")
+            };
         });
 
         return parentApi;
