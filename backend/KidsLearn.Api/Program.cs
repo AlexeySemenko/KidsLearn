@@ -22,6 +22,7 @@ builder.Services.AddTransient<IRequestValidator<CreateParentAssignmentCommand>, 
 builder.Services.AddTransient<IRequestValidator<SubmitParentAssignmentAnswersCommand>, SubmitParentAssignmentAnswersCommandValidator>();
 builder.Services.AddTransient<IRequestValidator<CompleteParentAssignmentCommand>, CompleteParentAssignmentCommandValidator>();
 builder.Services.AddTransient<IRequestValidator<GetParentAssignmentForSolvingQuery>, GetParentAssignmentForSolvingQueryValidator>();
+builder.Services.AddTransient<IRequestValidator<GetParentResultDetailQuery>, GetParentResultDetailQueryValidator>();
 
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
