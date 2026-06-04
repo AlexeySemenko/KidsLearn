@@ -12,10 +12,25 @@ public static class ParentLessonsController
                 return Results.Unauthorized();
             }
 
-            if (string.IsNullOrWhiteSpace(request.Title)
-                || string.IsNullOrWhiteSpace(request.Subject)
-                || string.IsNullOrWhiteSpace(request.Topic)
-                || request.Grade is < 1 or > 12)
+            var titleValidation = ApiEndpointHelpers.ValidateRequiredNonEmpty(request.Title, "Title, subject, topic and grade (1-12) are required.");
+            if (titleValidation is not null)
+            {
+                return titleValidation;
+            }
+
+            var subjectValidation = ApiEndpointHelpers.ValidateRequiredNonEmpty(request.Subject, "Title, subject, topic and grade (1-12) are required.");
+            if (subjectValidation is not null)
+            {
+                return subjectValidation;
+            }
+
+            var topicValidation = ApiEndpointHelpers.ValidateRequiredNonEmpty(request.Topic, "Title, subject, topic and grade (1-12) are required.");
+            if (topicValidation is not null)
+            {
+                return topicValidation;
+            }
+
+            if (!ApiEndpointHelpers.IsGradeInRange(request.Grade))
             {
                 return Results.BadRequest(new { error = "Title, subject, topic and grade (1-12) are required." });
             }
@@ -276,9 +291,10 @@ public static class ParentLessonsController
 
             if (request.Title is not null)
             {
-                if (string.IsNullOrWhiteSpace(request.Title))
+                var titleValidation = ApiEndpointHelpers.ValidateOptionalNonEmpty(request.Title, "Title cannot be empty.");
+                if (titleValidation is not null)
                 {
-                    return Results.BadRequest(new { error = "Title cannot be empty." });
+                    return titleValidation;
                 }
 
                 lesson.Title = request.Title.Trim();
@@ -286,9 +302,10 @@ public static class ParentLessonsController
 
             if (request.Subject is not null)
             {
-                if (string.IsNullOrWhiteSpace(request.Subject))
+                var subjectValidation = ApiEndpointHelpers.ValidateOptionalNonEmpty(request.Subject, "Subject cannot be empty.");
+                if (subjectValidation is not null)
                 {
-                    return Results.BadRequest(new { error = "Subject cannot be empty." });
+                    return subjectValidation;
                 }
 
                 lesson.Subject = request.Subject.Trim();
@@ -296,9 +313,10 @@ public static class ParentLessonsController
 
             if (request.Topic is not null)
             {
-                if (string.IsNullOrWhiteSpace(request.Topic))
+                var topicValidation = ApiEndpointHelpers.ValidateOptionalNonEmpty(request.Topic, "Topic cannot be empty.");
+                if (topicValidation is not null)
                 {
-                    return Results.BadRequest(new { error = "Topic cannot be empty." });
+                    return topicValidation;
                 }
 
                 lesson.Topic = request.Topic.Trim();
@@ -306,9 +324,10 @@ public static class ParentLessonsController
 
             if (request.Difficulty is not null)
             {
-                if (string.IsNullOrWhiteSpace(request.Difficulty))
+                var difficultyValidation = ApiEndpointHelpers.ValidateOptionalNonEmpty(request.Difficulty, "Difficulty cannot be empty.");
+                if (difficultyValidation is not null)
                 {
-                    return Results.BadRequest(new { error = "Difficulty cannot be empty." });
+                    return difficultyValidation;
                 }
 
                 lesson.Difficulty = request.Difficulty.Trim();
@@ -316,7 +335,7 @@ public static class ParentLessonsController
 
             if (request.Grade.HasValue)
             {
-                if (request.Grade.Value is < 1 or > 12)
+                if (!ApiEndpointHelpers.IsGradeInRange(request.Grade.Value))
                 {
                     return Results.BadRequest(new { error = "Grade must be between 1 and 12." });
                 }

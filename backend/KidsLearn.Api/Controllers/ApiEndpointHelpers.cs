@@ -26,6 +26,30 @@ public static class ApiEndpointHelpers
         return true;
     }
 
+    public static bool IsGradeInRange(int grade)
+    {
+        return grade is >= 1 and <= 12;
+    }
+
+    public static IResult? ValidateRequiredNonEmpty(string? value, string errorMessage)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? Results.BadRequest(new { error = errorMessage })
+            : null;
+    }
+
+    public static IResult? ValidateOptionalNonEmpty(string? value, string errorMessage)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        return string.IsNullOrWhiteSpace(value)
+            ? Results.BadRequest(new { error = errorMessage })
+            : null;
+    }
+
     public static string GenerateAccessCode()
     {
         return Random.Shared.Next(100000, 999999).ToString();

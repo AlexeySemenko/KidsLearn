@@ -27,12 +27,13 @@ public static class ParentChildrenController
                 return Results.Unauthorized();
             }
 
-            if (string.IsNullOrWhiteSpace(request.Name))
+            var nameValidation = ApiEndpointHelpers.ValidateRequiredNonEmpty(request.Name, "Name is required.");
+            if (nameValidation is not null)
             {
-                return Results.BadRequest(new { error = "Name is required." });
+                return nameValidation;
             }
 
-            if (request.Grade is < 1 or > 12)
+            if (!ApiEndpointHelpers.IsGradeInRange(request.Grade))
             {
                 return Results.BadRequest(new { error = "Grade must be between 1 and 12." });
             }
@@ -89,19 +90,20 @@ public static class ParentChildrenController
                 return Results.NotFound();
             }
 
+            var optionalNameValidation = ApiEndpointHelpers.ValidateOptionalNonEmpty(request.Name, "Name cannot be empty.");
+            if (optionalNameValidation is not null)
+            {
+                return optionalNameValidation;
+            }
+
             if (request.Name is not null)
             {
-                if (string.IsNullOrWhiteSpace(request.Name))
-                {
-                    return Results.BadRequest(new { error = "Name cannot be empty." });
-                }
-
                 child.Name = request.Name.Trim();
             }
 
             if (request.Grade.HasValue)
             {
-                if (request.Grade.Value is < 1 or > 12)
+                if (!ApiEndpointHelpers.IsGradeInRange(request.Grade.Value))
                 {
                     return Results.BadRequest(new { error = "Grade must be between 1 and 12." });
                 }
