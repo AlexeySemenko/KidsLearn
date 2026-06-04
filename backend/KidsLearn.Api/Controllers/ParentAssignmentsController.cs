@@ -36,15 +36,21 @@ public static class ParentAssignmentsController
             return Results.Ok(assignments);
         });
 
-        parentApi.MapGet("/assignments/{assignmentId:guid}/for-solving", async (IAssignmentSolvingService solvingService, ClaimsPrincipal user, Guid assignmentId) =>
+        parentApi.MapGet("/assignments/{assignmentId:guid}/for-solving", async (ISender sender, ClaimsPrincipal user, Guid assignmentId) =>
         {
             if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var result = await solvingService.GetForSolvingAsync(AssignmentAccessScope.Parent, parentId, assignmentId);
-            return ApiEndpointHelpers.ToHttpResult(result);
+            var result = await sender.Send(new GetParentAssignmentForSolvingQuery(parentId, assignmentId));
+            return result.StatusCode switch
+            {
+                StatusCodes.Status200OK when result.Response is not null => Results.Ok(result.Response),
+                StatusCodes.Status400BadRequest => Results.BadRequest(new { error = result.Error ?? "Bad request." }),
+                StatusCodes.Status404NotFound => Results.NotFound(new { error = result.Error ?? "Not found." }),
+                _ => Results.Problem(result.Error ?? "Unexpected error.")
+            };
         });
 
         parentApi.MapPost("/assignments/{assignmentId:guid}/answers", async (ISender sender, ClaimsPrincipal user, Guid assignmentId, SubmitAssignmentAnswersRequest request) =>

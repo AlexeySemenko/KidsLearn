@@ -21,6 +21,7 @@ builder.Services.AddTransient<IRequestValidator<DeleteParentLessonCommand>, Dele
 builder.Services.AddTransient<IRequestValidator<CreateParentAssignmentCommand>, CreateParentAssignmentCommandValidator>();
 builder.Services.AddTransient<IRequestValidator<SubmitParentAssignmentAnswersCommand>, SubmitParentAssignmentAnswersCommandValidator>();
 builder.Services.AddTransient<IRequestValidator<CompleteParentAssignmentCommand>, CompleteParentAssignmentCommandValidator>();
+builder.Services.AddTransient<IRequestValidator<GetParentAssignmentForSolvingQuery>, GetParentAssignmentForSolvingQueryValidator>();
 
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
