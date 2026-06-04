@@ -25,14 +25,14 @@ public static class ParentAssignmentsController
             return Results.Created($"/api/v1/assignments/{result.Assignment.Id}", result.Assignment);
         });
 
-        parentApi.MapGet("/assignments", async (IAssignmentReadService assignmentReadService, ClaimsPrincipal user, Guid? childId) =>
+        parentApi.MapGet("/assignments", async (ISender sender, ClaimsPrincipal user, Guid? childId) =>
         {
             if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var assignments = await assignmentReadService.ListForParentAsync(parentId, childId);
+            var assignments = await sender.Send(new GetParentAssignmentsQuery(parentId, childId));
             return Results.Ok(assignments);
         });
 
