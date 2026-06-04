@@ -17,3 +17,16 @@ public sealed record GenerateAiLessonResponse(
     Guid CreatedLessonId,
     LessonDetailResponse LessonDraft,
     AiProviderMetaResponse ProviderMeta);
+
+public sealed record EditAiLessonRequest(
+    string Command,
+    Dictionary<string, string>? Params,
+    List<EditAiAnswerInput>? Answers);
+
+public sealed record EditAiAnswerInput(string AnswerText, bool IsCorrect);
+
+public sealed record EditAiLessonResponse(
+    Guid RevisionId,
+    int RevisionNumber,
+    string DiffSummary,
+    LessonDetailResponse LessonDraft);

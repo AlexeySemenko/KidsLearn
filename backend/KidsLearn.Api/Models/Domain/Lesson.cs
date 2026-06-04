@@ -11,4 +11,5 @@ public class Lesson
 
     public ICollection<Question> Questions { get; set; } = new List<Question>();
     public ICollection<Assignment> Assignments { get; set; } = new List<Assignment>();
+    public ICollection<LessonRevision> Revisions { get; set; } = new List<LessonRevision>();
 }

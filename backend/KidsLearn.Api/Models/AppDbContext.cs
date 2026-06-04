@@ -8,6 +8,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Lesson> Lessons => Set<Lesson>();
     public DbSet<Question> Questions => Set<Question>();
     public DbSet<AnswerOption> AnswerOptions => Set<AnswerOption>();
+    public DbSet<LessonRevision> LessonRevisions => Set<LessonRevision>();
     public DbSet<Assignment> Assignments => Set<Assignment>();
     public DbSet<AssignmentAnswer> AssignmentAnswers => Set<AssignmentAnswer>();
     public DbSet<AssignmentResult> Results => Set<AssignmentResult>();
@@ -74,6 +75,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(x => x.Question)
                 .WithMany(x => x.Answers)
                 .HasForeignKey(x => x.QuestionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<LessonRevision>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.SnapshotJson).HasColumnType("text");
+            entity.Property(x => x.DiffSummary).HasMaxLength(500);
+            entity.HasIndex(x => new { x.LessonId, x.RevisionNumber }).IsUnique();
+
+            entity.HasOne(x => x.Lesson)
+                .WithMany(x => x.Revisions)
+                .HasForeignKey(x => x.LessonId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

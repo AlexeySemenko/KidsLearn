@@ -118,6 +118,7 @@ GitHub Actions will:
 | POST   | /api/v1/children/{childId}/access-code/reset | Reset child access code |
 | DELETE | /api/v1/children/{childId} | Delete child |
 | POST   | /api/v1/ai/lessons/generate | Generate AI lesson draft and persist lesson |
+| POST   | /api/v1/ai/lessons/{lessonId}/edit | Apply AI lesson edit command and create revision |
 | POST   | /api/v1/lessons | Create lesson with nested questions and answers |
 | GET    | /api/v1/lessons?page=1&pageSize=20 | List parent lessons with pagination |
 | GET    | /api/v1/lessons/{lessonId} | Get lesson details |
