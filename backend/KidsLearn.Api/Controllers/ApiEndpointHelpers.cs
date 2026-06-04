@@ -70,6 +70,11 @@ public static class ApiEndpointHelpers
             .FirstOrDefaultAsync();
     }
 
+    public static async Task<bool> EnsureParentOwnsChildAsync(AppDbContext db, Guid parentId, Guid childId)
+    {
+        return await db.Children.AnyAsync(x => x.Id == childId && x.ParentId == parentId);
+    }
+
     public static IResult ToHttpResult<T>(ServiceResult<T> result)
     {
         if (result.IsSuccess && result.Value is not null)

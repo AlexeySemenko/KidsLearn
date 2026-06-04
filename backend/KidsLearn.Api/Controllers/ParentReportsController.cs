@@ -13,8 +13,8 @@ public static class ParentReportsController
                 return Results.Unauthorized();
             }
 
-            var childExists = await db.Children.AnyAsync(x => x.Id == childId && x.ParentId == parentId);
-            if (!childExists)
+            var childBelongsToParent = await ApiEndpointHelpers.EnsureParentOwnsChildAsync(db, parentId, childId);
+            if (!childBelongsToParent)
             {
                 return Results.NotFound(new { error = "Child not found." });
             }
@@ -91,8 +91,8 @@ public static class ParentReportsController
                 return Results.Unauthorized();
             }
 
-            var childExists = await db.Children.AnyAsync(x => x.Id == childId && x.ParentId == parentId);
-            if (!childExists)
+            var childBelongsToParent = await ApiEndpointHelpers.EnsureParentOwnsChildAsync(db, parentId, childId);
+            if (!childBelongsToParent)
             {
                 return Results.NotFound(new { error = "Child not found." });
             }

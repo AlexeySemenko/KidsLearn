@@ -12,8 +12,8 @@ public static class ParentAssignmentsController
                 return Results.Unauthorized();
             }
 
-            var child = await db.Children.FirstOrDefaultAsync(x => x.Id == request.ChildId && x.ParentId == parentId);
-            if (child is null)
+            var childBelongsToParent = await ApiEndpointHelpers.EnsureParentOwnsChildAsync(db, parentId, request.ChildId);
+            if (!childBelongsToParent)
             {
                 return Results.BadRequest(new { error = "Child does not belong to current parent." });
             }
