@@ -2,11 +2,14 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddProblemDetails();
 
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
@@ -104,6 +107,24 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 
+app.UseExceptionHandler(exceptionHandlerApp =>
+{
+    exceptionHandlerApp.Run(async context =>
+    {
+        var exceptionFeature = context.Features.Get<IExceptionHandlerFeature>();
+        var detail = app.Environment.IsDevelopment()
+            ? exceptionFeature?.Error.Message
+            : null;
+
+        var problemResult = Results.Problem(
+            title: "Unexpected server error",
+            detail: detail,
+            statusCode: StatusCodes.Status500InternalServerError);
+
+        await problemResult.ExecuteAsync(context);
+    });
+});
+
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -140,9 +161,41 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
+app.MapGet("/health/live", () => Results.Ok(new { status = "alive" }));
+app.MapGet("/health/ready", async (AppDbContext db) =>
+{
+    if (!db.Database.IsRelational())
+    {
+        return Results.Ok(new { status = "ready", database = "in-memory" });
+    }
+
+    var canConnect = await db.Database.CanConnectAsync();
+    if (!canConnect)
+    {
+        return Results.Json(new { status = "degraded", database = "unreachable" }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    return Results.Ok(new { status = "ready", database = "reachable" });
+});
 
 var apiV1 = app.MapGroup("/api/v1");
 apiV1.MapGet("/health", () => Results.Ok(new { status = "healthy", version = "v1" }));
+apiV1.MapGet("/health/live", () => Results.Ok(new { status = "alive", version = "v1" }));
+apiV1.MapGet("/health/ready", async (AppDbContext db) =>
+{
+    if (!db.Database.IsRelational())
+    {
+        return Results.Ok(new { status = "ready", database = "in-memory", version = "v1" });
+    }
+
+    var canConnect = await db.Database.CanConnectAsync();
+    if (!canConnect)
+    {
+        return Results.Json(new { status = "degraded", database = "unreachable", version = "v1" }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    return Results.Ok(new { status = "ready", database = "reachable", version = "v1" });
+});
 
 apiV1.MapAuthController(builder.Configuration);
 apiV1.MapParentController();
