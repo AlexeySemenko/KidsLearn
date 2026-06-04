@@ -115,6 +115,13 @@ GitHub Actions will:
 | POST   | /api/v1/children | Create child `{ "name": "...", "grade": 1..12 }` |
 | PATCH  | /api/v1/children/{childId} | Update child name or grade |
 | DELETE | /api/v1/children/{childId} | Delete child |
+| POST   | /api/v1/lessons | Create lesson with nested questions and answers |
+| GET    | /api/v1/lessons?page=1&pageSize=20 | List parent lessons with pagination |
+| GET    | /api/v1/lessons/{lessonId} | Get lesson details |
+| PATCH  | /api/v1/lessons/{lessonId} | Update lesson metadata |
+| DELETE | /api/v1/lessons/{lessonId} | Delete lesson (if no assignments) |
+| POST   | /api/v1/assignments | Assign parent lesson to parent child |
+| GET    | /api/v1/assignments | List assignments for authenticated parent |
 
 ### Auth header for protected routes
 
