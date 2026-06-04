@@ -16,6 +16,7 @@ builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBeh
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(RequestLoggingBehavior<,>));
 builder.Services.AddTransient<IRequestValidator<CreateParentLessonCommand>, CreateParentLessonCommandValidator>();
 builder.Services.AddTransient<IRequestValidator<DuplicateParentLessonCommand>, DuplicateParentLessonCommandValidator>();
+builder.Services.AddTransient<IRequestValidator<UpdateParentLessonCommand>, UpdateParentLessonCommandValidator>();
 
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 

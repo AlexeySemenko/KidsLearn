@@ -137,84 +137,25 @@ public static class ParentLessonsController
             return Results.Created($"/api/v1/lessons/{result.Lesson.Id}", result.Lesson);
         });
 
-        parentApi.MapPatch("/lessons/{lessonId:guid}", async (AppDbContext db, ClaimsPrincipal user, Guid lessonId, UpdateLessonRequest request) =>
+        parentApi.MapPatch("/lessons/{lessonId:guid}", async (ISender sender, ClaimsPrincipal user, Guid lessonId, UpdateLessonRequest request) =>
         {
             if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var lesson = await db.Lessons.FirstOrDefaultAsync(x => x.Id == lessonId && x.CreatedBy == parentId);
-            if (lesson is null)
+            var result = await sender.Send(new UpdateParentLessonCommand(parentId, lessonId, request));
+            if (result.Lesson is null)
             {
-                return Results.NotFound();
-            }
-
-            if (request.Title is not null)
-            {
-                var titleValidation = ApiEndpointHelpers.ValidateOptionalNonEmpty(request.Title, "Title cannot be empty.");
-                if (titleValidation is not null)
+                return result.StatusCode switch
                 {
-                    return titleValidation;
-                }
-
-                lesson.Title = request.Title.Trim();
+                    StatusCodes.Status400BadRequest => Results.BadRequest(new { error = result.Error ?? "Bad request." }),
+                    StatusCodes.Status404NotFound => Results.NotFound(new { error = result.Error ?? "Not found." }),
+                    _ => Results.Problem(result.Error ?? "Unexpected error.")
+                };
             }
 
-            if (request.Subject is not null)
-            {
-                var subjectValidation = ApiEndpointHelpers.ValidateOptionalNonEmpty(request.Subject, "Subject cannot be empty.");
-                if (subjectValidation is not null)
-                {
-                    return subjectValidation;
-                }
-
-                lesson.Subject = request.Subject.Trim();
-            }
-
-            if (request.Topic is not null)
-            {
-                var topicValidation = ApiEndpointHelpers.ValidateOptionalNonEmpty(request.Topic, "Topic cannot be empty.");
-                if (topicValidation is not null)
-                {
-                    return topicValidation;
-                }
-
-                lesson.Topic = request.Topic.Trim();
-            }
-
-            if (request.Difficulty is not null)
-            {
-                var difficultyValidation = ApiEndpointHelpers.ValidateOptionalNonEmpty(request.Difficulty, "Difficulty cannot be empty.");
-                if (difficultyValidation is not null)
-                {
-                    return difficultyValidation;
-                }
-
-                lesson.Difficulty = request.Difficulty.Trim();
-            }
-
-            if (request.Grade.HasValue)
-            {
-                if (!ApiEndpointHelpers.IsGradeInRange(request.Grade.Value))
-                {
-                    return Results.BadRequest(new { error = "Grade must be between 1 and 12." });
-                }
-
-                lesson.Grade = request.Grade.Value;
-            }
-
-            await db.SaveChangesAsync();
-
-            return Results.Ok(new LessonSummaryResponse(
-                lesson.Id,
-                lesson.Title,
-                lesson.Subject,
-                lesson.Grade,
-                lesson.Topic,
-                lesson.Difficulty,
-                lesson.CreatedAt,
-                await db.Questions.CountAsync(x => x.LessonId == lesson.Id)));
+            return Results.Ok(result.Lesson);
         });
 
         parentApi.MapDelete("/lessons/{lessonId:guid}", async (AppDbContext db, ClaimsPrincipal user, Guid lessonId) =>
