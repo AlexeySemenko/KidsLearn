@@ -738,6 +738,240 @@ parentApi.MapGet("/assignments", async (AppDbContext db, ClaimsPrincipal user, G
     return Results.Ok(assignments);
 });
 
+parentApi.MapGet("/assignments/{assignmentId:guid}/for-solving", async (AppDbContext db, ClaimsPrincipal user, Guid assignmentId) =>
+{
+    var parentId = ResolveUserId(user);
+    if (!parentId.HasValue)
+    {
+        return Results.Unauthorized();
+    }
+
+    var assignment = await db.Assignments
+        .AsNoTracking()
+        .Include(x => x.Lesson)
+        .ThenInclude(x => x.Questions.OrderBy(q => q.Order))
+        .ThenInclude(q => q.Answers.OrderBy(a => a.Order))
+        .FirstOrDefaultAsync(x => x.Id == assignmentId && x.Child.ParentId == parentId.Value);
+
+    if (assignment is null)
+    {
+        return Results.NotFound();
+    }
+
+    var response = new AssignmentForSolvingResponse(
+        assignment.Id,
+        assignment.ChildId,
+        assignment.LessonId,
+        assignment.AssignedAt,
+        assignment.DueDate,
+        assignment.Status,
+        assignment.Lesson.Title,
+        assignment.Lesson.Questions
+            .OrderBy(q => q.Order)
+            .Select(q => new AssignmentQuestionResponse(
+                q.Id,
+                q.QuestionText,
+                q.Explanation,
+                q.Order,
+                q.Answers
+                    .OrderBy(a => a.Order)
+                    .Select(a => new AssignmentQuestionAnswerResponse(a.Id, a.AnswerText, a.Order))
+                    .ToList()))
+            .ToList());
+
+    return Results.Ok(response);
+});
+
+parentApi.MapPost("/assignments/{assignmentId:guid}/answers", async (AppDbContext db, ClaimsPrincipal user, Guid assignmentId, SubmitAssignmentAnswersRequest request) =>
+{
+    var parentId = ResolveUserId(user);
+    if (!parentId.HasValue)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (request.Answers is null || request.Answers.Count == 0)
+    {
+        return Results.BadRequest(new { error = "At least one answer is required." });
+    }
+
+    var assignment = await db.Assignments
+        .Include(x => x.Lesson)
+        .ThenInclude(x => x.Questions)
+        .ThenInclude(q => q.Answers)
+        .FirstOrDefaultAsync(x => x.Id == assignmentId && x.Child.ParentId == parentId.Value);
+
+    if (assignment is null)
+    {
+        return Results.NotFound();
+    }
+
+    var questionsById = assignment.Lesson.Questions.ToDictionary(q => q.Id);
+    var instantCheck = new List<InstantCheckItemResponse>();
+
+    foreach (var answer in request.Answers)
+    {
+        if (!questionsById.TryGetValue(answer.QuestionId, out var question))
+        {
+            return Results.BadRequest(new { error = "Question does not belong to assignment lesson." });
+        }
+
+        var normalizedTextAnswer = string.IsNullOrWhiteSpace(answer.TextAnswer)
+            ? null
+            : answer.TextAnswer.Trim();
+
+        var isCorrect = false;
+        if (answer.SelectedAnswerOptionId.HasValue)
+        {
+            var selected = question.Answers.FirstOrDefault(x => x.Id == answer.SelectedAnswerOptionId.Value);
+            if (selected is null)
+            {
+                return Results.BadRequest(new { error = "Selected answer option does not belong to question." });
+            }
+
+            isCorrect = selected.IsCorrect;
+        }
+        else if (!string.IsNullOrWhiteSpace(normalizedTextAnswer))
+        {
+            isCorrect = question.Answers.Any(x => x.IsCorrect && string.Equals(x.AnswerText.Trim(), normalizedTextAnswer, StringComparison.OrdinalIgnoreCase));
+        }
+        else
+        {
+            return Results.BadRequest(new { error = "Either SelectedAnswerOptionId or TextAnswer is required for each answer." });
+        }
+
+        var existing = await db.AssignmentAnswers
+            .FirstOrDefaultAsync(x => x.AssignmentId == assignment.Id && x.QuestionId == answer.QuestionId);
+
+        if (existing is null)
+        {
+            db.AssignmentAnswers.Add(new AssignmentAnswer
+            {
+                AssignmentId = assignment.Id,
+                QuestionId = answer.QuestionId,
+                SelectedAnswerOptionId = answer.SelectedAnswerOptionId,
+                TextAnswer = normalizedTextAnswer,
+                IsCorrect = isCorrect,
+                SubmittedAt = DateTime.UtcNow
+            });
+        }
+        else
+        {
+            existing.SelectedAnswerOptionId = answer.SelectedAnswerOptionId;
+            existing.TextAnswer = normalizedTextAnswer;
+            existing.IsCorrect = isCorrect;
+            existing.SubmittedAt = DateTime.UtcNow;
+        }
+
+        instantCheck.Add(new InstantCheckItemResponse(question.Id, isCorrect, question.Explanation));
+    }
+
+    if (assignment.Status == "Assigned")
+    {
+        assignment.Status = "InProgress";
+    }
+
+    await db.SaveChangesAsync();
+
+    var totalQuestions = assignment.Lesson.Questions.Count;
+    var correctCount = await db.AssignmentAnswers.CountAsync(x => x.AssignmentId == assignment.Id && x.IsCorrect);
+    var partialScore = totalQuestions == 0 ? 0 : Math.Round(100m * correctCount / totalQuestions, 2);
+
+    return Results.Ok(new SubmitAssignmentAnswersResponse(instantCheck, partialScore));
+});
+
+parentApi.MapPost("/assignments/{assignmentId:guid}/complete", async (AppDbContext db, ClaimsPrincipal user, Guid assignmentId) =>
+{
+    var parentId = ResolveUserId(user);
+    if (!parentId.HasValue)
+    {
+        return Results.Unauthorized();
+    }
+
+    var assignment = await db.Assignments
+        .Include(x => x.Lesson)
+        .ThenInclude(x => x.Questions)
+        .FirstOrDefaultAsync(x => x.Id == assignmentId && x.Child.ParentId == parentId.Value);
+
+    if (assignment is null)
+    {
+        return Results.NotFound();
+    }
+
+    var totalQuestions = assignment.Lesson.Questions.Count;
+    var correctCount = await db.AssignmentAnswers.CountAsync(x => x.AssignmentId == assignment.Id && x.IsCorrect);
+    var score = totalQuestions == 0 ? 0 : Math.Round(100m * correctCount / totalQuestions, 2);
+    var completedAt = DateTime.UtcNow;
+
+    var result = await db.Results.FirstOrDefaultAsync(x => x.AssignmentId == assignment.Id);
+
+    if (result is null)
+    {
+        result = new AssignmentResult
+        {
+            AssignmentId = assignment.Id,
+            Score = score,
+            CorrectAnswers = correctCount,
+            TotalQuestions = totalQuestions,
+            CompletedAt = completedAt
+        };
+
+        db.Results.Add(result);
+    }
+    else
+    {
+        result.Score = score;
+        result.CorrectAnswers = correctCount;
+        result.TotalQuestions = totalQuestions;
+        result.CompletedAt = completedAt;
+    }
+
+    assignment.Status = "Completed";
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new CompleteAssignmentResponse(
+        result.Id,
+        result.Score,
+        result.CompletedAt,
+        result.CorrectAnswers,
+        result.TotalQuestions));
+});
+
+parentApi.MapGet("/results/{resultId:guid}", async (AppDbContext db, ClaimsPrincipal user, Guid resultId) =>
+{
+    var parentId = ResolveUserId(user);
+    if (!parentId.HasValue)
+    {
+        return Results.Unauthorized();
+    }
+
+    var result = await db.Results
+        .AsNoTracking()
+        .Include(x => x.Assignment)
+        .FirstOrDefaultAsync(x => x.Id == resultId && x.Assignment.Child.ParentId == parentId.Value);
+
+    if (result is null)
+    {
+        return Results.NotFound();
+    }
+
+    var breakdown = await db.AssignmentAnswers
+        .AsNoTracking()
+        .Where(x => x.AssignmentId == result.AssignmentId)
+        .OrderBy(x => x.SubmittedAt)
+        .Select(x => new ResultBreakdownItemResponse(x.QuestionId, x.IsCorrect))
+        .ToListAsync();
+
+    return Results.Ok(new ResultDetailResponse(
+        result.Id,
+        result.AssignmentId,
+        result.Score,
+        result.CompletedAt,
+        result.CorrectAnswers,
+        result.TotalQuestions,
+        breakdown));
+});
+
 // Main endpoint — returns greeting from DB
 app.MapGet("/api/hello", async (AppDbContext db) =>
 {

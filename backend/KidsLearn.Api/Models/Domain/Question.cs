@@ -8,4 +8,5 @@ public class Question
 
     public Lesson Lesson { get; set; } = null!;
     public ICollection<AnswerOption> Answers { get; set; } = new List<AnswerOption>();
+    public ICollection<AssignmentAnswer> AssignmentAnswers { get; set; } = new List<AssignmentAnswer>();
 }

@@ -9,6 +9,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Question> Questions => Set<Question>();
     public DbSet<AnswerOption> AnswerOptions => Set<AnswerOption>();
     public DbSet<Assignment> Assignments => Set<Assignment>();
+    public DbSet<AssignmentAnswer> AssignmentAnswers => Set<AssignmentAnswer>();
     public DbSet<AssignmentResult> Results => Set<AssignmentResult>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
@@ -83,6 +84,28 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany(x => x.Assignments)
                 .HasForeignKey(x => x.LessonId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AssignmentAnswer>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.TextAnswer).HasMaxLength(500);
+            entity.HasIndex(x => new { x.AssignmentId, x.QuestionId }).IsUnique();
+
+            entity.HasOne(x => x.Assignment)
+                .WithMany(x => x.Answers)
+                .HasForeignKey(x => x.AssignmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.Question)
+                .WithMany(x => x.AssignmentAnswers)
+                .HasForeignKey(x => x.QuestionId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.SelectedAnswerOption)
+                .WithMany()
+                .HasForeignKey(x => x.SelectedAnswerOptionId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<AssignmentResult>(entity =>

@@ -122,6 +122,10 @@ GitHub Actions will:
 | DELETE | /api/v1/lessons/{lessonId} | Delete lesson (if no assignments) |
 | POST   | /api/v1/assignments | Assign parent lesson to parent child |
 | GET    | /api/v1/assignments | List assignments for authenticated parent |
+| GET    | /api/v1/assignments/{assignmentId}/for-solving | Get assignment payload for solving |
+| POST   | /api/v1/assignments/{assignmentId}/answers | Submit answers and get instant check |
+| POST   | /api/v1/assignments/{assignmentId}/complete | Complete assignment and calculate score |
+| GET    | /api/v1/results/{resultId} | Get result with correctness breakdown |
 
 ### Auth header for protected routes
 

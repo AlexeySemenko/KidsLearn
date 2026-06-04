@@ -10,4 +10,5 @@ public class Assignment
     public Child Child { get; set; } = null!;
     public Lesson Lesson { get; set; } = null!;
     public AssignmentResult? Result { get; set; }
+    public ICollection<AssignmentAnswer> Answers { get; set; } = new List<AssignmentAnswer>();
 }
