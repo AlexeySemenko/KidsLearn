@@ -15,6 +15,7 @@ builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblyContaining<Pr
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(RequestLoggingBehavior<,>));
 builder.Services.AddTransient<IRequestValidator<CreateParentLessonCommand>, CreateParentLessonCommandValidator>();
+builder.Services.AddTransient<IRequestValidator<DuplicateParentLessonCommand>, DuplicateParentLessonCommandValidator>();
 
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 

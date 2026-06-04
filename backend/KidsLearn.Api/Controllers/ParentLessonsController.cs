@@ -116,82 +116,25 @@ public static class ParentLessonsController
             return Results.Ok(response);
         });
 
-        parentApi.MapPost("/lessons/{lessonId:guid}/duplicate", async (AppDbContext db, ClaimsPrincipal user, Guid lessonId) =>
+        parentApi.MapPost("/lessons/{lessonId:guid}/duplicate", async (ISender sender, ClaimsPrincipal user, Guid lessonId) =>
         {
             if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var sourceLesson = await db.Lessons
-                .AsNoTracking()
-                .Include(x => x.Questions.OrderBy(q => q.Order))
-                .ThenInclude(q => q.Answers.OrderBy(a => a.Order))
-                .FirstOrDefaultAsync(x => x.Id == lessonId && x.CreatedBy == parentId);
-
-            if (sourceLesson is null)
+            var result = await sender.Send(new DuplicateParentLessonCommand(parentId, lessonId));
+            if (result.Lesson is null)
             {
-                return Results.NotFound();
-            }
-
-            var duplicatedLesson = new Lesson
-            {
-                Title = $"{sourceLesson.Title} (Copy)",
-                Subject = sourceLesson.Subject,
-                Grade = sourceLesson.Grade,
-                Topic = sourceLesson.Topic,
-                Difficulty = sourceLesson.Difficulty,
-                CreatedBy = parentId,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            foreach (var sourceQuestion in sourceLesson.Questions.OrderBy(q => q.Order))
-            {
-                var duplicatedQuestion = new Question
+                return result.StatusCode switch
                 {
-                    QuestionText = sourceQuestion.QuestionText,
-                    Explanation = sourceQuestion.Explanation,
-                    Order = sourceQuestion.Order
+                    StatusCodes.Status400BadRequest => Results.BadRequest(new { error = result.Error ?? "Bad request." }),
+                    StatusCodes.Status404NotFound => Results.NotFound(new { error = result.Error ?? "Not found." }),
+                    _ => Results.Problem(result.Error ?? "Unexpected error.")
                 };
-
-                foreach (var sourceAnswer in sourceQuestion.Answers.OrderBy(a => a.Order))
-                {
-                    duplicatedQuestion.Answers.Add(new AnswerOption
-                    {
-                        AnswerText = sourceAnswer.AnswerText,
-                        IsCorrect = sourceAnswer.IsCorrect,
-                        Order = sourceAnswer.Order
-                    });
-                }
-
-                duplicatedLesson.Questions.Add(duplicatedQuestion);
             }
 
-            db.Lessons.Add(duplicatedLesson);
-            await db.SaveChangesAsync();
-
-            var response = new LessonDetailResponse(
-                duplicatedLesson.Id,
-                duplicatedLesson.Title,
-                duplicatedLesson.Subject,
-                duplicatedLesson.Grade,
-                duplicatedLesson.Topic,
-                duplicatedLesson.Difficulty,
-                duplicatedLesson.CreatedAt,
-                duplicatedLesson.Questions
-                    .OrderBy(q => q.Order)
-                    .Select(q => new QuestionResponse(
-                        q.Id,
-                        q.QuestionText,
-                        q.Explanation,
-                        q.Order,
-                        q.Answers
-                            .OrderBy(a => a.Order)
-                            .Select(a => new AnswerOptionResponse(a.Id, a.AnswerText, a.IsCorrect, a.Order))
-                            .ToList()))
-                    .ToList());
-
-            return Results.Created($"/api/v1/lessons/{duplicatedLesson.Id}", response);
+            return Results.Created($"/api/v1/lessons/{result.Lesson.Id}", result.Lesson);
         });
 
         parentApi.MapPatch("/lessons/{lessonId:guid}", async (AppDbContext db, ClaimsPrincipal user, Guid lessonId, UpdateLessonRequest request) =>
