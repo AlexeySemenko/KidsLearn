@@ -1,161 +1,42 @@
 using System.Security.Claims;
-using System.Text;
-using Microsoft.EntityFrameworkCore;
+using MediatR;
 
 public static class ParentReportsController
 {
     public static RouteGroupBuilder MapParentReportsEndpoints(this RouteGroupBuilder parentApi)
     {
-        parentApi.MapGet("/reports/children/{childId:guid}", async (AppDbContext db, ClaimsPrincipal user, Guid childId, DateTime? from, DateTime? to) =>
+        parentApi.MapGet("/reports/children/{childId:guid}", async (ISender sender, ClaimsPrincipal user, Guid childId, DateTime? from, DateTime? to) =>
         {
             if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var childBelongsToParent = await ApiEndpointHelpers.EnsureParentOwnsChildAsync(db, parentId, childId);
-            if (!childBelongsToParent)
+            var result = await sender.Send(new GetParentChildReportSummaryQuery(parentId, childId, from, to));
+            return result.StatusCode switch
             {
-                return Results.NotFound(new { error = "Child not found." });
-            }
-
-            var assignmentsQuery = db.Assignments
-                .AsNoTracking()
-                .Where(x => x.ChildId == childId);
-
-            if (from.HasValue)
-            {
-                assignmentsQuery = assignmentsQuery.Where(x => x.AssignedAt >= from.Value);
-            }
-
-            if (to.HasValue)
-            {
-                assignmentsQuery = assignmentsQuery.Where(x => x.AssignedAt <= to.Value);
-            }
-
-            var assignments = await assignmentsQuery
-                .Include(x => x.Result)
-                .ToListAsync();
-
-            var totalCount = assignments.Count;
-            var solvedAssignments = assignments.Where(x => x.Result is not null).ToList();
-            var solvedCount = solvedAssignments.Count;
-
-            var completionRate = totalCount == 0
-                ? 0m
-                : Math.Round(100m * solvedCount / totalCount, 2);
-
-            var averageScore = solvedCount == 0
-                ? 0m
-                : Math.Round(solvedAssignments.Average(x => x.Result!.Score), 2);
-
-            var completionDays = solvedAssignments
-                .Select(x => x.Result!.CompletedAt.Date)
-                .Distinct()
-                .OrderByDescending(x => x)
-                .ToList();
-
-            var streakDays = 0;
-            DateTime? expectedDay = null;
-            foreach (var day in completionDays)
-            {
-                if (!expectedDay.HasValue)
-                {
-                    streakDays = 1;
-                    expectedDay = day.AddDays(-1);
-                    continue;
-                }
-
-                if (day == expectedDay.Value)
-                {
-                    streakDays++;
-                    expectedDay = day.AddDays(-1);
-                    continue;
-                }
-
-                break;
-            }
-
-            return Results.Ok(new ChildReportSummaryResponse(
-                childId,
-                completionRate,
-                averageScore,
-                solvedCount,
-                streakDays));
+                StatusCodes.Status200OK when result.Response is not null => Results.Ok(result.Response),
+                StatusCodes.Status404NotFound => Results.NotFound(new { error = result.Error ?? "Child not found." }),
+                _ => Results.Problem(result.Error ?? "Unexpected error.")
+            };
         });
 
-        parentApi.MapGet("/reports/children/{childId:guid}/export", async (AppDbContext db, ClaimsPrincipal user, Guid childId, string? format, DateTime? from, DateTime? to) =>
+        parentApi.MapGet("/reports/children/{childId:guid}/export", async (ISender sender, ClaimsPrincipal user, Guid childId, string? format, DateTime? from, DateTime? to) =>
         {
             if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var childBelongsToParent = await ApiEndpointHelpers.EnsureParentOwnsChildAsync(db, parentId, childId);
-            if (!childBelongsToParent)
+            var result = await sender.Send(new ExportParentChildReportCsvQuery(parentId, childId, format, from, to));
+            return result.StatusCode switch
             {
-                return Results.NotFound(new { error = "Child not found." });
-            }
-
-            if (!string.Equals(format, "csv", StringComparison.OrdinalIgnoreCase))
-            {
-                return Results.BadRequest(new { error = "Only format=csv is supported." });
-            }
-
-            var assignmentsQuery = db.Assignments
-                .AsNoTracking()
-                .Where(x => x.ChildId == childId);
-
-            if (from.HasValue)
-            {
-                assignmentsQuery = assignmentsQuery.Where(x => x.AssignedAt >= from.Value);
-            }
-
-            if (to.HasValue)
-            {
-                assignmentsQuery = assignmentsQuery.Where(x => x.AssignedAt <= to.Value);
-            }
-
-            var rows = await assignmentsQuery
-                .Include(x => x.Result)
-                .OrderBy(x => x.AssignedAt)
-                .ToListAsync();
-
-            static string EscapeCsv(string value)
-            {
-                var needsQuotes = value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r');
-                if (!needsQuotes)
-                {
-                    return value;
-                }
-
-                return $"\"{value.Replace("\"", "\"\"")}\"";
-            }
-
-            var sb = new StringBuilder();
-            sb.AppendLine("assignmentId,assignedAt,dueDate,status,score,completedAt,correctAnswers,totalQuestions");
-
-            foreach (var row in rows)
-            {
-                var score = row.Result is null ? string.Empty : row.Result.Score.ToString("0.##");
-                var completedAt = row.Result?.CompletedAt.ToString("O") ?? string.Empty;
-                var correctAnswers = row.Result?.CorrectAnswers.ToString() ?? string.Empty;
-                var totalQuestions = row.Result?.TotalQuestions.ToString() ?? string.Empty;
-
-                sb.AppendLine(string.Join(",",
-                    row.Id,
-                    row.AssignedAt.ToString("O"),
-                    row.DueDate?.ToString("O") ?? string.Empty,
-                    EscapeCsv(row.Status),
-                    score,
-                    completedAt,
-                    correctAnswers,
-                    totalQuestions));
-            }
-
-            var fileName = $"child-report-{childId}-{DateTime.UtcNow:yyyyMMddHHmmss}.csv";
-            var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-            return Results.File(bytes, "text/csv", fileName);
+                StatusCodes.Status200OK when result.FileBytes is not null && !string.IsNullOrWhiteSpace(result.FileName)
+                    => Results.File(result.FileBytes, "text/csv", result.FileName),
+                StatusCodes.Status400BadRequest => Results.BadRequest(new { error = result.Error ?? "Only format=csv is supported." }),
+                StatusCodes.Status404NotFound => Results.NotFound(new { error = result.Error ?? "Child not found." }),
+                _ => Results.Problem(result.Error ?? "Unexpected error.")
+            };
         });
 
         return parentApi;
