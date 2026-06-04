@@ -66,15 +66,23 @@ public static class ParentAssignmentsController
             };
         });
 
-        parentApi.MapPost("/assignments/{assignmentId:guid}/complete", async (IAssignmentSolvingService solvingService, ClaimsPrincipal user, Guid assignmentId) =>
+        parentApi.MapPost("/assignments/{assignmentId:guid}/complete", async (ISender sender, ClaimsPrincipal user, Guid assignmentId) =>
         {
             if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var result = await solvingService.CompleteAsync(AssignmentAccessScope.Parent, parentId, assignmentId);
-            return ApiEndpointHelpers.ToHttpResult(result);
+            var result = await sender.Send(new CompleteParentAssignmentCommand(parentId, assignmentId));
+            return result.StatusCode switch
+            {
+                StatusCodes.Status200OK when result.Response is not null => Results.Ok(result.Response),
+                StatusCodes.Status400BadRequest => Results.BadRequest(new { error = result.Error ?? "Bad request." }),
+                StatusCodes.Status404NotFound => Results.NotFound(new { error = result.Error ?? "Not found." }),
+                StatusCodes.Status409Conflict => Results.Conflict(new { error = result.Error ?? "Conflict." }),
+                StatusCodes.Status422UnprocessableEntity => Results.UnprocessableEntity(new { error = result.Error ?? "Unprocessable entity." }),
+                _ => Results.Problem(result.Error ?? "Unexpected error.")
+            };
         });
 
         parentApi.MapGet("/results/{resultId:guid}", async (IAssignmentSolvingService solvingService, ClaimsPrincipal user, Guid resultId) =>
