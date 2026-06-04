@@ -1,48 +1,28 @@
 using System.Security.Claims;
-using Microsoft.EntityFrameworkCore;
+using MediatR;
 
 public static class ParentAssignmentsController
 {
     public static RouteGroupBuilder MapParentAssignmentsEndpoints(this RouteGroupBuilder parentApi)
     {
-        parentApi.MapPost("/assignments", async (AppDbContext db, ClaimsPrincipal user, CreateAssignmentRequest request) =>
+        parentApi.MapPost("/assignments", async (ISender sender, ClaimsPrincipal user, CreateAssignmentRequest request) =>
         {
             if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var childBelongsToParent = await ApiEndpointHelpers.EnsureParentOwnsChildAsync(db, parentId, request.ChildId);
-            if (!childBelongsToParent)
+            var result = await sender.Send(new CreateParentAssignmentCommand(parentId, request));
+            if (result.Assignment is null)
             {
-                return Results.BadRequest(new { error = "Child does not belong to current parent." });
+                return result.StatusCode switch
+                {
+                    StatusCodes.Status400BadRequest => Results.BadRequest(new { error = result.Error ?? "Bad request." }),
+                    _ => Results.Problem(result.Error ?? "Unexpected error.")
+                };
             }
 
-            var lesson = await db.Lessons.FirstOrDefaultAsync(x => x.Id == request.LessonId && x.CreatedBy == parentId);
-            if (lesson is null)
-            {
-                return Results.BadRequest(new { error = "Lesson does not belong to current parent." });
-            }
-
-            var assignment = new Assignment
-            {
-                ChildId = request.ChildId,
-                LessonId = request.LessonId,
-                AssignedAt = DateTime.UtcNow,
-                DueDate = request.DueDate,
-                Status = "Assigned"
-            };
-
-            db.Assignments.Add(assignment);
-            await db.SaveChangesAsync();
-
-            return Results.Created($"/api/v1/assignments/{assignment.Id}", new AssignmentResponse(
-                assignment.Id,
-                assignment.ChildId,
-                assignment.LessonId,
-                assignment.AssignedAt,
-                assignment.DueDate,
-                assignment.Status));
+            return Results.Created($"/api/v1/assignments/{result.Assignment.Id}", result.Assignment);
         });
 
         parentApi.MapGet("/assignments", async (IAssignmentReadService assignmentReadService, ClaimsPrincipal user, Guid? childId) =>
