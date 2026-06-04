@@ -104,8 +104,25 @@ GitHub Actions will:
 | Method | Path        | Description                   |
 |--------|-------------|-------------------------------|
 | GET    | /health     | Health check                  |
+| GET    | /api/v1/health | Versioned health check     |
+| POST   | /api/v1/auth/register | Register parent account |
+| POST   | /api/v1/auth/login | Get access and refresh token |
+| POST   | /api/v1/auth/refresh | Rotate refresh token and issue new access token |
+| POST   | /api/v1/auth/revoke | Revoke refresh token |
 | GET    | /api/hello  | Returns latest greeting       |
 | POST   | /api/hello  | `{"message":"..."}` — saves a new greeting |
+| GET    | /api/v1/children | List children for authenticated parent |
+| POST   | /api/v1/children | Create child `{ "name": "...", "grade": 1..12 }` |
+| PATCH  | /api/v1/children/{childId} | Update child name or grade |
+| DELETE | /api/v1/children/{childId} | Delete child |
+
+### Auth header for protected routes
+
+Send a bearer token returned by `/api/v1/auth/login`.
+
+Example:
+
+`Authorization: Bearer <access-token>`
 
 ---
 

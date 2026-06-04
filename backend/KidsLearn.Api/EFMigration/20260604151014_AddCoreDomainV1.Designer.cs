@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -10,9 +11,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace KidsLearn.Api.EFMigration
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260604151014_AddCoreDomainV1")]
+    partial class AddCoreDomainV1
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -61,11 +64,6 @@ namespace KidsLearn.Api.EFMigration
                         .HasMaxLength(320)
                         .HasColumnType("character varying(320)");
 
-                    b.Property<string>("PasswordHash")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
                     b.Property<int>("Role")
                         .HasColumnType("integer");
 
@@ -80,9 +78,8 @@ namespace KidsLearn.Api.EFMigration
                         new
                         {
                             Id = new Guid("00000000-0000-0000-0000-000000000001"),
-                            CreatedAt = new DateTime(2026, 6, 4, 15, 20, 11, 749, DateTimeKind.Utc).AddTicks(5344),
+                            CreatedAt = new DateTime(2026, 6, 4, 15, 10, 14, 720, DateTimeKind.Utc).AddTicks(5158),
                             Email = "parent@example.com",
-                            PasswordHash = "",
                             Role = 1
                         });
                 });
@@ -189,7 +186,7 @@ namespace KidsLearn.Api.EFMigration
                         new
                         {
                             Id = 1,
-                            CreatedAt = new DateTime(2026, 6, 4, 15, 20, 11, 749, DateTimeKind.Utc).AddTicks(5196),
+                            CreatedAt = new DateTime(2026, 6, 4, 15, 10, 14, 720, DateTimeKind.Utc).AddTicks(5039),
                             Text = "Hello, World!"
                         });
                 });
@@ -261,39 +258,6 @@ namespace KidsLearn.Api.EFMigration
                     b.ToTable("Questions");
                 });
 
-            modelBuilder.Entity("RefreshToken", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("RevokedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Token")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Token")
-                        .IsUnique();
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("RefreshTokens");
-                });
-
             modelBuilder.Entity("AnswerOption", b =>
                 {
                     b.HasOne("Question", "Question")
@@ -357,22 +321,9 @@ namespace KidsLearn.Api.EFMigration
                     b.Navigation("Lesson");
                 });
 
-            modelBuilder.Entity("RefreshToken", b =>
-                {
-                    b.HasOne("AppUser", "User")
-                        .WithMany("RefreshTokens")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("AppUser", b =>
                 {
                     b.Navigation("Children");
-
-                    b.Navigation("RefreshTokens");
                 });
 
             modelBuilder.Entity("Assignment", b =>
