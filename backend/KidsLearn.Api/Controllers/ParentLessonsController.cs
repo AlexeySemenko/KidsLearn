@@ -1,111 +1,29 @@
 using System.Security.Claims;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 public static class ParentLessonsController
 {
     public static RouteGroupBuilder MapParentLessonsEndpoints(this RouteGroupBuilder parentApi)
     {
-        parentApi.MapPost("/lessons", async (AppDbContext db, ClaimsPrincipal user, CreateLessonRequest request) =>
+        parentApi.MapPost("/lessons", async (ISender sender, ClaimsPrincipal user, CreateLessonRequest request) =>
         {
             if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {
                 return Results.Unauthorized();
             }
 
-            var titleValidation = ApiEndpointHelpers.ValidateRequiredNonEmpty(request.Title, "Title, subject, topic and grade (1-12) are required.");
-            if (titleValidation is not null)
+            var result = await sender.Send(new CreateParentLessonCommand(parentId, request));
+            if (result.Lesson is null)
             {
-                return titleValidation;
-            }
-
-            var subjectValidation = ApiEndpointHelpers.ValidateRequiredNonEmpty(request.Subject, "Title, subject, topic and grade (1-12) are required.");
-            if (subjectValidation is not null)
-            {
-                return subjectValidation;
-            }
-
-            var topicValidation = ApiEndpointHelpers.ValidateRequiredNonEmpty(request.Topic, "Title, subject, topic and grade (1-12) are required.");
-            if (topicValidation is not null)
-            {
-                return topicValidation;
-            }
-
-            if (!ApiEndpointHelpers.IsGradeInRange(request.Grade))
-            {
-                return Results.BadRequest(new { error = "Title, subject, topic and grade (1-12) are required." });
-            }
-
-            if (request.Questions is null || request.Questions.Count == 0)
-            {
-                return Results.BadRequest(new { error = "At least one question is required." });
-            }
-
-            var lesson = new Lesson
-            {
-                Title = request.Title.Trim(),
-                Subject = request.Subject.Trim(),
-                Grade = request.Grade,
-                Topic = request.Topic.Trim(),
-                Difficulty = string.IsNullOrWhiteSpace(request.Difficulty) ? "Medium" : request.Difficulty.Trim(),
-                CreatedBy = parentId,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            for (var i = 0; i < request.Questions.Count; i++)
-            {
-                var sourceQuestion = request.Questions[i];
-                if (string.IsNullOrWhiteSpace(sourceQuestion.QuestionText)
-                    || sourceQuestion.Answers is null
-                    || sourceQuestion.Answers.Count < 2)
+                return result.StatusCode switch
                 {
-                    return Results.BadRequest(new { error = "Each question must have text and at least two answers." });
-                }
-
-                if (!sourceQuestion.Answers.Any(x => x.IsCorrect))
-                {
-                    return Results.BadRequest(new { error = "Each question must include at least one correct answer." });
-                }
-
-                var question = new Question
-                {
-                    QuestionText = sourceQuestion.QuestionText.Trim(),
-                    Explanation = sourceQuestion.Explanation?.Trim() ?? string.Empty,
-                    Order = sourceQuestion.Order ?? (i + 1)
+                    StatusCodes.Status400BadRequest => Results.BadRequest(new { error = result.Error ?? "Bad request." }),
+                    _ => Results.Problem(result.Error ?? "Unexpected error.")
                 };
-
-                for (var answerIndex = 0; answerIndex < sourceQuestion.Answers.Count; answerIndex++)
-                {
-                    var sourceAnswer = sourceQuestion.Answers[answerIndex];
-                    if (string.IsNullOrWhiteSpace(sourceAnswer.AnswerText))
-                    {
-                        return Results.BadRequest(new { error = "Answer text is required." });
-                    }
-
-                    question.Answers.Add(new AnswerOption
-                    {
-                        AnswerText = sourceAnswer.AnswerText.Trim(),
-                        IsCorrect = sourceAnswer.IsCorrect,
-                        Order = sourceAnswer.Order ?? (answerIndex + 1)
-                    });
-                }
-
-                lesson.Questions.Add(question);
             }
 
-            db.Lessons.Add(lesson);
-            await db.SaveChangesAsync();
-
-            var response = new LessonSummaryResponse(
-                lesson.Id,
-                lesson.Title,
-                lesson.Subject,
-                lesson.Grade,
-                lesson.Topic,
-                lesson.Difficulty,
-                lesson.CreatedAt,
-                lesson.Questions.Count);
-
-            return Results.Created($"/api/v1/lessons/{lesson.Id}", response);
+            return Results.Created($"/api/v1/lessons/{result.Lesson.Id}", result.Lesson);
         });
 
         parentApi.MapGet("/lessons", async (AppDbContext db, ClaimsPrincipal user, string? subject, int? grade, string? topic, int page = 1, int pageSize = 20) =>

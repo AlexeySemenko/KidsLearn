@@ -6,10 +6,13 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using MediatR;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddProblemDetails();
+builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblyContaining<Program>());
+builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(RequestLoggingBehavior<,>));
 
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
