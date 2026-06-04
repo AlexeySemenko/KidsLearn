@@ -125,6 +125,35 @@ app.UseExceptionHandler(exceptionHandlerApp =>
     });
 });
 
+app.Use(async (context, next) =>
+{
+    var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("HttpRequest");
+    var startedAt = DateTime.UtcNow;
+
+    try
+    {
+        await next();
+        var elapsedMs = (DateTime.UtcNow - startedAt).TotalMilliseconds;
+        logger.LogInformation(
+            "HTTP {Method} {Path} responded {StatusCode} in {ElapsedMs:0.00} ms",
+            context.Request.Method,
+            context.Request.Path,
+            context.Response.StatusCode,
+            elapsedMs);
+    }
+    catch (Exception ex)
+    {
+        var elapsedMs = (DateTime.UtcNow - startedAt).TotalMilliseconds;
+        logger.LogError(
+            ex,
+            "HTTP {Method} {Path} failed in {ElapsedMs:0.00} ms",
+            context.Request.Method,
+            context.Request.Path,
+            elapsedMs);
+        throw;
+    }
+});
+
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
