@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 public static class ParentReportsController
 {
-    public static RouteGroupBuilder MapParentReportEndpoints(this RouteGroupBuilder parentApi)
+    public static RouteGroupBuilder MapParentReportsEndpoints(this RouteGroupBuilder parentApi)
     {
         parentApi.MapGet("/reports/children/{childId:guid}", async (AppDbContext db, ClaimsPrincipal user, Guid childId, DateTime? from, DateTime? to) =>
         {

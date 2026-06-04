@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 public static class ParentAssignmentsController
 {
-    public static RouteGroupBuilder MapParentAssignmentEndpoints(this RouteGroupBuilder parentApi)
+    public static RouteGroupBuilder MapParentAssignmentsEndpoints(this RouteGroupBuilder parentApi)
     {
         parentApi.MapPost("/assignments", async (AppDbContext db, ClaimsPrincipal user, CreateAssignmentRequest request) =>
         {

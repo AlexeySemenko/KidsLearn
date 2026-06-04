@@ -8,8 +8,8 @@ public static class ParentController
         parentApi.MapParentAiEndpoints();
         parentApi.MapParentChildrenEndpoints();
         parentApi.MapParentLessonsEndpoints();
-        parentApi.MapParentAssignmentEndpoints();
-        parentApi.MapParentReportEndpoints();
+        parentApi.MapParentAssignmentsEndpoints();
+        parentApi.MapParentReportsEndpoints();
 
         return apiV1;
     }
