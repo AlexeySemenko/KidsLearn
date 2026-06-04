@@ -243,7 +243,7 @@ apiV1.MapGet("/health/ready", async (AppDbContext db) =>
     return Results.Ok(new { status = "ready", database = "reachable", version = "v1" });
 });
 
-apiV1.MapAuthController(builder.Configuration);
+apiV1.MapAuthController();
 apiV1.MapParentController();
 apiV1.MapChildController();
 

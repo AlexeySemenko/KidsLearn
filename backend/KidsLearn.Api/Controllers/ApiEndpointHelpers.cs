@@ -31,25 +31,6 @@ public static class ApiEndpointHelpers
         return grade is >= 1 and <= 12;
     }
 
-    public static IResult? ValidateRequiredNonEmpty(string? value, string errorMessage)
-    {
-        return string.IsNullOrWhiteSpace(value)
-            ? Results.BadRequest(new { error = errorMessage })
-            : null;
-    }
-
-    public static IResult? ValidateOptionalNonEmpty(string? value, string errorMessage)
-    {
-        if (value is null)
-        {
-            return null;
-        }
-
-        return string.IsNullOrWhiteSpace(value)
-            ? Results.BadRequest(new { error = errorMessage })
-            : null;
-    }
-
     public static string GenerateAccessCode()
     {
         return Random.Shared.Next(100000, 999999).ToString();
@@ -75,22 +56,5 @@ public static class ApiEndpointHelpers
         return await db.Children.AnyAsync(x => x.Id == childId && x.ParentId == parentId);
     }
 
-    public static IResult ToHttpResult<T>(ServiceResult<T> result)
-    {
-        if (result.IsSuccess && result.Value is not null)
-        {
-            return Results.Ok(result.Value);
-        }
-
-        return result.StatusCode switch
-        {
-            400 => Results.BadRequest(new { error = result.Error ?? "Bad request." }),
-            401 => Results.Unauthorized(),
-            404 => Results.NotFound(new { error = result.Error ?? "Not found." }),
-            409 => Results.Conflict(new { error = result.Error ?? "Conflict." }),
-            422 => Results.UnprocessableEntity(new { error = result.Error ?? "Unprocessable entity." }),
-            _ => Results.Problem(result.Error ?? "Unexpected error.")
-        };
-    }
 }
 

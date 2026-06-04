@@ -2,7 +2,7 @@ using MediatR;
 
 public static class AuthController
 {
-    public static RouteGroupBuilder MapAuthController(this RouteGroupBuilder apiV1, IConfiguration configuration)
+    public static RouteGroupBuilder MapAuthController(this RouteGroupBuilder apiV1)
     {
         apiV1.MapPost("/auth/register", async (ISender sender, RegisterRequest request) =>
         {
