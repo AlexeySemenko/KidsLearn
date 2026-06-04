@@ -47,6 +47,7 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
 
 builder.Services.AddScoped<IPasswordHasherService, PasswordHasherService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IAssignmentSolvingService, AssignmentSolvingService>();
 
 var jwtKey = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrWhiteSpace(jwtKey) && builder.Environment.IsDevelopment())
@@ -141,6 +142,23 @@ static async Task<Guid?> ResolveChildIdAsync(AppDbContext db, ClaimsPrincipal us
         .Where(x => x.UserId == userId.Value)
         .Select(x => (Guid?)x.Id)
         .FirstOrDefaultAsync();
+}
+
+static IResult ToHttpResult<T>(ServiceResult<T> result)
+{
+    if (result.IsSuccess && result.Value is not null)
+    {
+        return Results.Ok(result.Value);
+    }
+
+    return result.StatusCode switch
+    {
+        400 => Results.BadRequest(new { error = result.Error ?? "Bad request." }),
+        401 => Results.Unauthorized(),
+        404 => Results.NotFound(new { error = result.Error ?? "Not found." }),
+        409 => Results.Conflict(new { error = result.Error ?? "Conflict." }),
+        _ => Results.Problem(result.Error ?? "Unexpected error.")
+    };
 }
 
 apiV1.MapPost("/auth/register", async (AppDbContext db, IPasswordHasherService passwordHasher, RegisterRequest request) =>
@@ -882,7 +900,7 @@ parentApi.MapGet("/assignments", async (AppDbContext db, ClaimsPrincipal user, G
     return Results.Ok(assignments);
 });
 
-parentApi.MapGet("/assignments/{assignmentId:guid}/for-solving", async (AppDbContext db, ClaimsPrincipal user, Guid assignmentId) =>
+parentApi.MapGet("/assignments/{assignmentId:guid}/for-solving", async (IAssignmentSolvingService solvingService, ClaimsPrincipal user, Guid assignmentId) =>
 {
     var parentId = ResolveUserId(user);
     if (!parentId.HasValue)
@@ -890,43 +908,11 @@ parentApi.MapGet("/assignments/{assignmentId:guid}/for-solving", async (AppDbCon
         return Results.Unauthorized();
     }
 
-    var assignment = await db.Assignments
-        .AsNoTracking()
-        .Include(x => x.Lesson)
-        .ThenInclude(x => x.Questions.OrderBy(q => q.Order))
-        .ThenInclude(q => q.Answers.OrderBy(a => a.Order))
-        .FirstOrDefaultAsync(x => x.Id == assignmentId && x.Child.ParentId == parentId.Value);
-
-    if (assignment is null)
-    {
-        return Results.NotFound();
-    }
-
-    var response = new AssignmentForSolvingResponse(
-        assignment.Id,
-        assignment.ChildId,
-        assignment.LessonId,
-        assignment.AssignedAt,
-        assignment.DueDate,
-        assignment.Status,
-        assignment.Lesson.Title,
-        assignment.Lesson.Questions
-            .OrderBy(q => q.Order)
-            .Select(q => new AssignmentQuestionResponse(
-                q.Id,
-                q.QuestionText,
-                q.Explanation,
-                q.Order,
-                q.Answers
-                    .OrderBy(a => a.Order)
-                    .Select(a => new AssignmentQuestionAnswerResponse(a.Id, a.AnswerText, a.Order))
-                    .ToList()))
-            .ToList());
-
-    return Results.Ok(response);
+    var result = await solvingService.GetForSolvingAsync(AssignmentAccessScope.Parent, parentId.Value, assignmentId);
+    return ToHttpResult(result);
 });
 
-parentApi.MapPost("/assignments/{assignmentId:guid}/answers", async (AppDbContext db, ClaimsPrincipal user, Guid assignmentId, SubmitAssignmentAnswersRequest request) =>
+parentApi.MapPost("/assignments/{assignmentId:guid}/answers", async (IAssignmentSolvingService solvingService, ClaimsPrincipal user, Guid assignmentId, SubmitAssignmentAnswersRequest request) =>
 {
     var parentId = ResolveUserId(user);
     if (!parentId.HasValue)
@@ -934,97 +920,11 @@ parentApi.MapPost("/assignments/{assignmentId:guid}/answers", async (AppDbContex
         return Results.Unauthorized();
     }
 
-    if (request.Answers is null || request.Answers.Count == 0)
-    {
-        return Results.BadRequest(new { error = "At least one answer is required." });
-    }
-
-    var assignment = await db.Assignments
-        .Include(x => x.Lesson)
-        .ThenInclude(x => x.Questions)
-        .ThenInclude(q => q.Answers)
-        .FirstOrDefaultAsync(x => x.Id == assignmentId && x.Child.ParentId == parentId.Value);
-
-    if (assignment is null)
-    {
-        return Results.NotFound();
-    }
-
-    var questionsById = assignment.Lesson.Questions.ToDictionary(q => q.Id);
-    var instantCheck = new List<InstantCheckItemResponse>();
-
-    foreach (var answer in request.Answers)
-    {
-        if (!questionsById.TryGetValue(answer.QuestionId, out var question))
-        {
-            return Results.BadRequest(new { error = "Question does not belong to assignment lesson." });
-        }
-
-        var normalizedTextAnswer = string.IsNullOrWhiteSpace(answer.TextAnswer)
-            ? null
-            : answer.TextAnswer.Trim();
-
-        var isCorrect = false;
-        if (answer.SelectedAnswerOptionId.HasValue)
-        {
-            var selected = question.Answers.FirstOrDefault(x => x.Id == answer.SelectedAnswerOptionId.Value);
-            if (selected is null)
-            {
-                return Results.BadRequest(new { error = "Selected answer option does not belong to question." });
-            }
-
-            isCorrect = selected.IsCorrect;
-        }
-        else if (!string.IsNullOrWhiteSpace(normalizedTextAnswer))
-        {
-            isCorrect = question.Answers.Any(x => x.IsCorrect && string.Equals(x.AnswerText.Trim(), normalizedTextAnswer, StringComparison.OrdinalIgnoreCase));
-        }
-        else
-        {
-            return Results.BadRequest(new { error = "Either SelectedAnswerOptionId or TextAnswer is required for each answer." });
-        }
-
-        var existing = await db.AssignmentAnswers
-            .FirstOrDefaultAsync(x => x.AssignmentId == assignment.Id && x.QuestionId == answer.QuestionId);
-
-        if (existing is null)
-        {
-            db.AssignmentAnswers.Add(new AssignmentAnswer
-            {
-                AssignmentId = assignment.Id,
-                QuestionId = answer.QuestionId,
-                SelectedAnswerOptionId = answer.SelectedAnswerOptionId,
-                TextAnswer = normalizedTextAnswer,
-                IsCorrect = isCorrect,
-                SubmittedAt = DateTime.UtcNow
-            });
-        }
-        else
-        {
-            existing.SelectedAnswerOptionId = answer.SelectedAnswerOptionId;
-            existing.TextAnswer = normalizedTextAnswer;
-            existing.IsCorrect = isCorrect;
-            existing.SubmittedAt = DateTime.UtcNow;
-        }
-
-        instantCheck.Add(new InstantCheckItemResponse(question.Id, isCorrect, question.Explanation));
-    }
-
-    if (assignment.Status == "Assigned")
-    {
-        assignment.Status = "InProgress";
-    }
-
-    await db.SaveChangesAsync();
-
-    var totalQuestions = assignment.Lesson.Questions.Count;
-    var correctCount = await db.AssignmentAnswers.CountAsync(x => x.AssignmentId == assignment.Id && x.IsCorrect);
-    var partialScore = totalQuestions == 0 ? 0 : Math.Round(100m * correctCount / totalQuestions, 2);
-
-    return Results.Ok(new SubmitAssignmentAnswersResponse(instantCheck, partialScore));
+    var result = await solvingService.SubmitAnswersAsync(AssignmentAccessScope.Parent, parentId.Value, assignmentId, request);
+    return ToHttpResult(result);
 });
 
-parentApi.MapPost("/assignments/{assignmentId:guid}/complete", async (AppDbContext db, ClaimsPrincipal user, Guid assignmentId) =>
+parentApi.MapPost("/assignments/{assignmentId:guid}/complete", async (IAssignmentSolvingService solvingService, ClaimsPrincipal user, Guid assignmentId) =>
 {
     var parentId = ResolveUserId(user);
     if (!parentId.HasValue)
@@ -1032,56 +932,11 @@ parentApi.MapPost("/assignments/{assignmentId:guid}/complete", async (AppDbConte
         return Results.Unauthorized();
     }
 
-    var assignment = await db.Assignments
-        .Include(x => x.Lesson)
-        .ThenInclude(x => x.Questions)
-        .FirstOrDefaultAsync(x => x.Id == assignmentId && x.Child.ParentId == parentId.Value);
-
-    if (assignment is null)
-    {
-        return Results.NotFound();
-    }
-
-    var totalQuestions = assignment.Lesson.Questions.Count;
-    var correctCount = await db.AssignmentAnswers.CountAsync(x => x.AssignmentId == assignment.Id && x.IsCorrect);
-    var score = totalQuestions == 0 ? 0 : Math.Round(100m * correctCount / totalQuestions, 2);
-    var completedAt = DateTime.UtcNow;
-
-    var result = await db.Results.FirstOrDefaultAsync(x => x.AssignmentId == assignment.Id);
-
-    if (result is null)
-    {
-        result = new AssignmentResult
-        {
-            AssignmentId = assignment.Id,
-            Score = score,
-            CorrectAnswers = correctCount,
-            TotalQuestions = totalQuestions,
-            CompletedAt = completedAt
-        };
-
-        db.Results.Add(result);
-    }
-    else
-    {
-        result.Score = score;
-        result.CorrectAnswers = correctCount;
-        result.TotalQuestions = totalQuestions;
-        result.CompletedAt = completedAt;
-    }
-
-    assignment.Status = "Completed";
-    await db.SaveChangesAsync();
-
-    return Results.Ok(new CompleteAssignmentResponse(
-        result.Id,
-        result.Score,
-        result.CompletedAt,
-        result.CorrectAnswers,
-        result.TotalQuestions));
+    var result = await solvingService.CompleteAsync(AssignmentAccessScope.Parent, parentId.Value, assignmentId);
+    return ToHttpResult(result);
 });
 
-parentApi.MapGet("/results/{resultId:guid}", async (AppDbContext db, ClaimsPrincipal user, Guid resultId) =>
+parentApi.MapGet("/results/{resultId:guid}", async (IAssignmentSolvingService solvingService, ClaimsPrincipal user, Guid resultId) =>
 {
     var parentId = ResolveUserId(user);
     if (!parentId.HasValue)
@@ -1089,31 +944,8 @@ parentApi.MapGet("/results/{resultId:guid}", async (AppDbContext db, ClaimsPrinc
         return Results.Unauthorized();
     }
 
-    var result = await db.Results
-        .AsNoTracking()
-        .Include(x => x.Assignment)
-        .FirstOrDefaultAsync(x => x.Id == resultId && x.Assignment.Child.ParentId == parentId.Value);
-
-    if (result is null)
-    {
-        return Results.NotFound();
-    }
-
-    var breakdown = await db.AssignmentAnswers
-        .AsNoTracking()
-        .Where(x => x.AssignmentId == result.AssignmentId)
-        .OrderBy(x => x.SubmittedAt)
-        .Select(x => new ResultBreakdownItemResponse(x.QuestionId, x.IsCorrect))
-        .ToListAsync();
-
-    return Results.Ok(new ResultDetailResponse(
-        result.Id,
-        result.AssignmentId,
-        result.Score,
-        result.CompletedAt,
-        result.CorrectAnswers,
-        result.TotalQuestions,
-        breakdown));
+    var result = await solvingService.GetResultAsync(AssignmentAccessScope.Parent, parentId.Value, resultId);
+    return ToHttpResult(result);
 });
 
 var childApi = apiV1.MapGroup("/child")
@@ -1143,7 +975,7 @@ childApi.MapGet("/assignments", async (AppDbContext db, ClaimsPrincipal user) =>
     return Results.Ok(assignments);
 });
 
-childApi.MapGet("/assignments/{assignmentId:guid}/for-solving", async (AppDbContext db, ClaimsPrincipal user, Guid assignmentId) =>
+childApi.MapGet("/assignments/{assignmentId:guid}/for-solving", async (AppDbContext db, IAssignmentSolvingService solvingService, ClaimsPrincipal user, Guid assignmentId) =>
 {
     var childId = await ResolveChildIdAsync(db, user);
     if (!childId.HasValue)
@@ -1151,43 +983,11 @@ childApi.MapGet("/assignments/{assignmentId:guid}/for-solving", async (AppDbCont
         return Results.Unauthorized();
     }
 
-    var assignment = await db.Assignments
-        .AsNoTracking()
-        .Include(x => x.Lesson)
-        .ThenInclude(x => x.Questions.OrderBy(q => q.Order))
-        .ThenInclude(q => q.Answers.OrderBy(a => a.Order))
-        .FirstOrDefaultAsync(x => x.Id == assignmentId && x.ChildId == childId.Value);
-
-    if (assignment is null)
-    {
-        return Results.NotFound();
-    }
-
-    var response = new AssignmentForSolvingResponse(
-        assignment.Id,
-        assignment.ChildId,
-        assignment.LessonId,
-        assignment.AssignedAt,
-        assignment.DueDate,
-        assignment.Status,
-        assignment.Lesson.Title,
-        assignment.Lesson.Questions
-            .OrderBy(q => q.Order)
-            .Select(q => new AssignmentQuestionResponse(
-                q.Id,
-                q.QuestionText,
-                q.Explanation,
-                q.Order,
-                q.Answers
-                    .OrderBy(a => a.Order)
-                    .Select(a => new AssignmentQuestionAnswerResponse(a.Id, a.AnswerText, a.Order))
-                    .ToList()))
-            .ToList());
-
-    return Results.Ok(response);
+    var result = await solvingService.GetForSolvingAsync(AssignmentAccessScope.Child, childId.Value, assignmentId);
+    return ToHttpResult(result);
 });
 
-childApi.MapPost("/assignments/{assignmentId:guid}/answers", async (AppDbContext db, ClaimsPrincipal user, Guid assignmentId, SubmitAssignmentAnswersRequest request) =>
+childApi.MapPost("/assignments/{assignmentId:guid}/answers", async (AppDbContext db, IAssignmentSolvingService solvingService, ClaimsPrincipal user, Guid assignmentId, SubmitAssignmentAnswersRequest request) =>
 {
     var childId = await ResolveChildIdAsync(db, user);
     if (!childId.HasValue)
@@ -1195,97 +995,11 @@ childApi.MapPost("/assignments/{assignmentId:guid}/answers", async (AppDbContext
         return Results.Unauthorized();
     }
 
-    if (request.Answers is null || request.Answers.Count == 0)
-    {
-        return Results.BadRequest(new { error = "At least one answer is required." });
-    }
-
-    var assignment = await db.Assignments
-        .Include(x => x.Lesson)
-        .ThenInclude(x => x.Questions)
-        .ThenInclude(q => q.Answers)
-        .FirstOrDefaultAsync(x => x.Id == assignmentId && x.ChildId == childId.Value);
-
-    if (assignment is null)
-    {
-        return Results.NotFound();
-    }
-
-    var questionsById = assignment.Lesson.Questions.ToDictionary(q => q.Id);
-    var instantCheck = new List<InstantCheckItemResponse>();
-
-    foreach (var answer in request.Answers)
-    {
-        if (!questionsById.TryGetValue(answer.QuestionId, out var question))
-        {
-            return Results.BadRequest(new { error = "Question does not belong to assignment lesson." });
-        }
-
-        var normalizedTextAnswer = string.IsNullOrWhiteSpace(answer.TextAnswer)
-            ? null
-            : answer.TextAnswer.Trim();
-
-        var isCorrect = false;
-        if (answer.SelectedAnswerOptionId.HasValue)
-        {
-            var selected = question.Answers.FirstOrDefault(x => x.Id == answer.SelectedAnswerOptionId.Value);
-            if (selected is null)
-            {
-                return Results.BadRequest(new { error = "Selected answer option does not belong to question." });
-            }
-
-            isCorrect = selected.IsCorrect;
-        }
-        else if (!string.IsNullOrWhiteSpace(normalizedTextAnswer))
-        {
-            isCorrect = question.Answers.Any(x => x.IsCorrect && string.Equals(x.AnswerText.Trim(), normalizedTextAnswer, StringComparison.OrdinalIgnoreCase));
-        }
-        else
-        {
-            return Results.BadRequest(new { error = "Either SelectedAnswerOptionId or TextAnswer is required for each answer." });
-        }
-
-        var existing = await db.AssignmentAnswers
-            .FirstOrDefaultAsync(x => x.AssignmentId == assignment.Id && x.QuestionId == answer.QuestionId);
-
-        if (existing is null)
-        {
-            db.AssignmentAnswers.Add(new AssignmentAnswer
-            {
-                AssignmentId = assignment.Id,
-                QuestionId = answer.QuestionId,
-                SelectedAnswerOptionId = answer.SelectedAnswerOptionId,
-                TextAnswer = normalizedTextAnswer,
-                IsCorrect = isCorrect,
-                SubmittedAt = DateTime.UtcNow
-            });
-        }
-        else
-        {
-            existing.SelectedAnswerOptionId = answer.SelectedAnswerOptionId;
-            existing.TextAnswer = normalizedTextAnswer;
-            existing.IsCorrect = isCorrect;
-            existing.SubmittedAt = DateTime.UtcNow;
-        }
-
-        instantCheck.Add(new InstantCheckItemResponse(question.Id, isCorrect, question.Explanation));
-    }
-
-    if (assignment.Status == "Assigned")
-    {
-        assignment.Status = "InProgress";
-    }
-
-    await db.SaveChangesAsync();
-
-    var totalQuestions = assignment.Lesson.Questions.Count;
-    var correctCount = await db.AssignmentAnswers.CountAsync(x => x.AssignmentId == assignment.Id && x.IsCorrect);
-    var partialScore = totalQuestions == 0 ? 0 : Math.Round(100m * correctCount / totalQuestions, 2);
-
-    return Results.Ok(new SubmitAssignmentAnswersResponse(instantCheck, partialScore));
+    var result = await solvingService.SubmitAnswersAsync(AssignmentAccessScope.Child, childId.Value, assignmentId, request);
+    return ToHttpResult(result);
 });
 
-childApi.MapPost("/assignments/{assignmentId:guid}/complete", async (AppDbContext db, ClaimsPrincipal user, Guid assignmentId) =>
+childApi.MapPost("/assignments/{assignmentId:guid}/complete", async (AppDbContext db, IAssignmentSolvingService solvingService, ClaimsPrincipal user, Guid assignmentId) =>
 {
     var childId = await ResolveChildIdAsync(db, user);
     if (!childId.HasValue)
@@ -1293,54 +1007,11 @@ childApi.MapPost("/assignments/{assignmentId:guid}/complete", async (AppDbContex
         return Results.Unauthorized();
     }
 
-    var assignment = await db.Assignments
-        .Include(x => x.Lesson)
-        .ThenInclude(x => x.Questions)
-        .FirstOrDefaultAsync(x => x.Id == assignmentId && x.ChildId == childId.Value);
-
-    if (assignment is null)
-    {
-        return Results.NotFound();
-    }
-
-    var totalQuestions = assignment.Lesson.Questions.Count;
-    var correctCount = await db.AssignmentAnswers.CountAsync(x => x.AssignmentId == assignment.Id && x.IsCorrect);
-    var score = totalQuestions == 0 ? 0 : Math.Round(100m * correctCount / totalQuestions, 2);
-    var completedAt = DateTime.UtcNow;
-
-    var result = await db.Results.FirstOrDefaultAsync(x => x.AssignmentId == assignment.Id);
-    if (result is null)
-    {
-        result = new AssignmentResult
-        {
-            AssignmentId = assignment.Id,
-            Score = score,
-            CorrectAnswers = correctCount,
-            TotalQuestions = totalQuestions,
-            CompletedAt = completedAt
-        };
-        db.Results.Add(result);
-    }
-    else
-    {
-        result.Score = score;
-        result.CorrectAnswers = correctCount;
-        result.TotalQuestions = totalQuestions;
-        result.CompletedAt = completedAt;
-    }
-
-    assignment.Status = "Completed";
-    await db.SaveChangesAsync();
-
-    return Results.Ok(new CompleteAssignmentResponse(
-        result.Id,
-        result.Score,
-        result.CompletedAt,
-        result.CorrectAnswers,
-        result.TotalQuestions));
+    var result = await solvingService.CompleteAsync(AssignmentAccessScope.Child, childId.Value, assignmentId);
+    return ToHttpResult(result);
 });
 
-childApi.MapGet("/results/{resultId:guid}", async (AppDbContext db, ClaimsPrincipal user, Guid resultId) =>
+childApi.MapGet("/results/{resultId:guid}", async (AppDbContext db, IAssignmentSolvingService solvingService, ClaimsPrincipal user, Guid resultId) =>
 {
     var childId = await ResolveChildIdAsync(db, user);
     if (!childId.HasValue)
@@ -1348,31 +1019,8 @@ childApi.MapGet("/results/{resultId:guid}", async (AppDbContext db, ClaimsPrinci
         return Results.Unauthorized();
     }
 
-    var result = await db.Results
-        .AsNoTracking()
-        .Include(x => x.Assignment)
-        .FirstOrDefaultAsync(x => x.Id == resultId && x.Assignment.ChildId == childId.Value);
-
-    if (result is null)
-    {
-        return Results.NotFound();
-    }
-
-    var breakdown = await db.AssignmentAnswers
-        .AsNoTracking()
-        .Where(x => x.AssignmentId == result.AssignmentId)
-        .OrderBy(x => x.SubmittedAt)
-        .Select(x => new ResultBreakdownItemResponse(x.QuestionId, x.IsCorrect))
-        .ToListAsync();
-
-    return Results.Ok(new ResultDetailResponse(
-        result.Id,
-        result.AssignmentId,
-        result.Score,
-        result.CompletedAt,
-        result.CorrectAnswers,
-        result.TotalQuestions,
-        breakdown));
+    var result = await solvingService.GetResultAsync(AssignmentAccessScope.Child, childId.Value, resultId);
+    return ToHttpResult(result);
 });
 
 // Main endpoint — returns greeting from DB
