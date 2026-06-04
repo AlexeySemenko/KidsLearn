@@ -1,8 +1,10 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
@@ -49,6 +51,23 @@ builder.Services.AddScoped<IPasswordHasherService, PasswordHasherService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAssignmentSolvingService, AssignmentSolvingService>();
 builder.Services.AddScoped<IAssignmentReadService, AssignmentReadService>();
+builder.Services.AddScoped<IAiLessonGenerationService, AiLessonGenerationService>();
+builder.Services.AddHttpClient<IAIProvider, OpenAiProvider>();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+});
 
 var jwtKey = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrWhiteSpace(jwtKey) && builder.Environment.IsDevelopment())
@@ -110,6 +129,17 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseCors("AllowFrontend");
+app.UseRateLimiter();
+
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.TryAdd("X-Content-Type-Options", "nosniff");
+    context.Response.Headers.TryAdd("X-Frame-Options", "DENY");
+    context.Response.Headers.TryAdd("Referrer-Policy", "no-referrer");
+    context.Response.Headers.TryAdd("X-Permitted-Cross-Domain-Policies", "none");
+    await next();
+});
+
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
@@ -162,6 +192,7 @@ static IResult ToHttpResult<T>(ServiceResult<T> result)
         401 => Results.Unauthorized(),
         404 => Results.NotFound(new { error = result.Error ?? "Not found." }),
         409 => Results.Conflict(new { error = result.Error ?? "Conflict." }),
+        422 => Results.UnprocessableEntity(new { error = result.Error ?? "Unprocessable entity." }),
         _ => Results.Problem(result.Error ?? "Unexpected error.")
     };
 }
@@ -363,6 +394,18 @@ apiV1.MapPost("/auth/revoke", async (AppDbContext db, RevokeRequest request) =>
 
 var parentApi = apiV1.MapGroup("")
     .RequireAuthorization("ParentOnly");
+
+parentApi.MapPost("/ai/lessons/generate", async (IAiLessonGenerationService aiLessonGenerationService, ClaimsPrincipal user, GenerateAiLessonRequest request, CancellationToken cancellationToken) =>
+{
+    var parentId = ResolveUserId(user);
+    if (!parentId.HasValue)
+    {
+        return Results.Unauthorized();
+    }
+
+    var result = await aiLessonGenerationService.GenerateAndPersistAsync(parentId.Value, request, cancellationToken);
+    return ToHttpResult(result);
+});
 
 parentApi.MapGet("/children", async (AppDbContext db, ClaimsPrincipal user) =>
 {
