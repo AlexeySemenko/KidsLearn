@@ -6,6 +6,8 @@ public interface IAIProvider
     Task<GeneratedLessonDraft> GenerateLessonDraftAsync(GenerateAiLessonRequest request, CancellationToken cancellationToken = default);
 }
 
+public sealed class AiSchemaValidationException(string message) : Exception(message);
+
 public interface IAiLessonGenerationService
 {
     Task<ServiceResult<GenerateAiLessonResponse>> GenerateAndPersistAsync(Guid parentId, GenerateAiLessonRequest request, CancellationToken cancellationToken = default);
@@ -53,23 +55,38 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
                 input = prompt
             });
 
-            using var requestMessage = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/responses");
-            requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
-            requestMessage.Content = new StringContent(payload, Encoding.UTF8, "application/json");
-
-            using var response = await httpClient.SendAsync(requestMessage, cancellationToken);
-            if (!response.IsSuccessStatusCode)
+            for (var attempt = 1; attempt <= 2; attempt++)
             {
-                return BuildFallbackDraft(request, model, $"OpenAI returned {(int)response.StatusCode}. Fallback generator is used.");
+                using var requestMessage = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/responses");
+                requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+                requestMessage.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+                using var response = await httpClient.SendAsync(requestMessage, cancellationToken);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var isTransient = (int)response.StatusCode is 429 or 500 or 502 or 503 or 504;
+                    if (attempt < 2 && isTransient)
+                    {
+                        continue;
+                    }
+
+                    return BuildFallbackDraft(request, model, $"OpenAI returned {(int)response.StatusCode}. Fallback generator is used.");
+                }
+
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                if (TryParseDraftFromResponse(body, request, model, out var draft, out var parseError))
+                {
+                    return draft;
+                }
+
+                throw new AiSchemaValidationException(parseError ?? "Unknown AI schema validation error.");
             }
 
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            if (TryParseDraftFromResponse(body, request, model, out var draft))
-            {
-                return draft;
-            }
-
-            return BuildFallbackDraft(request, model, "OpenAI response could not be parsed. Fallback generator is used.");
+            return BuildFallbackDraft(request, model, "OpenAI response retry policy exhausted. Fallback generator is used.");
+        }
+        catch (AiSchemaValidationException)
+        {
+            throw;
         }
         catch
         {
@@ -91,29 +108,57 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
                $"QuestionCount: {request.QuestionCount}; Language: {request.Language ?? "en"}; QuestionTypes: {types}.";
     }
 
-    private static bool TryParseDraftFromResponse(string body, GenerateAiLessonRequest request, string model, out GeneratedLessonDraft draft)
+    private static bool TryParseDraftFromResponse(string body, GenerateAiLessonRequest request, string model, out GeneratedLessonDraft draft, out string? error)
     {
         draft = BuildFallbackDraft(request, model, "Fallback parser initialization.");
+        error = null;
 
-        using var doc = JsonDocument.Parse(body);
+        JsonDocument doc;
+        try
+        {
+            doc = JsonDocument.Parse(body);
+        }
+        catch (JsonException ex)
+        {
+            error = $"OpenAI transport payload is not valid JSON: {ex.Message}";
+            return false;
+        }
+
+        using (doc)
+        {
         if (!doc.RootElement.TryGetProperty("output_text", out var outputTextElement))
         {
+            error = "Missing 'output_text' in OpenAI response.";
             return false;
         }
 
         var outputText = outputTextElement.GetString();
         if (string.IsNullOrWhiteSpace(outputText))
         {
+            error = "Field 'output_text' is empty in OpenAI response.";
             return false;
         }
 
-        using var lessonDoc = JsonDocument.Parse(outputText);
+        JsonDocument lessonDoc;
+        try
+        {
+            lessonDoc = JsonDocument.Parse(outputText);
+        }
+        catch (JsonException ex)
+        {
+            error = $"AI lesson payload is not valid JSON: {ex.Message}";
+            return false;
+        }
+
+        using (lessonDoc)
+        {
         var root = lessonDoc.RootElement;
 
         if (!root.TryGetProperty("title", out var titleProp)
             || !root.TryGetProperty("questions", out var questionsProp)
             || questionsProp.ValueKind != JsonValueKind.Array)
         {
+            error = "AI lesson payload must contain 'title' and array 'questions'.";
             return false;
         }
 
@@ -125,6 +170,7 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
                 || !q.TryGetProperty("answers", out var answersProp)
                 || answersProp.ValueKind != JsonValueKind.Array)
             {
+                error = $"Question #{index} must contain 'questionText' and array 'answers'.";
                 return false;
             }
 
@@ -135,6 +181,7 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
                 if (!a.TryGetProperty("answerText", out var answerTextProp)
                     || !a.TryGetProperty("isCorrect", out var isCorrectProp))
                 {
+                    error = $"Question #{index}, answer #{answerIndex} must contain 'answerText' and 'isCorrect'.";
                     return false;
                 }
 
@@ -153,6 +200,12 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
             index++;
         }
 
+        if (questions.Count == 0)
+        {
+            error = "AI lesson payload must contain at least one question.";
+            return false;
+        }
+
         draft = new GeneratedLessonDraft(
             titleProp.GetString() ?? $"{request.Topic} Practice",
             request.Subject,
@@ -161,6 +214,9 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
             request.Difficulty?.Trim() ?? "Medium",
             questions,
             new AiProviderMetaResponse("OpenAI", model, false, null));
+
+        }
+        }
 
         return true;
     }
@@ -219,7 +275,15 @@ public sealed class AiLessonGenerationService(AppDbContext db, IAIProvider aiPro
             return ServiceResult<GenerateAiLessonResponse>.Fail(400, "Subject, topic, grade (1-12) and questionCount (1-20) are required.");
         }
 
-        var draft = await aiProvider.GenerateLessonDraftAsync(request, cancellationToken);
+        GeneratedLessonDraft draft;
+        try
+        {
+            draft = await aiProvider.GenerateLessonDraftAsync(request, cancellationToken);
+        }
+        catch (AiSchemaValidationException ex)
+        {
+            return ServiceResult<GenerateAiLessonResponse>.Fail(422, $"AI schema validation failed: {ex.Message}");
+        }
 
         if (draft.Questions.Count == 0)
         {

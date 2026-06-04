@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 public class AiLessonGenerationIntegrationTests
@@ -41,6 +42,39 @@ public class AiLessonGenerationIntegrationTests
         Assert.Equal(3, persistedLesson!.Questions.Count);
     }
 
+    [Fact]
+    public async Task Parent_GenerateAiLesson_Returns422_WhenProviderSchemaIsInvalid()
+    {
+        await using var factory = new KidsLearnApiFactory(services =>
+        {
+            services.RemoveAll<IAIProvider>();
+            services.AddScoped<IAIProvider, InvalidSchemaAiProvider>();
+        });
+        using var client = factory.CreateClient();
+
+        EnsureParentUser(factory.Services);
+        var parentToken = CreateParentToken(factory.Services);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", parentToken);
+
+        var request = new GenerateAiLessonRequest(
+            "Math",
+            3,
+            "Fractions",
+            3,
+            "Easy",
+            "en",
+            new List<string> { "multiple-choice" });
+
+        var response = await client.PostAsJsonAsync("/api/v1/ai/lessons/generate", request);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+
+        var payload = await response.Content.ReadFromJsonAsync<Dictionary<string, string>>();
+        Assert.NotNull(payload);
+        Assert.True(payload!.TryGetValue("error", out var error));
+        Assert.Contains("AI schema validation failed", error);
+        Assert.Contains("Question #1", error);
+    }
+
     private static void EnsureParentUser(IServiceProvider services)
     {
         using var scope = services.CreateScope();
@@ -71,5 +105,13 @@ public class AiLessonGenerationIntegrationTests
 
         var user = db.Users.First(x => x.Email == "parent.test@example.com");
         return tokenService.CreateAccessToken(user);
+    }
+
+    private sealed class InvalidSchemaAiProvider : IAIProvider
+    {
+        public Task<GeneratedLessonDraft> GenerateLessonDraftAsync(GenerateAiLessonRequest request, CancellationToken cancellationToken = default)
+        {
+            throw new AiSchemaValidationException("Question #1 must contain 'questionText' and array 'answers'.");
+        }
     }
 }
