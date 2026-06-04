@@ -123,6 +123,26 @@ static Guid? ResolveUserId(ClaimsPrincipal user)
     return Guid.TryParse(candidate, out var userId) ? userId : null;
 }
 
+static string GenerateAccessCode()
+{
+    return Random.Shared.Next(100000, 999999).ToString();
+}
+
+static async Task<Guid?> ResolveChildIdAsync(AppDbContext db, ClaimsPrincipal user)
+{
+    var userId = ResolveUserId(user);
+    if (!userId.HasValue)
+    {
+        return null;
+    }
+
+    return await db.Children
+        .AsNoTracking()
+        .Where(x => x.UserId == userId.Value)
+        .Select(x => (Guid?)x.Id)
+        .FirstOrDefaultAsync();
+}
+
 apiV1.MapPost("/auth/register", async (AppDbContext db, IPasswordHasherService passwordHasher, RegisterRequest request) =>
 {
     if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
@@ -200,6 +220,55 @@ apiV1.MapPost("/auth/login", async (AppDbContext db, IPasswordHasherService pass
         refreshToken,
         expiresIn,
         new AuthUserResponse(user.Id, user.Email, user.Role.ToString())));
+});
+
+apiV1.MapPost("/auth/child-login", async (AppDbContext db, IPasswordHasherService passwordHasher, IJwtTokenService tokenService, ChildLoginRequest request) =>
+{
+    if (request.ChildId == Guid.Empty || string.IsNullOrWhiteSpace(request.AccessCode))
+    {
+        return Results.BadRequest(new { error = "ChildId and access code are required." });
+    }
+
+    var child = await db.Children
+        .Include(x => x.User)
+        .FirstOrDefaultAsync(x => x.Id == request.ChildId);
+
+    if (child?.User is null || child.User.Role != UserRole.Child)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (string.IsNullOrWhiteSpace(child.User.PasswordHash)
+        || !passwordHasher.VerifyPassword(request.AccessCode.Trim(), child.User.PasswordHash))
+    {
+        return Results.Unauthorized();
+    }
+
+    var accessToken = tokenService.CreateAccessToken(child.User);
+    var refreshToken = tokenService.CreateRefreshToken();
+    var refreshExpiresDays = int.TryParse(builder.Configuration["Jwt:RefreshTokenExpirationDays"], out var refreshDays)
+        ? refreshDays
+        : 14;
+
+    db.RefreshTokens.Add(new RefreshToken
+    {
+        UserId = child.User.Id,
+        Token = refreshToken,
+        CreatedAt = DateTime.UtcNow,
+        ExpiresAt = DateTime.UtcNow.AddDays(refreshExpiresDays)
+    });
+
+    await db.SaveChangesAsync();
+
+    var expiresIn = int.TryParse(builder.Configuration["Jwt:AccessTokenExpirationMinutes"], out var accessMinutes)
+        ? accessMinutes * 60
+        : 1800;
+
+    return Results.Ok(new AuthTokenResponse(
+        accessToken,
+        refreshToken,
+        expiresIn,
+        new AuthUserResponse(child.User.Id, child.Name, child.User.Role.ToString())));
 });
 
 apiV1.MapPost("/auth/refresh", async (AppDbContext db, IJwtTokenService tokenService, RefreshRequest request) =>
@@ -288,7 +357,7 @@ parentApi.MapGet("/children", async (AppDbContext db, ClaimsPrincipal user) =>
     return Results.Ok(children);
 });
 
-parentApi.MapPost("/children", async (AppDbContext db, ClaimsPrincipal user, CreateChildRequest request) =>
+parentApi.MapPost("/children", async (AppDbContext db, ClaimsPrincipal user, IPasswordHasherService passwordHasher, CreateChildRequest request) =>
 {
     var parentId = ResolveUserId(user);
     if (!parentId.HasValue)
@@ -312,9 +381,27 @@ parentApi.MapPost("/children", async (AppDbContext db, ClaimsPrincipal user, Cre
         return Results.NotFound(new { error = "Parent was not found." });
     }
 
+    var accessCode = string.IsNullOrWhiteSpace(request.AccessCode)
+        ? GenerateAccessCode()
+        : request.AccessCode.Trim();
+
+    if (accessCode.Length < 4)
+    {
+        return Results.BadRequest(new { error = "Access code must contain at least 4 characters." });
+    }
+
+    var childUser = new AppUser
+    {
+        Email = $"child-{Guid.NewGuid():N}@kidslearn.local",
+        PasswordHash = passwordHasher.HashPassword(accessCode),
+        Role = UserRole.Child,
+        CreatedAt = DateTime.UtcNow
+    };
+
     var child = new Child
     {
         ParentId = parentId.Value,
+        User = childUser,
         Name = request.Name.Trim(),
         Grade = request.Grade
     };
@@ -322,10 +409,12 @@ parentApi.MapPost("/children", async (AppDbContext db, ClaimsPrincipal user, Cre
     db.Children.Add(child);
     await db.SaveChangesAsync();
 
-    return Results.Created($"/api/v1/children/{child.Id}", new ChildResponse(child.Id, child.ParentId, child.Name, child.Grade));
+    return Results.Created(
+        $"/api/v1/children/{child.Id}",
+        new CreatedChildResponse(new ChildResponse(child.Id, child.ParentId, child.Name, child.Grade), accessCode));
 });
 
-parentApi.MapPatch("/children/{childId:guid}", async (AppDbContext db, ClaimsPrincipal user, Guid childId, UpdateChildRequest request) =>
+parentApi.MapPatch("/children/{childId:guid}", async (AppDbContext db, ClaimsPrincipal user, IPasswordHasherService passwordHasher, Guid childId, UpdateChildRequest request) =>
 {
     var parentId = ResolveUserId(user);
     if (!parentId.HasValue)
@@ -359,8 +448,52 @@ parentApi.MapPatch("/children/{childId:guid}", async (AppDbContext db, ClaimsPri
         child.Grade = request.Grade.Value;
     }
 
+    if (request.AccessCode is not null)
+    {
+        if (string.IsNullOrWhiteSpace(request.AccessCode) || request.AccessCode.Trim().Length < 4)
+        {
+            return Results.BadRequest(new { error = "Access code must contain at least 4 characters." });
+        }
+
+        if (child.UserId.HasValue)
+        {
+            var childUser = await db.Users.FirstOrDefaultAsync(x => x.Id == child.UserId.Value && x.Role == UserRole.Child);
+            if (childUser is not null)
+            {
+                childUser.PasswordHash = passwordHasher.HashPassword(request.AccessCode.Trim());
+            }
+        }
+    }
+
     await db.SaveChangesAsync();
     return Results.Ok(new ChildResponse(child.Id, child.ParentId, child.Name, child.Grade));
+});
+
+parentApi.MapPost("/children/{childId:guid}/access-code/reset", async (AppDbContext db, ClaimsPrincipal user, IPasswordHasherService passwordHasher, Guid childId) =>
+{
+    var parentId = ResolveUserId(user);
+    if (!parentId.HasValue)
+    {
+        return Results.Unauthorized();
+    }
+
+    var child = await db.Children.FirstOrDefaultAsync(x => x.Id == childId && x.ParentId == parentId.Value);
+    if (child is null || !child.UserId.HasValue)
+    {
+        return Results.NotFound();
+    }
+
+    var childUser = await db.Users.FirstOrDefaultAsync(x => x.Id == child.UserId.Value && x.Role == UserRole.Child);
+    if (childUser is null)
+    {
+        return Results.NotFound();
+    }
+
+    var newCode = GenerateAccessCode();
+    childUser.PasswordHash = passwordHasher.HashPassword(newCode);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new ResetChildAccessCodeResponse(child.Id, newCode));
 });
 
 parentApi.MapDelete("/children/{childId:guid}", async (AppDbContext db, ClaimsPrincipal user, Guid childId) =>
@@ -377,7 +510,18 @@ parentApi.MapDelete("/children/{childId:guid}", async (AppDbContext db, ClaimsPr
         return Results.NotFound();
     }
 
+    AppUser? childUser = null;
+    if (child.UserId.HasValue)
+    {
+        childUser = await db.Users.FirstOrDefaultAsync(x => x.Id == child.UserId.Value && x.Role == UserRole.Child);
+    }
+
     db.Children.Remove(child);
+    if (childUser is not null)
+    {
+        db.Users.Remove(childUser);
+    }
+
     await db.SaveChangesAsync();
 
     return Results.NoContent();
@@ -949,6 +1093,265 @@ parentApi.MapGet("/results/{resultId:guid}", async (AppDbContext db, ClaimsPrinc
         .AsNoTracking()
         .Include(x => x.Assignment)
         .FirstOrDefaultAsync(x => x.Id == resultId && x.Assignment.Child.ParentId == parentId.Value);
+
+    if (result is null)
+    {
+        return Results.NotFound();
+    }
+
+    var breakdown = await db.AssignmentAnswers
+        .AsNoTracking()
+        .Where(x => x.AssignmentId == result.AssignmentId)
+        .OrderBy(x => x.SubmittedAt)
+        .Select(x => new ResultBreakdownItemResponse(x.QuestionId, x.IsCorrect))
+        .ToListAsync();
+
+    return Results.Ok(new ResultDetailResponse(
+        result.Id,
+        result.AssignmentId,
+        result.Score,
+        result.CompletedAt,
+        result.CorrectAnswers,
+        result.TotalQuestions,
+        breakdown));
+});
+
+var childApi = apiV1.MapGroup("/child")
+    .RequireAuthorization("ChildOnly");
+
+childApi.MapGet("/assignments", async (AppDbContext db, ClaimsPrincipal user) =>
+{
+    var childId = await ResolveChildIdAsync(db, user);
+    if (!childId.HasValue)
+    {
+        return Results.Unauthorized();
+    }
+
+    var assignments = await db.Assignments
+        .AsNoTracking()
+        .Where(x => x.ChildId == childId.Value)
+        .OrderByDescending(x => x.AssignedAt)
+        .Select(x => new AssignmentResponse(
+            x.Id,
+            x.ChildId,
+            x.LessonId,
+            x.AssignedAt,
+            x.DueDate,
+            x.Status))
+        .ToListAsync();
+
+    return Results.Ok(assignments);
+});
+
+childApi.MapGet("/assignments/{assignmentId:guid}/for-solving", async (AppDbContext db, ClaimsPrincipal user, Guid assignmentId) =>
+{
+    var childId = await ResolveChildIdAsync(db, user);
+    if (!childId.HasValue)
+    {
+        return Results.Unauthorized();
+    }
+
+    var assignment = await db.Assignments
+        .AsNoTracking()
+        .Include(x => x.Lesson)
+        .ThenInclude(x => x.Questions.OrderBy(q => q.Order))
+        .ThenInclude(q => q.Answers.OrderBy(a => a.Order))
+        .FirstOrDefaultAsync(x => x.Id == assignmentId && x.ChildId == childId.Value);
+
+    if (assignment is null)
+    {
+        return Results.NotFound();
+    }
+
+    var response = new AssignmentForSolvingResponse(
+        assignment.Id,
+        assignment.ChildId,
+        assignment.LessonId,
+        assignment.AssignedAt,
+        assignment.DueDate,
+        assignment.Status,
+        assignment.Lesson.Title,
+        assignment.Lesson.Questions
+            .OrderBy(q => q.Order)
+            .Select(q => new AssignmentQuestionResponse(
+                q.Id,
+                q.QuestionText,
+                q.Explanation,
+                q.Order,
+                q.Answers
+                    .OrderBy(a => a.Order)
+                    .Select(a => new AssignmentQuestionAnswerResponse(a.Id, a.AnswerText, a.Order))
+                    .ToList()))
+            .ToList());
+
+    return Results.Ok(response);
+});
+
+childApi.MapPost("/assignments/{assignmentId:guid}/answers", async (AppDbContext db, ClaimsPrincipal user, Guid assignmentId, SubmitAssignmentAnswersRequest request) =>
+{
+    var childId = await ResolveChildIdAsync(db, user);
+    if (!childId.HasValue)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (request.Answers is null || request.Answers.Count == 0)
+    {
+        return Results.BadRequest(new { error = "At least one answer is required." });
+    }
+
+    var assignment = await db.Assignments
+        .Include(x => x.Lesson)
+        .ThenInclude(x => x.Questions)
+        .ThenInclude(q => q.Answers)
+        .FirstOrDefaultAsync(x => x.Id == assignmentId && x.ChildId == childId.Value);
+
+    if (assignment is null)
+    {
+        return Results.NotFound();
+    }
+
+    var questionsById = assignment.Lesson.Questions.ToDictionary(q => q.Id);
+    var instantCheck = new List<InstantCheckItemResponse>();
+
+    foreach (var answer in request.Answers)
+    {
+        if (!questionsById.TryGetValue(answer.QuestionId, out var question))
+        {
+            return Results.BadRequest(new { error = "Question does not belong to assignment lesson." });
+        }
+
+        var normalizedTextAnswer = string.IsNullOrWhiteSpace(answer.TextAnswer)
+            ? null
+            : answer.TextAnswer.Trim();
+
+        var isCorrect = false;
+        if (answer.SelectedAnswerOptionId.HasValue)
+        {
+            var selected = question.Answers.FirstOrDefault(x => x.Id == answer.SelectedAnswerOptionId.Value);
+            if (selected is null)
+            {
+                return Results.BadRequest(new { error = "Selected answer option does not belong to question." });
+            }
+
+            isCorrect = selected.IsCorrect;
+        }
+        else if (!string.IsNullOrWhiteSpace(normalizedTextAnswer))
+        {
+            isCorrect = question.Answers.Any(x => x.IsCorrect && string.Equals(x.AnswerText.Trim(), normalizedTextAnswer, StringComparison.OrdinalIgnoreCase));
+        }
+        else
+        {
+            return Results.BadRequest(new { error = "Either SelectedAnswerOptionId or TextAnswer is required for each answer." });
+        }
+
+        var existing = await db.AssignmentAnswers
+            .FirstOrDefaultAsync(x => x.AssignmentId == assignment.Id && x.QuestionId == answer.QuestionId);
+
+        if (existing is null)
+        {
+            db.AssignmentAnswers.Add(new AssignmentAnswer
+            {
+                AssignmentId = assignment.Id,
+                QuestionId = answer.QuestionId,
+                SelectedAnswerOptionId = answer.SelectedAnswerOptionId,
+                TextAnswer = normalizedTextAnswer,
+                IsCorrect = isCorrect,
+                SubmittedAt = DateTime.UtcNow
+            });
+        }
+        else
+        {
+            existing.SelectedAnswerOptionId = answer.SelectedAnswerOptionId;
+            existing.TextAnswer = normalizedTextAnswer;
+            existing.IsCorrect = isCorrect;
+            existing.SubmittedAt = DateTime.UtcNow;
+        }
+
+        instantCheck.Add(new InstantCheckItemResponse(question.Id, isCorrect, question.Explanation));
+    }
+
+    if (assignment.Status == "Assigned")
+    {
+        assignment.Status = "InProgress";
+    }
+
+    await db.SaveChangesAsync();
+
+    var totalQuestions = assignment.Lesson.Questions.Count;
+    var correctCount = await db.AssignmentAnswers.CountAsync(x => x.AssignmentId == assignment.Id && x.IsCorrect);
+    var partialScore = totalQuestions == 0 ? 0 : Math.Round(100m * correctCount / totalQuestions, 2);
+
+    return Results.Ok(new SubmitAssignmentAnswersResponse(instantCheck, partialScore));
+});
+
+childApi.MapPost("/assignments/{assignmentId:guid}/complete", async (AppDbContext db, ClaimsPrincipal user, Guid assignmentId) =>
+{
+    var childId = await ResolveChildIdAsync(db, user);
+    if (!childId.HasValue)
+    {
+        return Results.Unauthorized();
+    }
+
+    var assignment = await db.Assignments
+        .Include(x => x.Lesson)
+        .ThenInclude(x => x.Questions)
+        .FirstOrDefaultAsync(x => x.Id == assignmentId && x.ChildId == childId.Value);
+
+    if (assignment is null)
+    {
+        return Results.NotFound();
+    }
+
+    var totalQuestions = assignment.Lesson.Questions.Count;
+    var correctCount = await db.AssignmentAnswers.CountAsync(x => x.AssignmentId == assignment.Id && x.IsCorrect);
+    var score = totalQuestions == 0 ? 0 : Math.Round(100m * correctCount / totalQuestions, 2);
+    var completedAt = DateTime.UtcNow;
+
+    var result = await db.Results.FirstOrDefaultAsync(x => x.AssignmentId == assignment.Id);
+    if (result is null)
+    {
+        result = new AssignmentResult
+        {
+            AssignmentId = assignment.Id,
+            Score = score,
+            CorrectAnswers = correctCount,
+            TotalQuestions = totalQuestions,
+            CompletedAt = completedAt
+        };
+        db.Results.Add(result);
+    }
+    else
+    {
+        result.Score = score;
+        result.CorrectAnswers = correctCount;
+        result.TotalQuestions = totalQuestions;
+        result.CompletedAt = completedAt;
+    }
+
+    assignment.Status = "Completed";
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new CompleteAssignmentResponse(
+        result.Id,
+        result.Score,
+        result.CompletedAt,
+        result.CorrectAnswers,
+        result.TotalQuestions));
+});
+
+childApi.MapGet("/results/{resultId:guid}", async (AppDbContext db, ClaimsPrincipal user, Guid resultId) =>
+{
+    var childId = await ResolveChildIdAsync(db, user);
+    if (!childId.HasValue)
+    {
+        return Results.Unauthorized();
+    }
+
+    var result = await db.Results
+        .AsNoTracking()
+        .Include(x => x.Assignment)
+        .FirstOrDefaultAsync(x => x.Id == resultId && x.Assignment.ChildId == childId.Value);
 
     if (result is null)
     {
