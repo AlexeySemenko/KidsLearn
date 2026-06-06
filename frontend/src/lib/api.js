@@ -135,3 +135,7 @@ export async function createAssignment(accessToken, payload) {
     body: JSON.stringify(payload),
   }))
 }
+
+export async function getChildAssignments(accessToken) {
+  return request('/api/v1/child/assignments', withAuth(accessToken))
+}
