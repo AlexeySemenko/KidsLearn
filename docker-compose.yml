@@ -21,6 +21,7 @@ services:
     ports:
       - "8080:8080"
     environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
       ConnectionStrings__Postgres: "Host=postgres;Database=kidslearn;Username=postgres;Password=postgres"
       AllowedOrigins__0: "http://localhost:5173"
       AllowedOrigins__1: "http://localhost:3000"
