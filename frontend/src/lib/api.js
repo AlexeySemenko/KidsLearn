@@ -27,6 +27,16 @@ async function request(path, options = {}) {
   return payload
 }
 
+function withAuth(accessToken, options = {}) {
+  return {
+    ...options,
+    headers: {
+      ...(options.headers ?? {}),
+      Authorization: `Bearer ${accessToken}`,
+    },
+  }
+}
+
 export async function loginParent(credentials) {
   return request('/api/v1/auth/login', {
     method: 'POST',
@@ -53,4 +63,27 @@ export async function revokeSession(refreshToken) {
     method: 'POST',
     body: JSON.stringify({ refreshToken }),
   })
+}
+
+export async function getChildren(accessToken) {
+  return request('/api/v1/children', withAuth(accessToken))
+}
+
+export async function createChild(accessToken, payload) {
+  return request('/api/v1/children', withAuth(accessToken, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }))
+}
+
+export async function resetChildAccessCode(accessToken, childId) {
+  return request(`/api/v1/children/${childId}/access-code/reset`, withAuth(accessToken, {
+    method: 'POST',
+  }))
+}
+
+export async function deleteChild(accessToken, childId) {
+  return request(`/api/v1/children/${childId}`, withAuth(accessToken, {
+    method: 'DELETE',
+  }))
 }

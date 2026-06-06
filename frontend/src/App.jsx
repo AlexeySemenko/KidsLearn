@@ -5,6 +5,7 @@ import AuthBootstrap from './components/AuthBootstrap'
 import ProtectedRoute from './components/ProtectedRoute'
 import ChildHomePage from './pages/ChildHomePage'
 import LoginPage from './pages/LoginPage'
+import ParentChildrenPage from './pages/ParentChildrenPage'
 import ParentHomePage from './pages/ParentHomePage'
 import PlaceholderSection from './pages/PlaceholderSection'
 
@@ -33,13 +34,7 @@ export default function App() {
               <Route index element={<ParentHomePage />} />
               <Route
                 path="children"
-                element={
-                  <PlaceholderSection
-                    title="Children management"
-                    copy="This route is ready for the list/create/edit/reset/delete flow from the backlog."
-                    epic="Epic 3.2"
-                  />
-                }
+                element={<ParentChildrenPage />}
               />
               <Route
                 path="lessons"
