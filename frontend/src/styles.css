@@ -685,6 +685,22 @@ select.input:invalid {
   padding: 1.5rem;
 }
 
+.lessons-toolbar {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.lessons-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.3fr) repeat(3, minmax(140px, 0.8fr));
+  gap: 0.85rem;
+}
+
 .lesson-row {
   display: flex;
   justify-content: space-between;
@@ -935,6 +951,7 @@ select.input:invalid {
 
   .lesson-edit-grid,
   .lessons-form-grid,
+  .lessons-filter-grid,
   .assignments-form-grid {
     grid-template-columns: 1fr;
   }
@@ -979,6 +996,7 @@ select.input:invalid {
 
   .lesson-edit-grid,
   .lessons-form-grid,
+  .lessons-filter-grid,
   .assignments-form-grid {
     grid-template-columns: 1fr;
   }

@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createLesson, deleteLesson, duplicateLesson, getLessons, updateLesson } from '../lib/api'
 import { useAuth } from '../auth/AuthProvider'
+
+const LESSONS_FILTERS_STORAGE_KEY = 'kidslearn.parent.lessons.filters.v1'
 
 const emptyCreateForm = {
   title: '',
@@ -53,6 +55,29 @@ function validateEditLesson(form) {
   return null
 }
 
+function readStoredLessonsFilters() {
+  if (typeof window === 'undefined') {
+    return { searchTerm: '', gradeFilter: 'all', difficultyFilter: 'all', sortBy: 'newest' }
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(LESSONS_FILTERS_STORAGE_KEY)
+    if (!rawValue) {
+      return { searchTerm: '', gradeFilter: 'all', difficultyFilter: 'all', sortBy: 'newest' }
+    }
+
+    const parsed = JSON.parse(rawValue)
+    return {
+      searchTerm: typeof parsed.searchTerm === 'string' ? parsed.searchTerm : '',
+      gradeFilter: typeof parsed.gradeFilter === 'string' ? parsed.gradeFilter : 'all',
+      difficultyFilter: typeof parsed.difficultyFilter === 'string' ? parsed.difficultyFilter : 'all',
+      sortBy: typeof parsed.sortBy === 'string' ? parsed.sortBy : 'newest',
+    }
+  } catch {
+    return { searchTerm: '', gradeFilter: 'all', difficultyFilter: 'all', sortBy: 'newest' }
+  }
+}
+
 export default function ParentLessonsPage() {
   const { session } = useAuth()
   const [lessons, setLessons] = useState([])
@@ -64,6 +89,70 @@ export default function ParentLessonsPage() {
   const [editingLessonId, setEditingLessonId] = useState(null)
   const [editForm, setEditForm] = useState({ title: '', subject: '', grade: '1', topic: '', difficulty: 'Medium' })
   const [pendingActionId, setPendingActionId] = useState(null)
+  const [storedFilters] = useState(() => readStoredLessonsFilters())
+  const [searchTerm, setSearchTerm] = useState(storedFilters.searchTerm)
+  const [gradeFilter, setGradeFilter] = useState(storedFilters.gradeFilter)
+  const [difficultyFilter, setDifficultyFilter] = useState(storedFilters.difficultyFilter)
+  const [sortBy, setSortBy] = useState(storedFilters.sortBy)
+
+  const availableGrades = useMemo(() => {
+    return [...new Set(lessons.map((lesson) => String(lesson.grade)))].sort((a, b) => Number(a) - Number(b))
+  }, [lessons])
+
+  const availableDifficulties = useMemo(() => {
+    return [...new Set(lessons.map((lesson) => lesson.difficulty).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  }, [lessons])
+
+  const filteredLessons = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase()
+
+    return lessons.filter((lesson) => {
+      const matchesSearch = !normalizedSearch
+        || lesson.title.toLowerCase().includes(normalizedSearch)
+        || lesson.subject.toLowerCase().includes(normalizedSearch)
+        || lesson.topic.toLowerCase().includes(normalizedSearch)
+
+      const matchesGrade = gradeFilter === 'all' || String(lesson.grade) === gradeFilter
+      const matchesDifficulty = difficultyFilter === 'all' || lesson.difficulty === difficultyFilter
+
+      return matchesSearch && matchesGrade && matchesDifficulty
+    })
+  }, [difficultyFilter, gradeFilter, lessons, searchTerm])
+
+  const visibleLessons = useMemo(() => {
+    const items = [...filteredLessons]
+
+    switch (sortBy) {
+      case 'title-asc':
+        items.sort((a, b) => a.title.localeCompare(b.title))
+        break
+      case 'grade-asc':
+        items.sort((a, b) => a.grade - b.grade || a.title.localeCompare(b.title))
+        break
+      case 'difficulty-asc':
+        items.sort((a, b) => a.difficulty.localeCompare(b.difficulty) || a.title.localeCompare(b.title))
+        break
+      case 'questions-desc':
+        items.sort((a, b) => b.questionCount - a.questionCount || a.title.localeCompare(b.title))
+        break
+      case 'newest':
+      default:
+        break
+    }
+
+    return items
+  }, [filteredLessons, sortBy])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    window.localStorage.setItem(
+      LESSONS_FILTERS_STORAGE_KEY,
+      JSON.stringify({ searchTerm, gradeFilter, difficultyFilter, sortBy }),
+    )
+  }, [difficultyFilter, gradeFilter, searchTerm, sortBy])
 
   useEffect(() => {
     let isMounted = true
@@ -358,15 +447,78 @@ export default function ParentLessonsPage() {
             <h3>Lessons</h3>
             <p>Summary-level management for the parent lesson library.</p>
           </div>
-          <span className="badge">{lessons.length} records</span>
+          <span className="badge">{visibleLessons.length} / {lessons.length} records</span>
+        </div>
+
+        <div className="lessons-toolbar">
+          <div className="lessons-filter-grid">
+            <div className="field">
+              <label htmlFor="lessons-search">Search lessons</label>
+              <input
+                id="lessons-search"
+                className="input"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search by title, subject, or topic"
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="lessons-grade-filter">Grade</label>
+              <select id="lessons-grade-filter" className="input" value={gradeFilter} onChange={(event) => setGradeFilter(event.target.value)}>
+                <option value="all">All grades</option>
+                {availableGrades.map((grade) => (
+                  <option key={grade} value={grade}>Grade {grade}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="field">
+              <label htmlFor="lessons-difficulty-filter">Difficulty</label>
+              <select id="lessons-difficulty-filter" className="input" value={difficultyFilter} onChange={(event) => setDifficultyFilter(event.target.value)}>
+                <option value="all">All levels</option>
+                {availableDifficulties.map((difficulty) => (
+                  <option key={difficulty} value={difficulty}>{difficulty}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="field">
+              <label htmlFor="lessons-sort">Sort by</label>
+              <select id="lessons-sort" className="input" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+                <option value="newest">Newest</option>
+                <option value="title-asc">Title (A-Z)</option>
+                <option value="grade-asc">Grade (low-high)</option>
+                <option value="difficulty-asc">Difficulty (A-Z)</option>
+                <option value="questions-desc">Questions (most first)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="button-row">
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={() => {
+                setSearchTerm('')
+                setGradeFilter('all')
+                setDifficultyFilter('all')
+                setSortBy('newest')
+              }}
+              disabled={!searchTerm && gradeFilter === 'all' && difficultyFilter === 'all' && sortBy === 'newest'}
+            >
+              Reset filters
+            </button>
+          </div>
         </div>
 
         {isLoading ? <p className="children-empty">Loading lessons...</p> : null}
         {!isLoading && lessons.length === 0 ? <p className="children-empty">No lessons yet. Create the first lesson from the panel on the right.</p> : null}
+        {!isLoading && lessons.length > 0 && visibleLessons.length === 0 ? <p className="children-empty">No lessons match current filters.</p> : null}
 
-        {!isLoading && lessons.length > 0 ? (
+        {!isLoading && visibleLessons.length > 0 ? (
           <div className="children-list">
-            {lessons.map((lesson) => (
+            {visibleLessons.map((lesson) => (
               <article key={lesson.id} className="lesson-row">
                 <div>
                   <div className="child-name">{lesson.title}</div>
