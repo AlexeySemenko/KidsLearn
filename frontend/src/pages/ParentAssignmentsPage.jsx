@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { createAssignment, getAssignments, getChildren, getLessons } from '../lib/api'
+import {
+  createAssignment,
+  getAssignments,
+  getChildren,
+  getLessons,
+  getParentAssignmentForSolving,
+  getParentResultDetail,
+} from '../lib/api'
 import { useAuth } from '../auth/AuthProvider'
 import DropdownSelect from '../components/DropdownSelect'
 
@@ -39,6 +46,12 @@ export default function ParentAssignmentsPage() {
   const [error, setError] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
   const [form, setForm] = useState(emptyAssignmentForm)
+  const [previewAssignment, setPreviewAssignment] = useState(null)
+  const [previewResult, setPreviewResult] = useState(null)
+  const [previewError, setPreviewError] = useState('')
+  const [isOpeningPreview, setIsOpeningPreview] = useState(false)
+  const [isLoadingResultDetail, setIsLoadingResultDetail] = useState(false)
+  const [resultLookupId, setResultLookupId] = useState('')
 
   const childOptions = useMemo(
     () => children.map((child) => ({
@@ -106,6 +119,21 @@ export default function ParentAssignmentsPage() {
     }
   }, [session?.accessToken])
 
+  useEffect(() => {
+    if (!previewAssignment) {
+      return undefined
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        closePreviewModal()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [previewAssignment])
+
   function updateField(name, value) {
     setForm((current) => ({ ...current, [name]: value }))
   }
@@ -158,6 +186,61 @@ export default function ParentAssignmentsPage() {
       setError(requestError.message)
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  async function handleOpenPreview(assignmentId) {
+    if (!session?.accessToken) {
+      return
+    }
+
+    setPreviewError('')
+    setPreviewResult(null)
+    setResultLookupId('')
+    setIsOpeningPreview(true)
+
+    try {
+      const response = await getParentAssignmentForSolving(session.accessToken, assignmentId)
+      setPreviewAssignment(response)
+    } catch (requestError) {
+      setPreviewAssignment(null)
+      setPreviewError(requestError.message)
+    } finally {
+      setIsOpeningPreview(false)
+    }
+  }
+
+  function closePreviewModal() {
+    setPreviewAssignment(null)
+    setPreviewResult(null)
+    setPreviewError('')
+    setResultLookupId('')
+  }
+
+  async function handleLoadResultDetail(event) {
+    event.preventDefault()
+
+    if (!session?.accessToken) {
+      return
+    }
+
+    const normalizedResultId = resultLookupId.trim()
+    if (!normalizedResultId) {
+      setPreviewError('Result ID is required to load result detail.')
+      return
+    }
+
+    setPreviewError('')
+    setIsLoadingResultDetail(true)
+
+    try {
+      const response = await getParentResultDetail(session.accessToken, normalizedResultId)
+      setPreviewResult(response)
+    } catch (requestError) {
+      setPreviewResult(null)
+      setPreviewError(requestError.message)
+    } finally {
+      setIsLoadingResultDetail(false)
     }
   }
 
@@ -287,11 +370,102 @@ export default function ParentAssignmentsPage() {
                     <span className="assignment-meta-chip">Due {formatDate(assignment.dueDate)}</span>
                   </div>
                 </div>
+                <div className="button-row child-actions">
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    disabled={isOpeningPreview}
+                    onClick={() => handleOpenPreview(assignment.id)}
+                  >
+                    {isOpeningPreview ? 'Opening...' : 'Review'}
+                  </button>
+                </div>
               </article>
             ))}
           </div>
         ) : null}
       </article>
+
+      {previewAssignment ? (
+        <div className="modal-overlay" role="presentation" onClick={closePreviewModal}>
+          <section
+            className="modal-card lesson-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="parent-review-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="children-list-header modal-header">
+              <div>
+                <h3 id="parent-review-title">Assignment review</h3>
+                <p>{previewAssignment.lessonTitle} · {previewAssignment.questions.length} questions</p>
+              </div>
+              <button type="button" className="button-secondary" onClick={closePreviewModal}>Close</button>
+            </div>
+
+            <div className="children-list">
+              {previewAssignment.questions.map((question, index) => (
+                <article key={question.questionId} className="assignment-row question-card">
+                  <div className="assignment-copy">
+                    <div className="assignment-topline">
+                      <div className="child-name">Question {index + 1}</div>
+                    </div>
+
+                    <div>{question.questionText}</div>
+                    <div className="child-meta">Explanation: {question.explanation}</div>
+
+                    <div className="question-options">
+                      {question.answers.map((answer) => (
+                        <div key={answer.answerId} className="question-option">
+                          <span>{answer.answerText}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <form className="auth-form compact-form" onSubmit={handleLoadResultDetail}>
+              <div className="field">
+                <label htmlFor="parent-result-id">Result ID</label>
+                <input
+                  id="parent-result-id"
+                  className="input"
+                  value={resultLookupId}
+                  onChange={(event) => setResultLookupId(event.target.value)}
+                  placeholder="Paste result ID to review breakdown"
+                />
+              </div>
+
+              <button type="submit" className="button-secondary" disabled={isLoadingResultDetail}>
+                {isLoadingResultDetail ? 'Loading result...' : 'Load result detail'}
+              </button>
+            </form>
+
+            {previewResult ? (
+              <div className="info-block success-block assignments-status-block">
+                <strong>Result summary</strong>
+                <span>Score: {previewResult.score}% · Correct: {previewResult.correctAnswers}/{previewResult.totalQuestions}</span>
+                <span>Completed: {formatDate(previewResult.completedAt)}</span>
+                <div className="children-list">
+                  {previewResult.breakdown.map((item, index) => (
+                    <div key={`${item.questionId}-${index}`} className="assignment-timeline">
+                      <span className="assignment-meta-chip">Q{index + 1}</span>
+                      <span className={`assignment-status-pill ${item.correct ? 'status-success' : 'status-danger'}`}>
+                        {item.correct ? 'Correct' : 'Incorrect'}
+                      </span>
+                      <span className="assignment-meta-chip">{item.questionId}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {previewError ? <div className="alert assignments-alert">{previewError}</div> : null}
+          </section>
+        </div>
+      ) : null}
     </section>
   )
 }

@@ -30,6 +30,8 @@ services:
       Jwt__Audience: "KidsLearn.Client"
       Jwt__AccessTokenExpirationMinutes: "30"
       Jwt__RefreshTokenExpirationDays: "14"
+      OpenAI__ApiKey: "${OPENAI_API_KEY:-}"
+      OpenAI__Model: "${OPENAI_MODEL:-gpt-4o-mini}"
     depends_on:
       postgres:
         condition: service_healthy

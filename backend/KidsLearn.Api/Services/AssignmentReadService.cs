@@ -25,6 +25,7 @@ public sealed class AssignmentReadService(AppDbContext db) : IAssignmentReadServ
                 x.Id,
                 x.ChildId,
                 x.LessonId,
+                x.Lesson.Title,
                 x.AssignedAt,
                 x.DueDate,
                 x.Status))
@@ -41,6 +42,7 @@ public sealed class AssignmentReadService(AppDbContext db) : IAssignmentReadServ
                 x.Id,
                 x.ChildId,
                 x.LessonId,
+                x.Lesson.Title,
                 x.AssignedAt,
                 x.DueDate,
                 x.Status))

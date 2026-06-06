@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createLesson, deleteLesson, duplicateLesson, getLessons, updateLesson } from '../lib/api'
 import { useAuth } from '../auth/AuthProvider'
+import AiLessonGenerationModal from '../components/AiLessonGenerationModal'
 
 const LESSONS_FILTERS_STORAGE_KEY = 'kidslearn.parent.lessons.filters.v1'
 
@@ -94,6 +95,7 @@ export default function ParentLessonsPage() {
   const [gradeFilter, setGradeFilter] = useState(storedFilters.gradeFilter)
   const [difficultyFilter, setDifficultyFilter] = useState(storedFilters.difficultyFilter)
   const [sortBy, setSortBy] = useState(storedFilters.sortBy)
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false)
 
   const availableGrades = useMemo(() => {
     return [...new Set(lessons.map((lesson) => String(lesson.grade)))].sort((a, b) => Number(a) - Number(b))
@@ -189,6 +191,21 @@ export default function ParentLessonsPage() {
       isMounted = false
     }
   }, [session?.accessToken])
+
+  useEffect(() => {
+    if (!editingLessonId) {
+      return undefined
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        cancelEditing()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [editingLessonId])
 
   function updateCreateField(name, value) {
     setCreateForm((current) => ({ ...current, [name]: value }))
@@ -347,6 +364,31 @@ export default function ParentLessonsPage() {
     }
   }
 
+  function openAiModal() {
+    setIsAiModalOpen(true)
+  }
+
+  function closeAiModal() {
+    setIsAiModalOpen(false)
+  }
+
+  function handleAiGenerated(response) {
+    const draft = response.lessonDraft
+    const summary = {
+      id: draft.id,
+      title: draft.title,
+      subject: draft.subject,
+      grade: draft.grade,
+      topic: draft.topic,
+      difficulty: draft.difficulty,
+      createdAt: draft.createdAt,
+      questionCount: draft.questions.length,
+    }
+
+    setLessons((current) => [summary, ...current])
+    setStatusMessage(`AI lesson \"${draft.title}\" was generated.`)
+  }
+
   return (
     <section className="panel-grid">
       <article className="hero-card lessons-hero">
@@ -426,9 +468,15 @@ export default function ParentLessonsPage() {
             </select>
           </div>
 
-          <button type="submit" className="button" disabled={isCreating}>
-            {isCreating ? 'Creating...' : 'Create lesson'}
-          </button>
+          <div className="button-row">
+            <button type="submit" className="button" disabled={isCreating}>
+              {isCreating ? 'Creating...' : 'Create lesson'}
+            </button>
+            <button type="button" className="button ai-launch-button" onClick={openAiModal}>
+              <span className="ai-button-icon" aria-hidden="true">AI</span>
+              <span>Generate lesson</span>
+            </button>
+          </div>
         </form>
 
         {statusMessage ? (
@@ -584,6 +632,15 @@ export default function ParentLessonsPage() {
           </section>
         </div>
       ) : null}
+
+      <AiLessonGenerationModal
+        isOpen={isAiModalOpen}
+        onClose={closeAiModal}
+        onGenerated={handleAiGenerated}
+        idPrefix="lessons-ai"
+        title="Generate AI lesson"
+        description="Create a lesson draft from prompt settings without leaving lessons."
+      />
     </section>
   )
 }

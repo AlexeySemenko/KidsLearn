@@ -8,6 +8,6 @@ public sealed record RefreshRequest(string RefreshToken);
 
 public sealed record RevokeRequest(string RefreshToken);
 
-public sealed record AuthUserResponse(Guid Id, string Email, string Role);
+public sealed record AuthUserResponse(Guid Id, string Email, string Role, string? DisplayName);
 
 public sealed record AuthTokenResponse(string AccessToken, string RefreshToken, int ExpiresInSeconds, AuthUserResponse User);

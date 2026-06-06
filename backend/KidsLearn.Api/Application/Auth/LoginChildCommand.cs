@@ -81,6 +81,6 @@ public sealed class LoginChildCommandHandler : IRequestHandler<LoginChildCommand
             accessToken,
             refreshToken,
             expiresIn,
-            new AuthUserResponse(child.User.Id, child.Name, child.User.Role.ToString())));
+            new AuthUserResponse(child.User.Id, child.User.Email, child.User.Role.ToString(), child.Name)));
     }
 }

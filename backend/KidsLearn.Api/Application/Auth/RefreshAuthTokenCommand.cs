@@ -67,10 +67,25 @@ public sealed class RefreshAuthTokenCommandHandler : IRequestHandler<RefreshAuth
             ? accessMinutes * 60
             : 1800;
 
+        string? displayName;
+        if (existing.User.Role == UserRole.Child)
+        {
+            var childName = await _db.Children
+                .AsNoTracking()
+                .Where(x => x.UserId == existing.UserId)
+                .Select(x => x.Name)
+                .FirstOrDefaultAsync(cancellationToken);
+            displayName = string.IsNullOrWhiteSpace(childName) ? existing.User.Email : childName;
+        }
+        else
+        {
+            displayName = existing.User.Email;
+        }
+
         return RefreshAuthTokenResult.Success(new AuthTokenResponse(
             accessToken,
             newRefreshToken,
             expiresIn,
-            new AuthUserResponse(existing.User.Id, existing.User.Email, existing.User.Role.ToString())));
+            new AuthUserResponse(existing.User.Id, existing.User.Email, existing.User.Role.ToString(), displayName)));
     }
 }

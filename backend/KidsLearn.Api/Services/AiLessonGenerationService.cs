@@ -126,13 +126,12 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
 
         using (doc)
         {
-        if (!doc.RootElement.TryGetProperty("output_text", out var outputTextElement))
+        if (!TryExtractGeneratedText(doc.RootElement, out var outputText, out var extractionError))
         {
-            error = "Missing 'output_text' in OpenAI response.";
+            error = extractionError;
             return false;
         }
 
-        var outputText = outputTextElement.GetString();
         if (string.IsNullOrWhiteSpace(outputText))
         {
             error = "Field 'output_text' is empty in OpenAI response.";
@@ -216,6 +215,54 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
             new AiProviderMetaResponse("OpenAI", model, false, null));
 
         }
+        }
+
+        return true;
+    }
+
+    private static bool TryExtractGeneratedText(JsonElement root, out string? text, out string? error)
+    {
+        text = null;
+        error = null;
+
+        if (root.TryGetProperty("output_text", out var outputTextElement)
+            && outputTextElement.ValueKind == JsonValueKind.String)
+        {
+            text = outputTextElement.GetString();
+            return true;
+        }
+
+        if (!root.TryGetProperty("output", out var outputElement)
+            || outputElement.ValueKind != JsonValueKind.Array)
+        {
+            error = "Missing both 'output_text' and array 'output' in OpenAI response.";
+            return false;
+        }
+
+        var builder = new StringBuilder();
+        foreach (var outputItem in outputElement.EnumerateArray())
+        {
+            if (!outputItem.TryGetProperty("content", out var contentElement)
+                || contentElement.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            foreach (var contentItem in contentElement.EnumerateArray())
+            {
+                if (contentItem.TryGetProperty("text", out var textElement)
+                    && textElement.ValueKind == JsonValueKind.String)
+                {
+                    builder.AppendLine(textElement.GetString());
+                }
+            }
+        }
+
+        text = builder.ToString().Trim();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            error = "OpenAI response did not include textual output in 'output' content blocks.";
+            return false;
         }
 
         return true;

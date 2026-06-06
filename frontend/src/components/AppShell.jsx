@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
+
+const THEME_STORAGE_KEY = 'kidslearn.theme.mode'
 
 const navByRole = {
   Parent: [
@@ -7,6 +10,7 @@ const navByRole = {
     { to: '/parent/children', label: 'Children' },
     { to: '/parent/lessons', label: 'Lessons' },
     { to: '/parent/assignments', label: 'Assignments' },
+    { to: '/parent/ai', label: 'AI Lessons' },
     { to: '/parent/reports', label: 'Reports' },
   ],
   Child: [
@@ -19,10 +23,105 @@ export default function AppShell() {
   const location = useLocation()
   const { logout, role, user } = useAuth()
   const navItems = navByRole[role] ?? []
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [themeMode, setThemeMode] = useState('system')
+  const [prefersDark, setPrefersDark] = useState(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return false
+    }
+
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+  })
+
+  const resolvedTheme = themeMode === 'system' ? (prefersDark ? 'dark' : 'light') : themeMode
+  const displayName = user?.displayName || user?.email || null
+  const shellTitle = role === 'Child'
+    ? `Hello, ${displayName || 'learner'}!`
+    : (displayName || 'KidsLearn session')
+
+  useEffect(() => {
+    setIsSidebarOpen(false)
+  }, [location.pathname, role])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
+    if (storedTheme === 'dark' || storedTheme === 'light' || storedTheme === 'system') {
+      setThemeMode(storedTheme)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return undefined
+    }
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+
+    function handleChange(event) {
+      setPrefersDark(event.matches)
+    }
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handleChange)
+      return () => mediaQuery.removeEventListener('change', handleChange)
+    }
+
+    mediaQuery.addListener(handleChange)
+    return () => mediaQuery.removeListener(handleChange)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    window.document.documentElement.setAttribute('data-theme', resolvedTheme)
+
+    if (themeMode === 'system') {
+      window.localStorage.removeItem(THEME_STORAGE_KEY)
+      return
+    }
+
+    window.localStorage.setItem(THEME_STORAGE_KEY, themeMode)
+  }, [resolvedTheme, themeMode])
+
+  function toggleDarkMode() {
+    setThemeMode((current) => {
+      const currentResolved = current === 'system' ? (prefersDark ? 'dark' : 'light') : current
+      return currentResolved === 'dark' ? 'light' : 'dark'
+    })
+  }
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
+    <div className={`app-shell${isSidebarOpen ? ' nav-open' : ''}`}>
+      <div className="mobile-shell-bar">
+        <span className="mobile-shell-title">{role === 'Child' ? 'Child workspace' : 'Parent workspace'}</span>
+        <button
+          type="button"
+          className="mobile-menu-button"
+          aria-expanded={isSidebarOpen}
+          aria-controls="app-sidebar-nav"
+          aria-label={isSidebarOpen ? 'Close navigation menu' : 'Open navigation menu'}
+          onClick={() => setIsSidebarOpen((current) => !current)}
+        >
+          <span aria-hidden="true">{isSidebarOpen ? '×' : '☰'}</span>
+        </button>
+      </div>
+
+      {isSidebarOpen ? (
+        <button
+          type="button"
+          className="sidebar-overlay"
+          aria-label="Close navigation menu"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      ) : null}
+
+      <aside className={`sidebar${isSidebarOpen ? ' open' : ''}`}>
         <div className="brand">
           <span className="brand-kicker">KidsLearn Platform</span>
           <span className="brand-title">{role === 'Child' ? 'Child workspace' : 'Parent workspace'}</span>
@@ -31,7 +130,7 @@ export default function AppShell() {
           </span>
         </div>
 
-        <nav>
+        <nav id="app-sidebar-nav">
           <ul className="nav-list">
             {navItems.map((item) => (
               <li key={item.to}>
@@ -46,13 +145,27 @@ export default function AppShell() {
             ))}
           </ul>
         </nav>
+
+        <div className="theme-toggle-inline">
+          <span>Dark mode</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={resolvedTheme === 'dark'}
+            aria-label="Toggle dark mode"
+            className={`theme-switch${resolvedTheme === 'dark' ? ' active' : ''}`}
+            onClick={toggleDarkMode}
+          >
+            <span className="theme-switch-thumb" aria-hidden="true" />
+          </button>
+        </div>
       </aside>
 
       <main className="content">
         <header className="header">
           <div className="header-copy">
             <span className="header-eyebrow">Authenticated shell</span>
-            <h1>{user?.email ?? 'KidsLearn session'}</h1>
+            <h1>{shellTitle}</h1>
             <p>
               Route: {location.pathname}. This foundation now supports role-aware navigation,
               persisted auth state, and clean next steps for dashboard screens.

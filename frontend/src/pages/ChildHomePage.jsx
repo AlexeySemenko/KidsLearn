@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import {
   completeChildAssignment,
@@ -24,6 +25,7 @@ function shortId(value) {
 }
 
 export default function ChildHomePage() {
+  const navigate = useNavigate()
   const { session } = useAuth()
   const [assignments, setAssignments] = useState([])
   const [isLoading, setIsLoading] = useState(true)
@@ -71,6 +73,21 @@ export default function ChildHomePage() {
       isMounted = false
     }
   }, [session?.accessToken])
+
+  useEffect(() => {
+    if (!solvingAssignment) {
+      return undefined
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        closeSolvingModal()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [solvingAssignment])
 
   async function handleOpenAssignment(assignmentId) {
     if (!session?.accessToken) {
@@ -212,7 +229,7 @@ export default function ChildHomePage() {
               <article key={assignment.id} className="assignment-row">
                 <div className="assignment-copy">
                   <div className="assignment-topline">
-                    <div className="child-name">Lesson {shortId(assignment.lessonId)}</div>
+                    <div className="child-name">{assignment.lessonTitle || `Lesson ${shortId(assignment.lessonId)}`}</div>
                     <span className="assignment-status-pill">{assignment.status}</span>
                   </div>
 
@@ -299,6 +316,15 @@ export default function ChildHomePage() {
               <div className="info-block success-block assignments-status-block">
                 <strong>Assignment completed</strong>
                 <span>Score: {completion.score}% · Correct: {completion.correctAnswers}/{completion.totalQuestions}</span>
+                <div className="button-row">
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    onClick={() => navigate(`/child/results?resultId=${completion.resultId}`)}
+                  >
+                    View result details
+                  </button>
+                </div>
               </div>
             ) : null}
 

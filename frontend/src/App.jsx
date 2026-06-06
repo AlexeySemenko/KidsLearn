@@ -9,6 +9,8 @@ import ParentChildrenPage from './pages/ParentChildrenPage'
 import ParentAssignmentsPage from './pages/ParentAssignmentsPage'
 import ParentHomePage from './pages/ParentHomePage'
 import ParentLessonsPage from './pages/ParentLessonsPage'
+import ChildResultsPage from './pages/ChildResultsPage'
+import ParentAiGenerationPage from './pages/ParentAiGenerationPage'
 import PlaceholderSection from './pages/PlaceholderSection'
 
 function LandingPage() {
@@ -56,22 +58,14 @@ export default function App() {
                   />
                 }
               />
+              <Route path="ai" element={<ParentAiGenerationPage />} />
             </Route>
           </Route>
 
           <Route element={<ProtectedRoute allowedRoles={['Child']} />}>
             <Route path="/child" element={<AppShell />}>
               <Route index element={<ChildHomePage />} />
-              <Route
-                path="results"
-                element={
-                  <PlaceholderSection
-                    title="Child results"
-                    copy="This route is reserved for completed assignment detail and score breakdown screens."
-                    epic="Epic 4.3"
-                  />
-                }
-              />
+              <Route path="results" element={<ChildResultsPage />} />
             </Route>
           </Route>
 

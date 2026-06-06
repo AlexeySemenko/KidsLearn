@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 
@@ -60,6 +60,15 @@ export default function LoginPage({ variant }) {
       : { childId: '', accessCode: '' }
   ))
 
+  useEffect(() => {
+    setError('')
+    setForm(
+      variant === 'parent'
+        ? { email: '', password: '' }
+        : { childId: '', accessCode: '' },
+    )
+  }, [variant])
+
   if (isAuthenticated) {
     return <Navigate to={role === 'Child' ? '/child' : '/parent'} replace />
   }
@@ -73,9 +82,15 @@ export default function LoginPage({ variant }) {
 
     try {
       if (variant === 'parent') {
-        await loginParent({ email: form.email.trim(), password: form.password })
+        await loginParent({
+          email: (form.email ?? '').trim(),
+          password: form.password ?? '',
+        })
       } else {
-        await loginChild({ childId: form.childId.trim(), accessCode: form.accessCode.trim() })
+        await loginChild({
+          childId: (form.childId ?? '').trim(),
+          accessCode: (form.accessCode ?? '').trim(),
+        })
       }
 
       navigate(targetPath, { replace: true })

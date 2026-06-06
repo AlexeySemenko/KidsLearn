@@ -136,6 +136,21 @@ export async function createAssignment(accessToken, payload) {
   }))
 }
 
+export async function generateParentAiLesson(accessToken, payload) {
+  return request('/api/v1/ai/lessons/generate', withAuth(accessToken, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }))
+}
+
+export async function getParentAssignmentForSolving(accessToken, assignmentId) {
+  return request(`/api/v1/assignments/${assignmentId}/for-solving`, withAuth(accessToken))
+}
+
+export async function getParentResultDetail(accessToken, resultId) {
+  return request(`/api/v1/results/${resultId}`, withAuth(accessToken))
+}
+
 export async function getChildAssignments(accessToken) {
   return request('/api/v1/child/assignments', withAuth(accessToken))
 }
@@ -155,4 +170,8 @@ export async function completeChildAssignment(accessToken, assignmentId) {
   return request(`/api/v1/child/assignments/${assignmentId}/complete`, withAuth(accessToken, {
     method: 'POST',
   }))
+}
+
+export async function getChildResultDetail(accessToken, resultId) {
+  return request(`/api/v1/child/results/${resultId}`, withAuth(accessToken))
 }
