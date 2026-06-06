@@ -82,6 +82,54 @@ public class ValidationBehaviorUnitTests
         Assert.Equal("At least one answer is required.", error);
     }
 
+    [Fact]
+    public void DeleteParentLessonCommandValidator_ReturnsError_WhenParentIdMissing()
+    {
+        var validator = new DeleteParentLessonCommandValidator();
+
+        var error = validator.Validate(new DeleteParentLessonCommand(Guid.Empty, Guid.NewGuid())).First();
+
+        Assert.Equal("Parent id is required.", error);
+    }
+
+    [Fact]
+    public void DeleteParentLessonCommandValidator_ReturnsError_WhenLessonIdMissing()
+    {
+        var validator = new DeleteParentLessonCommandValidator();
+
+        var error = validator.Validate(new DeleteParentLessonCommand(Guid.NewGuid(), Guid.Empty)).First();
+
+        Assert.Equal("Lesson id is required.", error);
+    }
+
+    [Fact]
+    public void UpdateParentLessonCommandValidator_ReturnsError_WhenPayloadTitleEmpty()
+    {
+        var validator = new UpdateParentLessonCommandValidator();
+
+        var error = validator.Validate(
+            new UpdateParentLessonCommand(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                new UpdateLessonRequest("", null, null, null, null))).First();
+
+        Assert.Equal("Title cannot be empty.", error);
+    }
+
+    [Fact]
+    public void UpdateParentLessonCommandValidator_ReturnsError_WhenPayloadGradeOutOfRange()
+    {
+        var validator = new UpdateParentLessonCommandValidator();
+
+        var error = validator.Validate(
+            new UpdateParentLessonCommand(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                new UpdateLessonRequest(null, null, 0, null, null))).First();
+
+        Assert.Equal("Grade must be between 1 and 12.", error);
+    }
+
     private sealed record TestRequestWithFactory : IValidationFailureResponseFactory<TestResponseWithFactory>
     {
         public TestResponseWithFactory CreateValidationFailureResponse(string error)
