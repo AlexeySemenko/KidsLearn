@@ -9,6 +9,7 @@ export default function DropdownSelect({
   onChange,
   disabled = false,
   helperText,
+  showHelperHint = true,
   emptyMessage = 'No options available yet.',
   noResultsMessage = 'No matching options found.',
   size = 'compact',
@@ -252,7 +253,7 @@ export default function DropdownSelect({
           </div>
         ) : null}
       </div>
-      <span className="field-hint">{helperText}</span>
+      {showHelperHint ? <span className="field-hint">{helperText}</span> : null}
     </div>
   )
 }

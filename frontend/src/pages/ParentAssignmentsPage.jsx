@@ -195,6 +195,7 @@ export default function ParentAssignmentsPage() {
               onChange={(nextValue) => updateField('childId', nextValue)}
               disabled={children.length === 0}
               helperText="Pick who should receive the lesson."
+              showHelperHint={false}
               size="compact"
               searchable
               searchPlaceholder="Search child"
@@ -209,6 +210,7 @@ export default function ParentAssignmentsPage() {
               onChange={(nextValue) => updateField('lessonId', nextValue)}
               disabled={lessons.length === 0}
               helperText="Choose from lessons created in the parent workspace."
+              showHelperHint={false}
               size="compact"
               searchable
               searchPlaceholder="Search lesson"
