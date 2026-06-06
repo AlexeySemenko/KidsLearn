@@ -425,6 +425,17 @@ button {
   justify-content: flex-end;
 }
 
+.child-edit-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.4fr) minmax(120px, 0.7fr) minmax(220px, 1fr);
+  gap: 0.85rem;
+  width: 100%;
+}
+
+.child-access-field {
+  min-width: 0;
+}
+
 .danger-button {
   border-color: rgba(255, 123, 123, 0.34);
   color: #ffd3d3;
@@ -492,6 +503,10 @@ button {
   .child-row {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .child-edit-grid {
+    grid-template-columns: 1fr;
   }
 
   .child-actions {

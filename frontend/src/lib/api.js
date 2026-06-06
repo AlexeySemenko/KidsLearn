@@ -76,6 +76,13 @@ export async function createChild(accessToken, payload) {
   }))
 }
 
+export async function updateChild(accessToken, childId, payload) {
+  return request(`/api/v1/children/${childId}`, withAuth(accessToken, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  }))
+}
+
 export async function resetChildAccessCode(accessToken, childId) {
   return request(`/api/v1/children/${childId}/access-code/reset`, withAuth(accessToken, {
     method: 'POST',
