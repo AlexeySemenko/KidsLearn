@@ -6,6 +6,7 @@ const navByRole = {
     { to: '/parent', label: 'Dashboard' },
     { to: '/parent/children', label: 'Children' },
     { to: '/parent/lessons', label: 'Lessons' },
+    { to: '/parent/assignments', label: 'Assignments' },
     { to: '/parent/reports', label: 'Reports' },
   ],
   Child: [

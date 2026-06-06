@@ -124,3 +124,14 @@ export async function deleteLesson(accessToken, lessonId) {
     method: 'DELETE',
   }))
 }
+
+export async function getAssignments(accessToken) {
+  return request('/api/v1/assignments', withAuth(accessToken))
+}
+
+export async function createAssignment(accessToken, payload) {
+  return request('/api/v1/assignments', withAuth(accessToken, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }))
+}

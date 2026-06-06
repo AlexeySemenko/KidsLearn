@@ -6,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import ChildHomePage from './pages/ChildHomePage'
 import LoginPage from './pages/LoginPage'
 import ParentChildrenPage from './pages/ParentChildrenPage'
+import ParentAssignmentsPage from './pages/ParentAssignmentsPage'
 import ParentHomePage from './pages/ParentHomePage'
 import ParentLessonsPage from './pages/ParentLessonsPage'
 import PlaceholderSection from './pages/PlaceholderSection'
@@ -40,6 +41,10 @@ export default function App() {
               <Route
                 path="lessons"
                 element={<ParentLessonsPage />}
+              />
+              <Route
+                path="assignments"
+                element={<ParentAssignmentsPage />}
               />
               <Route
                 path="reports"

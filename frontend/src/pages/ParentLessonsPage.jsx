@@ -264,7 +264,7 @@ export default function ParentLessonsPage() {
         <div className="brand-kicker">Epic 3.3</div>
         <h2>Lessons management is now live.</h2>
         <p>
-          This slice adds real lesson list loading, lesson creation, inline summary editing,
+          This slice adds real lesson list loading, lesson creation, modal summary editing,
           duplication, and deletion on top of the authenticated parent workspace.
         </p>
         <div className="badge-row">
@@ -368,61 +368,70 @@ export default function ParentLessonsPage() {
           <div className="children-list">
             {lessons.map((lesson) => (
               <article key={lesson.id} className="lesson-row">
-                {editingLessonId === lesson.id ? (
-                  <>
-                    <div className="lesson-edit-grid">
-                      <div className="field">
-                        <label htmlFor={`lesson-title-${lesson.id}`}>Title</label>
-                        <input id={`lesson-title-${lesson.id}`} className="input" value={editForm.title} onChange={(event) => updateEditField('title', event.target.value)} />
-                      </div>
-                      <div className="field">
-                        <label htmlFor={`lesson-subject-${lesson.id}`}>Subject</label>
-                        <input id={`lesson-subject-${lesson.id}`} className="input" value={editForm.subject} onChange={(event) => updateEditField('subject', event.target.value)} />
-                      </div>
-                      <div className="field">
-                        <label htmlFor={`lesson-grade-${lesson.id}`}>Grade</label>
-                        <input id={`lesson-grade-${lesson.id}`} className="input" type="number" min="1" max="12" value={editForm.grade} onChange={(event) => updateEditField('grade', event.target.value)} />
-                      </div>
-                      <div className="field">
-                        <label htmlFor={`lesson-topic-${lesson.id}`}>Topic</label>
-                        <input id={`lesson-topic-${lesson.id}`} className="input" value={editForm.topic} onChange={(event) => updateEditField('topic', event.target.value)} />
-                      </div>
-                      <div className="field">
-                        <label htmlFor={`lesson-difficulty-${lesson.id}`}>Difficulty</label>
-                        <input id={`lesson-difficulty-${lesson.id}`} className="input" value={editForm.difficulty} onChange={(event) => updateEditField('difficulty', event.target.value)} />
-                      </div>
-                    </div>
-                    <div className="button-row child-actions">
-                      <button type="button" className="button" disabled={pendingActionId === lesson.id} onClick={() => handleSaveLesson(lesson.id)}>
-                        {pendingActionId === lesson.id ? 'Saving...' : 'Save'}
-                      </button>
-                      <button type="button" className="button-secondary" onClick={cancelEditing}>Cancel</button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <div className="child-name">{lesson.title}</div>
-                      <div className="child-meta">
-                        {lesson.subject} · Grade {lesson.grade} · {lesson.topic} · {lesson.difficulty} · {lesson.questionCount} questions
-                      </div>
-                    </div>
-                    <div className="button-row child-actions">
-                      <button type="button" className="button-secondary" disabled={pendingActionId === lesson.id} onClick={() => startEditing(lesson)}>Edit</button>
-                      <button type="button" className="button-secondary" disabled={pendingActionId === lesson.id} onClick={() => handleDuplicateLesson(lesson.id)}>
-                        {pendingActionId === lesson.id ? 'Working...' : 'Duplicate'}
-                      </button>
-                      <button type="button" className="button-secondary danger-button" disabled={pendingActionId === lesson.id} onClick={() => handleDeleteLesson(lesson.id)}>
-                        {pendingActionId === lesson.id ? 'Deleting...' : 'Delete'}
-                      </button>
-                    </div>
-                  </>
-                )}
+                <div>
+                  <div className="child-name">{lesson.title}</div>
+                  <div className="child-meta">
+                    {lesson.subject} · Grade {lesson.grade} · {lesson.topic} · {lesson.difficulty} · {lesson.questionCount} questions
+                  </div>
+                </div>
+                <div className="button-row child-actions">
+                  <button type="button" className="button-secondary" disabled={pendingActionId === lesson.id} onClick={() => startEditing(lesson)}>Edit</button>
+                  <button type="button" className="button-secondary" disabled={pendingActionId === lesson.id} onClick={() => handleDuplicateLesson(lesson.id)}>
+                    {pendingActionId === lesson.id ? 'Working...' : 'Duplicate'}
+                  </button>
+                  <button type="button" className="button-secondary danger-button" disabled={pendingActionId === lesson.id} onClick={() => handleDeleteLesson(lesson.id)}>
+                    {pendingActionId === lesson.id ? 'Deleting...' : 'Delete'}
+                  </button>
+                </div>
               </article>
             ))}
           </div>
         ) : null}
       </article>
+
+      {editingLessonId ? (
+        <div className="modal-overlay" role="presentation" onClick={cancelEditing}>
+          <section className="modal-card lesson-modal" role="dialog" aria-modal="true" aria-labelledby="lesson-edit-title" onClick={(event) => event.stopPropagation()}>
+            <div className="children-list-header modal-header">
+              <div>
+                <h3 id="lesson-edit-title">Edit lesson</h3>
+                <p>Update summary fields for the selected lesson in a separate popup.</p>
+              </div>
+              <button type="button" className="button-secondary" onClick={cancelEditing}>Close</button>
+            </div>
+
+            <div className="lesson-edit-grid">
+              <div className="field">
+                <label htmlFor="modal-lesson-title">Title</label>
+                <input id="modal-lesson-title" className="input" value={editForm.title} onChange={(event) => updateEditField('title', event.target.value)} />
+              </div>
+              <div className="field">
+                <label htmlFor="modal-lesson-subject">Subject</label>
+                <input id="modal-lesson-subject" className="input" value={editForm.subject} onChange={(event) => updateEditField('subject', event.target.value)} />
+              </div>
+              <div className="field">
+                <label htmlFor="modal-lesson-grade">Grade</label>
+                <input id="modal-lesson-grade" className="input" type="number" min="1" max="12" value={editForm.grade} onChange={(event) => updateEditField('grade', event.target.value)} />
+              </div>
+              <div className="field">
+                <label htmlFor="modal-lesson-topic">Topic</label>
+                <input id="modal-lesson-topic" className="input" value={editForm.topic} onChange={(event) => updateEditField('topic', event.target.value)} />
+              </div>
+              <div className="field">
+                <label htmlFor="modal-lesson-difficulty">Difficulty</label>
+                <input id="modal-lesson-difficulty" className="input" value={editForm.difficulty} onChange={(event) => updateEditField('difficulty', event.target.value)} />
+              </div>
+            </div>
+
+            <div className="button-row modal-actions">
+              <button type="button" className="button" disabled={pendingActionId === editingLessonId} onClick={() => handleSaveLesson(editingLessonId)}>
+                {pendingActionId === editingLessonId ? 'Saving...' : 'Save'}
+              </button>
+              <button type="button" className="button-secondary" onClick={cancelEditing}>Cancel</button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   )
 }
