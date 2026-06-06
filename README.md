@@ -110,8 +110,6 @@ GitHub Actions will:
 | POST   | /api/v1/auth/child-login | Child login by `childId + accessCode` |
 | POST   | /api/v1/auth/refresh | Rotate refresh token and issue new access token |
 | POST   | /api/v1/auth/revoke | Revoke refresh token |
-| GET    | /api/hello  | Returns latest greeting       |
-| POST   | /api/hello  | `{"message":"..."}` — saves a new greeting |
 | GET    | /api/v1/children | List children for authenticated parent |
 | POST   | /api/v1/children | Create child `{ "name": "...", "grade": 1..12, "accessCode": "2468" }` |
 | PATCH  | /api/v1/children/{childId} | Update child name/grade and optional access code |

@@ -18,13 +18,6 @@ namespace KidsLearn.Api.EFMigration
                 nullable: true);
 
             migrationBuilder.UpdateData(
-                table: "Greetings",
-                keyColumn: "Id",
-                keyValue: 1,
-                column: "CreatedAt",
-                value: new DateTime(2026, 6, 4, 15, 44, 38, 973, DateTimeKind.Utc).AddTicks(4857));
-
-            migrationBuilder.UpdateData(
                 table: "Users",
                 keyColumn: "Id",
                 keyValue: new Guid("00000000-0000-0000-0000-000000000001"),
@@ -60,13 +53,6 @@ namespace KidsLearn.Api.EFMigration
             migrationBuilder.DropColumn(
                 name: "UserId",
                 table: "Children");
-
-            migrationBuilder.UpdateData(
-                table: "Greetings",
-                keyColumn: "Id",
-                keyValue: 1,
-                column: "CreatedAt",
-                value: new DateTime(2026, 6, 4, 15, 36, 3, 93, DateTimeKind.Utc).AddTicks(5452));
 
             migrationBuilder.UpdateData(
                 table: "Users",

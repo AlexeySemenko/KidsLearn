@@ -153,13 +153,6 @@ namespace KidsLearn.Api.EFMigration
                         onDelete: ReferentialAction.Cascade);
                 });
 
-            migrationBuilder.UpdateData(
-                table: "Greetings",
-                keyColumn: "Id",
-                keyValue: 1,
-                column: "CreatedAt",
-                value: new DateTime(2026, 6, 4, 15, 10, 14, 720, DateTimeKind.Utc).AddTicks(5039));
-
             migrationBuilder.InsertData(
                 table: "Users",
                 columns: new[] { "Id", "CreatedAt", "Email", "Role" },
@@ -227,12 +220,6 @@ namespace KidsLearn.Api.EFMigration
             migrationBuilder.DropTable(
                 name: "Users");
 
-            migrationBuilder.UpdateData(
-                table: "Greetings",
-                keyColumn: "Id",
-                keyValue: 1,
-                column: "CreatedAt",
-                value: new DateTime(2026, 6, 3, 7, 32, 52, 620, DateTimeKind.Utc).AddTicks(4437));
         }
     }
 }

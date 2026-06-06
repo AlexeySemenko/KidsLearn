@@ -247,25 +247,6 @@ apiV1.MapAuthController();
 apiV1.MapParentController();
 apiV1.MapChildController();
 
-app.MapGet("/api/hello", async (AppDbContext db) =>
-{
-    var greeting = await db.Greetings.OrderByDescending(g => g.Id).FirstOrDefaultAsync();
-    return Results.Ok(new
-    {
-        message = greeting?.Text ?? "Hello, World!",
-        timestamp = DateTime.UtcNow,
-        source = "PostgreSQL"
-    });
-});
-
-app.MapPost("/api/hello", async (AppDbContext db, GreetingRequest req) =>
-{
-    var greeting = new Greeting { Text = req.Message, CreatedAt = DateTime.UtcNow };
-    db.Greetings.Add(greeting);
-    await db.SaveChangesAsync();
-    return Results.Created("/api/hello", greeting);
-});
-
 app.MapFallbackToFile("index.html");
 
 app.Run();

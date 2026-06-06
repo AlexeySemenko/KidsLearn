@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
-    public DbSet<Greeting> Greetings => Set<Greeting>();
     public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<Child> Children => Set<Child>();
     public DbSet<Lesson> Lessons => Set<Lesson>();
@@ -136,10 +135,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .HasForeignKey<AssignmentResult>(x => x.AssignmentId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
-
-        modelBuilder.Entity<Greeting>().HasData(
-            new Greeting { Id = 1, Text = "Hello, World!", CreatedAt = DateTime.UtcNow }
-        );
 
         var defaultParentId = Guid.Parse("00000000-0000-0000-0000-000000000001");
         modelBuilder.Entity<AppUser>().HasData(

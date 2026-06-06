@@ -169,34 +169,6 @@ namespace KidsLearn.Api.EFMigration
                     b.ToTable("Children");
                 });
 
-            modelBuilder.Entity("Greeting", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Text")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Greetings");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            CreatedAt = new DateTime(2026, 6, 4, 15, 20, 11, 749, DateTimeKind.Utc).AddTicks(5196),
-                            Text = "Hello, World!"
-                        });
-                });
-
             modelBuilder.Entity("Lesson", b =>
                 {
                     b.Property<Guid>("Id")
