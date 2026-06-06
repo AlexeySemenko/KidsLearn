@@ -1,0 +1,1 @@
+public sealed record ResetChildAccessCodeResponse(Guid ChildId, string AccessCode);

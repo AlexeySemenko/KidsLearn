@@ -104,8 +104,46 @@ GitHub Actions will:
 | Method | Path        | Description                   |
 |--------|-------------|-------------------------------|
 | GET    | /health     | Health check                  |
-| GET    | /api/hello  | Returns latest greeting       |
-| POST   | /api/hello  | `{"message":"..."}` — saves a new greeting |
+| GET    | /api/v1/health | Versioned health check     |
+| POST   | /api/v1/auth/register | Register parent account |
+| POST   | /api/v1/auth/login | Get access and refresh token |
+| POST   | /api/v1/auth/child-login | Child login by `childId + accessCode` |
+| POST   | /api/v1/auth/refresh | Rotate refresh token and issue new access token |
+| POST   | /api/v1/auth/revoke | Revoke refresh token |
+| GET    | /api/v1/children | List children for authenticated parent |
+| POST   | /api/v1/children | Create child `{ "name": "...", "grade": 1..12, "accessCode": "2468" }` |
+| PATCH  | /api/v1/children/{childId} | Update child name/grade and optional access code |
+| POST   | /api/v1/children/{childId}/access-code/reset | Reset child access code |
+| DELETE | /api/v1/children/{childId} | Delete child |
+| POST   | /api/v1/ai/lessons/generate | Generate AI lesson draft and persist lesson |
+| POST   | /api/v1/ai/lessons/{lessonId}/edit | Apply AI lesson edit command and create revision |
+| POST   | /api/v1/lessons | Create lesson with nested questions and answers |
+| GET    | /api/v1/lessons?page=1&pageSize=20 | List parent lessons with pagination |
+| GET    | /api/v1/lessons/{lessonId} | Get lesson details |
+| POST   | /api/v1/lessons/{lessonId}/duplicate | Duplicate own lesson with questions/answers |
+| PATCH  | /api/v1/lessons/{lessonId} | Update lesson metadata |
+| DELETE | /api/v1/lessons/{lessonId} | Delete lesson (if no assignments) |
+| POST   | /api/v1/assignments | Assign parent lesson to parent child |
+| GET    | /api/v1/assignments | List assignments for authenticated parent |
+| GET    | /api/v1/assignments/{assignmentId}/for-solving | Get assignment payload for solving |
+| POST   | /api/v1/assignments/{assignmentId}/answers | Submit answers and get instant check |
+| POST   | /api/v1/assignments/{assignmentId}/complete | Complete assignment and calculate score |
+| GET    | /api/v1/results/{resultId} | Get result with correctness breakdown |
+| GET    | /api/v1/reports/children/{childId}?from=&to= | Parent child progress summary |
+| GET    | /api/v1/reports/children/{childId}/export?format=csv&from=&to= | Parent child report CSV export |
+| GET    | /api/v1/child/assignments | Child list of own assignments |
+| GET    | /api/v1/child/assignments/{assignmentId}/for-solving | Child gets own assignment for solving |
+| POST   | /api/v1/child/assignments/{assignmentId}/answers | Child submits answers and gets instant check |
+| POST   | /api/v1/child/assignments/{assignmentId}/complete | Child completes own assignment |
+| GET    | /api/v1/child/results/{resultId} | Child gets own result |
+
+### Auth header for protected routes
+
+Send a bearer token returned by `/api/v1/auth/login`.
+
+Example:
+
+`Authorization: Bearer <access-token>`
 
 ---
 
