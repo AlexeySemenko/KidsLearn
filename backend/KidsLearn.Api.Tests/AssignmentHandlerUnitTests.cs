@@ -21,6 +21,22 @@ public class AssignmentHandlerUnitTests
     }
 
     [Fact]
+    public async Task GetChildAssignmentsQueryHandler_ForwardsToReadService()
+    {
+        var expected = new List<AssignmentResponse>
+        {
+            new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow, null, "Completed")
+        };
+
+        var handler = new GetChildAssignmentsQueryHandler(new FakeAssignmentReadService(expected));
+
+        var result = await handler.Handle(new GetChildAssignmentsQuery(Guid.NewGuid()), CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal(expected[0].Status, result[0].Status);
+    }
+
+    [Fact]
     public async Task AssignmentReadService_ListForParentAsync_ReturnsOnlyMatchingAssignments_InDescendingOrder()
     {
         await using var db = CreateDbContext();
@@ -79,6 +95,29 @@ public class AssignmentHandlerUnitTests
     }
 
     [Fact]
+    public async Task AssignmentSolvingService_GetForSolvingAsync_ReturnsNotFound_WhenChildDoesNotOwnAssignment()
+    {
+        await using var db = CreateDbContext();
+
+        var parent = CreateUser("parent@example.com", UserRole.Parent);
+        var child = CreateChild(parent, "Kid");
+        var lesson = CreateLessonWithQuestion(parent, out _, out _, out _);
+        var assignment = CreateAssignment(child, lesson, DateTime.UtcNow);
+
+        db.Users.AddRange(parent, child.User!);
+        db.Children.Add(child);
+        db.Lessons.Add(lesson);
+        db.Assignments.Add(assignment);
+        await db.SaveChangesAsync();
+
+        var service = new AssignmentSolvingService(db);
+        var result = await service.GetForSolvingAsync(AssignmentAccessScope.Child, Guid.NewGuid(), assignment.Id);
+
+        Assert.Equal(StatusCodes.Status404NotFound, result.StatusCode);
+        Assert.Equal("Assignment not found.", result.Error);
+    }
+
+    [Fact]
     public async Task AssignmentSolvingService_SubmitAnswersAsync_UpdatesStatusAndReturnsPartialScore()
     {
         await using var db = CreateDbContext();
@@ -112,6 +151,45 @@ public class AssignmentHandlerUnitTests
 
         var storedAnswer = await db.AssignmentAnswers.SingleAsync(x => x.AssignmentId == assignment.Id);
         Assert.True(storedAnswer.IsCorrect);
+    }
+
+    [Fact]
+    public async Task AssignmentSolvingService_SubmitAnswersAsync_ReturnsBadRequest_WhenAnswerQuestionDoesNotBelongToAssignment()
+    {
+        await using var db = CreateDbContext();
+
+        var parent = CreateUser("parent@example.com", UserRole.Parent);
+        var child = CreateChild(parent, "Kid");
+        var lesson = CreateLessonWithQuestion(parent, out _, out _, out _);
+        var assignment = CreateAssignment(child, lesson, DateTime.UtcNow.AddDays(1));
+        var unrelatedLesson = CreateLesson(parent, "Other Lesson");
+        var unrelatedQuestion = new Question
+        {
+            QuestionText = "Unrelated?",
+            Explanation = "No",
+            Order = 1,
+            Lesson = unrelatedLesson
+        };
+        unrelatedLesson.Questions.Add(unrelatedQuestion);
+
+        db.Users.AddRange(parent, child.User!);
+        db.Children.Add(child);
+        db.Lessons.AddRange(lesson, unrelatedLesson);
+        db.Assignments.Add(assignment);
+        await db.SaveChangesAsync();
+
+        var service = new AssignmentSolvingService(db);
+        var result = await service.SubmitAnswersAsync(
+            AssignmentAccessScope.Child,
+            child.Id,
+            assignment.Id,
+            new SubmitAssignmentAnswersRequest(new List<SubmitAnswerRequest>
+            {
+                new(unrelatedQuestion.Id, null, "anything")
+            }));
+
+        Assert.Equal(StatusCodes.Status400BadRequest, result.StatusCode);
+        Assert.Equal("Question does not belong to assignment lesson.", result.Error);
     }
 
     [Fact]
@@ -151,6 +229,41 @@ public class AssignmentHandlerUnitTests
         Assert.Equal(StatusCodes.Status200OK, result.StatusCode);
         Assert.Single(result.Value!.Breakdown);
         Assert.True(result.Value.Breakdown[0].Correct);
+    }
+
+    [Fact]
+    public async Task AssignmentSolvingService_GetResultAsync_ReturnsNotFound_WhenChildDoesNotOwnResult()
+    {
+        await using var db = CreateDbContext();
+
+        var parent = CreateUser("parent@example.com", UserRole.Parent);
+        var otherParent = CreateUser("other@example.com", UserRole.Parent);
+        var child = CreateChild(otherParent, "Kid");
+        var lesson = CreateLessonWithQuestion(otherParent, out var question, out var correctOption, out _);
+        var assignment = CreateAssignment(child, lesson, DateTime.UtcNow);
+
+        db.Users.AddRange(parent, otherParent, child.User!);
+        db.Children.Add(child);
+        db.Lessons.Add(lesson);
+        db.Assignments.Add(assignment);
+        await db.SaveChangesAsync();
+
+        var service = new AssignmentSolvingService(db);
+        await service.SubmitAnswersAsync(
+            AssignmentAccessScope.Child,
+            child.Id,
+            assignment.Id,
+            new SubmitAssignmentAnswersRequest(new List<SubmitAnswerRequest>
+            {
+                new(question.Id, correctOption.Id, null)
+            }));
+
+        var complete = await service.CompleteAsync(AssignmentAccessScope.Child, child.Id, assignment.Id);
+        Assert.Equal(StatusCodes.Status200OK, complete.StatusCode);
+
+        var result = await service.GetResultAsync(AssignmentAccessScope.Child, Guid.NewGuid(), complete.Value!.ResultId);
+        Assert.Equal(StatusCodes.Status404NotFound, result.StatusCode);
+        Assert.Equal("Result not found.", result.Error);
     }
 
     private static AppDbContext CreateDbContext()
