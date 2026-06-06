@@ -7,6 +7,7 @@ import ChildHomePage from './pages/ChildHomePage'
 import LoginPage from './pages/LoginPage'
 import ParentChildrenPage from './pages/ParentChildrenPage'
 import ParentHomePage from './pages/ParentHomePage'
+import ParentLessonsPage from './pages/ParentLessonsPage'
 import PlaceholderSection from './pages/PlaceholderSection'
 
 function LandingPage() {
@@ -38,13 +39,7 @@ export default function App() {
               />
               <Route
                 path="lessons"
-                element={
-                  <PlaceholderSection
-                    title="Lessons management"
-                    copy="This route is reserved for lesson CRUD, duplication, and the future AI lesson workflow entry points."
-                    epic="Epic 3.3"
-                  />
-                }
+                element={<ParentLessonsPage />}
               />
               <Route
                 path="reports"

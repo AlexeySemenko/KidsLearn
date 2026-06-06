@@ -452,6 +452,53 @@ button {
   color: #ffd3d3;
 }
 
+.lessons-hero {
+  grid-column: span 7;
+}
+
+.lessons-form-card {
+  grid-column: span 5;
+}
+
+.lessons-status-block,
+.lessons-alert {
+  margin-top: 1rem;
+}
+
+.lessons-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.lessons-list-card {
+  grid-column: span 12;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-strong) 100%);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow);
+  padding: 1.5rem;
+}
+
+.lesson-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.lesson-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.85rem;
+  width: 100%;
+}
+
 .boot-screen {
   min-height: 100vh;
   display: grid;
@@ -494,8 +541,16 @@ button {
   .panel-card,
   .children-hero,
   .children-form-card,
-  .children-list-card {
+  .children-list-card,
+  .lessons-hero,
+  .lessons-form-card,
+  .lessons-list-card {
     grid-column: span 12;
+  }
+
+  .lesson-edit-grid,
+  .lessons-form-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -511,12 +566,18 @@ button {
   }
 
   .children-list-header,
-  .child-row {
+  .child-row,
+  .lesson-row {
     flex-direction: column;
     align-items: flex-start;
   }
 
   .child-edit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lesson-edit-grid,
+  .lessons-form-grid {
     grid-template-columns: 1fr;
   }
 

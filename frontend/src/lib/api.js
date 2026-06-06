@@ -94,3 +94,33 @@ export async function deleteChild(accessToken, childId) {
     method: 'DELETE',
   }))
 }
+
+export async function getLessons(accessToken) {
+  return request('/api/v1/lessons', withAuth(accessToken))
+}
+
+export async function createLesson(accessToken, payload) {
+  return request('/api/v1/lessons', withAuth(accessToken, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }))
+}
+
+export async function updateLesson(accessToken, lessonId, payload) {
+  return request(`/api/v1/lessons/${lessonId}`, withAuth(accessToken, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  }))
+}
+
+export async function duplicateLesson(accessToken, lessonId) {
+  return request(`/api/v1/lessons/${lessonId}/duplicate`, withAuth(accessToken, {
+    method: 'POST',
+  }))
+}
+
+export async function deleteLesson(accessToken, lessonId) {
+  return request(`/api/v1/lessons/${lessonId}`, withAuth(accessToken, {
+    method: 'DELETE',
+  }))
+}
