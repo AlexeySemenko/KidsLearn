@@ -139,3 +139,20 @@ export async function createAssignment(accessToken, payload) {
 export async function getChildAssignments(accessToken) {
   return request('/api/v1/child/assignments', withAuth(accessToken))
 }
+
+export async function getChildAssignmentForSolving(accessToken, assignmentId) {
+  return request(`/api/v1/child/assignments/${assignmentId}/for-solving`, withAuth(accessToken))
+}
+
+export async function submitChildAssignmentAnswers(accessToken, assignmentId, payload) {
+  return request(`/api/v1/child/assignments/${assignmentId}/answers`, withAuth(accessToken, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }))
+}
+
+export async function completeChildAssignment(accessToken, assignmentId) {
+  return request(`/api/v1/child/assignments/${assignmentId}/complete`, withAuth(accessToken, {
+    method: 'POST',
+  }))
+}

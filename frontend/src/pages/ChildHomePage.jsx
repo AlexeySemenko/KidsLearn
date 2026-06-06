@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
-import { getChildAssignments } from '../lib/api'
+import {
+  completeChildAssignment,
+  getChildAssignmentForSolving,
+  getChildAssignments,
+  submitChildAssignmentAnswers,
+} from '../lib/api'
 
 function formatDate(value) {
   if (!value) {
@@ -23,6 +28,14 @@ export default function ChildHomePage() {
   const [assignments, setAssignments] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const [solvingAssignment, setSolvingAssignment] = useState(null)
+  const [selectedAnswers, setSelectedAnswers] = useState({})
+  const [instantCheckMap, setInstantCheckMap] = useState({})
+  const [partialScore, setPartialScore] = useState(null)
+  const [completion, setCompletion] = useState(null)
+  const [isOpening, setIsOpening] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isCompleting, setIsCompleting] = useState(false)
 
   useEffect(() => {
     let isMounted = true
@@ -58,6 +71,104 @@ export default function ChildHomePage() {
       isMounted = false
     }
   }, [session?.accessToken])
+
+  async function handleOpenAssignment(assignmentId) {
+    if (!session?.accessToken) {
+      return
+    }
+
+    setError('')
+    setIsOpening(true)
+
+    try {
+      const response = await getChildAssignmentForSolving(session.accessToken, assignmentId)
+      setSolvingAssignment(response)
+      setSelectedAnswers({})
+      setInstantCheckMap({})
+      setPartialScore(null)
+      setCompletion(null)
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setIsOpening(false)
+    }
+  }
+
+  function handleSelectAnswer(questionId, answerId) {
+    setSelectedAnswers((current) => ({ ...current, [questionId]: answerId }))
+  }
+
+  function closeSolvingModal() {
+    setSolvingAssignment(null)
+    setSelectedAnswers({})
+    setInstantCheckMap({})
+    setPartialScore(null)
+    setCompletion(null)
+  }
+
+  async function handleCheckAnswers() {
+    if (!session?.accessToken || !solvingAssignment) {
+      return
+    }
+
+    const answersPayload = Object.entries(selectedAnswers).map(([questionId, answerId]) => ({
+      questionId,
+      selectedAnswerOptionId: answerId,
+      textAnswer: null,
+    }))
+
+    if (answersPayload.length === 0) {
+      setError('Choose at least one answer before checking.')
+      return
+    }
+
+    setError('')
+    setIsSubmitting(true)
+
+    try {
+      const response = await submitChildAssignmentAnswers(session.accessToken, solvingAssignment.assignmentId, {
+        answers: answersPayload,
+      })
+
+      const checkMap = {}
+      response.instantCheck.forEach((item) => {
+        checkMap[item.questionId] = item
+      })
+
+      setInstantCheckMap(checkMap)
+      setPartialScore(response.partialScore)
+      setAssignments((current) => current.map((item) => (
+        item.id === solvingAssignment.assignmentId ? { ...item, status: 'InProgress' } : item
+      )))
+      setSolvingAssignment((current) => (current ? { ...current, status: 'InProgress' } : current))
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  async function handleCompleteAssignment() {
+    if (!session?.accessToken || !solvingAssignment) {
+      return
+    }
+
+    setError('')
+    setIsCompleting(true)
+
+    try {
+      const response = await completeChildAssignment(session.accessToken, solvingAssignment.assignmentId)
+      setCompletion(response)
+      setAssignments((current) => current.map((item) => (
+        item.id === solvingAssignment.assignmentId ? { ...item, status: 'Completed' } : item
+      )))
+      setSolvingAssignment((current) => (current ? { ...current, status: 'Completed' } : current))
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setIsCompleting(false)
+    }
+  }
 
   return (
     <section className="panel-grid">
@@ -112,11 +223,96 @@ export default function ChildHomePage() {
                     <span className="assignment-meta-chip">Due {formatDate(assignment.dueDate)}</span>
                   </div>
                 </div>
+
+                <div className="button-row child-actions">
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    disabled={isOpening}
+                    onClick={() => handleOpenAssignment(assignment.id)}
+                  >
+                    {isOpening ? 'Opening...' : 'Solve'}
+                  </button>
+                </div>
               </article>
             ))}
           </div>
         ) : null}
       </article>
+
+      {solvingAssignment ? (
+        <div className="modal-overlay" role="presentation" onClick={closeSolvingModal}>
+          <section className="modal-card lesson-modal" role="dialog" aria-modal="true" aria-labelledby="solve-assignment-title" onClick={(event) => event.stopPropagation()}>
+            <div className="children-list-header modal-header">
+              <div>
+                <h3 id="solve-assignment-title">Solve assignment</h3>
+                <p>{solvingAssignment.lessonTitle} · {solvingAssignment.questions.length} questions</p>
+              </div>
+              <button type="button" className="button-secondary" onClick={closeSolvingModal}>Close</button>
+            </div>
+
+            <div className="children-list">
+              {solvingAssignment.questions.map((question, index) => (
+                <article key={question.questionId} className="assignment-row question-card">
+                  <div className="assignment-copy">
+                    <div className="assignment-topline">
+                      <div className="child-name">Question {index + 1}</div>
+                      {instantCheckMap[question.questionId] ? (
+                        <span className={`assignment-status-pill ${instantCheckMap[question.questionId].correct ? 'status-success' : 'status-danger'}`}>
+                          {instantCheckMap[question.questionId].correct ? 'Correct' : 'Try again'}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div>{question.questionText}</div>
+
+                    <div className="question-options">
+                      {question.answers.map((answer) => (
+                        <label key={answer.answerId} className="question-option">
+                          <input
+                            type="radio"
+                            name={`question-${question.questionId}`}
+                            checked={selectedAnswers[question.questionId] === answer.answerId}
+                            onChange={() => handleSelectAnswer(question.questionId, answer.answerId)}
+                          />
+                          <span>{answer.answerText}</span>
+                        </label>
+                      ))}
+                    </div>
+
+                    {instantCheckMap[question.questionId] ? (
+                      <div className="child-meta">Explanation: {instantCheckMap[question.questionId].explanation}</div>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            {partialScore !== null ? (
+              <div className="info-block success-block assignments-status-block">
+                <strong>Current score</strong>
+                <span>{partialScore}%</span>
+              </div>
+            ) : null}
+
+            {completion ? (
+              <div className="info-block success-block assignments-status-block">
+                <strong>Assignment completed</strong>
+                <span>Score: {completion.score}% · Correct: {completion.correctAnswers}/{completion.totalQuestions}</span>
+              </div>
+            ) : null}
+
+            <div className="button-row modal-actions">
+              <button type="button" className="button-secondary" disabled={isSubmitting || isCompleting} onClick={handleCheckAnswers}>
+                {isSubmitting ? 'Checking...' : 'Check answers'}
+              </button>
+              <button type="button" className="button" disabled={isSubmitting || isCompleting || solvingAssignment.status === 'Completed'} onClick={handleCompleteAssignment}>
+                {isCompleting ? 'Completing...' : (solvingAssignment.status === 'Completed' ? 'Completed' : 'Complete assignment')}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   )
 }

@@ -872,6 +872,18 @@ select.input:invalid {
   text-transform: uppercase;
 }
 
+.assignment-status-pill.status-success {
+  border-color: rgba(140, 233, 154, 0.26);
+  background: rgba(140, 233, 154, 0.12);
+  color: #b9ffd3;
+}
+
+.assignment-status-pill.status-danger {
+  border-color: rgba(255, 123, 123, 0.34);
+  background: rgba(255, 123, 123, 0.16);
+  color: #ffd2d2;
+}
+
 .assignment-timeline {
   display: flex;
   flex-wrap: wrap;
@@ -887,6 +899,30 @@ select.input:invalid {
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 0.74rem;
+}
+
+.question-card {
+  padding: 1.1rem;
+}
+
+.question-options {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.3rem;
+}
+
+.question-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.question-option input {
+  margin: 0;
 }
 
 .modal-header {
