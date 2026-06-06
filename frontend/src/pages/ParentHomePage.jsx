@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 export default function ParentHomePage() {
   return (
     <section className="panel-grid">
@@ -18,9 +20,14 @@ export default function ParentHomePage() {
 
       <article className="side-card panel-card">
         <h3>Children workspace</h3>
-        <p>Reserved for list, create, edit, reset access code, and delete child actions.</p>
+        <p>List, create, edit, reset access code, and delete actions are now live.</p>
         <div className="metric">Epic 3.2</div>
-        <div className="metric-copy">Children management is the next concrete parent slice.</div>
+        <div className="metric-copy">Children management is ready for daily use and further polish.</div>
+        <div className="button-row">
+          <Link className="button-secondary inline-link" to="/parent/children">
+            Open children workspace
+          </Link>
+        </div>
       </article>
 
       <article className="panel-card">

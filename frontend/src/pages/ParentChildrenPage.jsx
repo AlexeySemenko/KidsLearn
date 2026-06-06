@@ -2,6 +2,26 @@ import { useEffect, useState } from 'react'
 import { createChild, deleteChild, getChildren, resetChildAccessCode, updateChild } from '../lib/api'
 import { useAuth } from '../auth/AuthProvider'
 
+function validateChildPayload({ name, grade, accessCode }, { requireAccessCode = false } = {}) {
+  const trimmedName = name.trim()
+  const normalizedCode = accessCode.trim()
+  const parsedGrade = Number(grade)
+
+  if (!trimmedName) {
+    return 'Name is required.'
+  }
+
+  if (!Number.isInteger(parsedGrade) || parsedGrade < 1 || parsedGrade > 12) {
+    return 'Grade must be a whole number between 1 and 12.'
+  }
+
+  if ((requireAccessCode || normalizedCode) && normalizedCode.length < 4) {
+    return 'Access code must contain at least 4 characters.'
+  }
+
+  return null
+}
+
 export default function ParentChildrenPage() {
   const { session } = useAuth()
   const [children, setChildren] = useState([])
@@ -13,6 +33,9 @@ export default function ParentChildrenPage() {
   const [editingChildId, setEditingChildId] = useState(null)
   const [editForm, setEditForm] = useState({ name: '', grade: '1', accessCode: '' })
   const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [isDeletingChildId, setIsDeletingChildId] = useState(null)
+  const [isResettingChildId, setIsResettingChildId] = useState(null)
+  const [statusMessage, setStatusMessage] = useState('')
 
   useEffect(() => {
     let isMounted = true
@@ -27,6 +50,7 @@ export default function ParentChildrenPage() {
 
       try {
         setError('')
+        setStatusMessage('')
         const response = await getChildren(session.accessToken)
         if (isMounted) {
           setChildren(response)
@@ -56,6 +80,7 @@ export default function ParentChildrenPage() {
   function startEditing(child) {
     setError('')
     setFreshAccessCode('')
+    setStatusMessage('')
     setEditingChildId(child.id)
     setEditForm({
       name: child.name,
@@ -79,9 +104,18 @@ export default function ParentChildrenPage() {
       return
     }
 
+    const validationError = validateChildPayload(form)
+    if (validationError) {
+      setError(validationError)
+      setStatusMessage('')
+      setFreshAccessCode('')
+      return
+    }
+
     setIsSubmitting(true)
     setError('')
     setFreshAccessCode('')
+    setStatusMessage('')
 
     try {
       const payload = {
@@ -92,6 +126,7 @@ export default function ParentChildrenPage() {
       const response = await createChild(session.accessToken, payload)
       setChildren((current) => [...current, response.child])
       setFreshAccessCode(response.accessCode)
+      setStatusMessage(`${response.child.name} was created successfully.`)
       setForm({ name: '', grade: '1', accessCode: '' })
     } catch (requestError) {
       setError(requestError.message)
@@ -107,12 +142,17 @@ export default function ParentChildrenPage() {
 
     setError('')
     setFreshAccessCode('')
+    setStatusMessage('')
+    setIsResettingChildId(childId)
 
     try {
       const response = await resetChildAccessCode(session.accessToken, childId)
       setFreshAccessCode(`Child ${response.childId}: ${response.accessCode}`)
+      setStatusMessage('Access code was reset successfully.')
     } catch (requestError) {
       setError(requestError.message)
+    } finally {
+      setIsResettingChildId(null)
     }
   }
 
@@ -121,8 +161,17 @@ export default function ParentChildrenPage() {
       return
     }
 
+    const validationError = validateChildPayload(editForm)
+    if (validationError) {
+      setError(validationError)
+      setStatusMessage('')
+      setFreshAccessCode('')
+      return
+    }
+
     setError('')
     setFreshAccessCode('')
+    setStatusMessage('')
     setIsSavingEdit(true)
 
     try {
@@ -135,6 +184,7 @@ export default function ParentChildrenPage() {
       setChildren((current) => current.map((child) => (
         child.id === childId ? response : child
       )))
+      setStatusMessage(`${response.name} was updated successfully.`)
       cancelEditing()
     } catch (requestError) {
       setError(requestError.message)
@@ -148,14 +198,29 @@ export default function ParentChildrenPage() {
       return
     }
 
+    const child = children.find((item) => item.id === childId)
+    if (!child) {
+      return
+    }
+
+    const isConfirmed = window.confirm(`Delete ${child.name}? This action cannot be undone.`)
+    if (!isConfirmed) {
+      return
+    }
+
     setError('')
     setFreshAccessCode('')
+    setStatusMessage('')
+    setIsDeletingChildId(childId)
 
     try {
       await deleteChild(session.accessToken, childId)
       setChildren((current) => current.filter((child) => child.id !== childId))
+      setStatusMessage(`${child.name} was deleted.`)
     } catch (requestError) {
       setError(requestError.message)
+    } finally {
+      setIsDeletingChildId(null)
     }
   }
 
@@ -228,6 +293,13 @@ export default function ParentChildrenPage() {
           <div className="info-block success-block">
             <strong>Issued access code</strong>
             <span>{freshAccessCode}</span>
+          </div>
+        ) : null}
+
+        {statusMessage ? (
+          <div className="info-block success-block children-status-block">
+            <strong>Update</strong>
+            <span>{statusMessage}</span>
           </div>
         ) : null}
 
@@ -312,6 +384,7 @@ export default function ParentChildrenPage() {
                       <button
                         type="button"
                         className="button-secondary"
+                        disabled={isResettingChildId === child.id || isDeletingChildId === child.id}
                         onClick={() => startEditing(child)}
                       >
                         Edit
@@ -319,16 +392,18 @@ export default function ParentChildrenPage() {
                       <button
                         type="button"
                         className="button-secondary"
+                        disabled={isResettingChildId === child.id || isDeletingChildId === child.id}
                         onClick={() => handleResetAccessCode(child.id)}
                       >
-                        Reset code
+                        {isResettingChildId === child.id ? 'Resetting...' : 'Reset code'}
                       </button>
                       <button
                         type="button"
                         className="button-secondary danger-button"
+                        disabled={isDeletingChildId === child.id || isResettingChildId === child.id}
                         onClick={() => handleDeleteChild(child.id)}
                       >
-                        Delete
+                        {isDeletingChildId === child.id ? 'Deleting...' : 'Delete'}
                       </button>
                     </div>
                   </>
