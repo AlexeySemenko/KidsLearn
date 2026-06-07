@@ -6,11 +6,11 @@
 
 - Эпик 1 (Базовый UI и навигация): выполнено.
 - Эпик 2 (Авторизация и сессия): выполнено.
-- Эпик 3 (Родительский кабинет): выполнено для core-flow (children/lessons/assignments + review popup).
-- Эпик 4 (AI-уроки): частично выполнено (генерация готова, редактирование и revisions pending).
+- Эпик 3 (Родительский кабинет): выполнено (dashboard + children/lessons/assignments + review popup).
+- Эпик 4 (AI-уроки): выполнено для текущего scope (генерация, команды редактирования, revision history).
 - Эпик 5 (Детский кабинет): выполнено для core-flow (list/solve/result detail).
-- Эпик 6 (Отчеты и аналитика): не начато на UI.
-- Эпик 7 (Интеграция и качество): частично (shared API layer есть, typed client/tests/a11y pending).
+- Эпик 6 (Отчеты и аналитика): выполнено для текущего scope (summary + CSV export + date filters).
+- Эпик 7 (Интеграция и качество): выполнено для текущего hardening scope (typed API module, error boundary, frontend tests in CI, a11y pass on key screens).
 
 ## Эпик 1. Базовый UI и навигация
 - Собрать общую структуру приложения: layout, header, sidebar или top navigation.
@@ -82,6 +82,6 @@
 - Frontend стабильно работает с backend API и имеет базовую защиту от регрессий.
 
 ## Приоритет реализации
-1. Отчеты и аналитика.
-2. AI-редактирование и ревизии.
-3. Интеграция и качество (typed client, error boundary, tests, a11y).
+1. Расширение строгой типизации API-клиента на все endpoint contracts.
+2. Дополнительные UI/regression-тесты на новые сценарии.
+3. Поддержка и полировка UX/a11y по мере обратной связи.

@@ -42,7 +42,7 @@ jobs:
   # 2. Build & test frontend
   # ─────────────────────────────────────────────────────────────
   frontend:
-    name: Frontend – Build
+    name: Frontend – Test & Build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -56,7 +56,10 @@ jobs:
           node-version: "22"
 
       - name: Install
-        run: npm install
+        run: npm ci
+
+      - name: Test
+        run: npm run test
 
       - name: Build
         run: npm run build

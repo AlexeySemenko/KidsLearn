@@ -371,7 +371,7 @@ export default function ParentAiGenerationPage() {
         )}
 
         {editStatus ? (
-          <div className="info-block success-block assignments-status-block">
+          <div className="info-block success-block assignments-status-block" role="status" aria-live="polite">
             <strong>Update</strong>
             <span>{editStatus}</span>
           </div>
@@ -386,7 +386,7 @@ export default function ParentAiGenerationPage() {
         ) : null}
 
         {isLoadingRevisions ? <p className="children-empty">Loading revision history...</p> : null}
-        {revisionsError ? <div className="alert assignments-alert">{revisionsError}</div> : null}
+        {revisionsError ? <div className="alert assignments-alert" role="alert" aria-live="assertive">{revisionsError}</div> : null}
 
         {!isLoadingRevisions && revisionHistory.length > 0 ? (
           <div className="children-list">
@@ -404,7 +404,7 @@ export default function ParentAiGenerationPage() {
           </div>
         ) : null}
 
-        {editError ? <div className="alert assignments-alert">{editError}</div> : null}
+        {editError ? <div className="alert assignments-alert" role="alert" aria-live="assertive">{editError}</div> : null}
       </article>
 
       <article className="assignments-list-card">

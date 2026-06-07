@@ -93,6 +93,16 @@ a {
   color: inherit;
 }
 
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role='button']:focus-visible {
+  outline: 2px solid rgba(244, 211, 94, 0.9);
+  outline-offset: 2px;
+}
+
 button, input, select {
   font: inherit;
 }

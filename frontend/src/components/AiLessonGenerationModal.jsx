@@ -163,6 +163,7 @@ export default function AiLessonGenerationModal({
                 value={form.subject}
                 onChange={(event) => updateField('subject', event.target.value)}
                 placeholder="Math"
+                autoFocus
                 required
               />
             </div>
@@ -254,14 +255,14 @@ export default function AiLessonGenerationModal({
         </form>
 
         {status ? (
-          <div className="info-block success-block lessons-status-block">
+          <div className="info-block success-block lessons-status-block" role="status" aria-live="polite">
             <strong>Update</strong>
             <span>{status}</span>
             {providerMeta?.note ? <span>{providerMeta.note}</span> : null}
           </div>
         ) : null}
 
-        {error ? <div className="alert lessons-alert">{error}</div> : null}
+        {error ? <div className="alert lessons-alert" role="alert" aria-live="assertive">{error}</div> : null}
       </section>
     </div>
   )

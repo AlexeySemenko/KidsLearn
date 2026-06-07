@@ -41,24 +41,24 @@ Dependency notes:
 - UI should preserve instant-check and completion semantics.
 
 ## Phase 4. Reports and AI
-- [ ] Add report summary and CSV export UI.
+- [x] Add report summary and CSV export UI.
 - [x] Add AI lesson generation UI.
-- [ ] Add AI lesson editing and revision review UI.
+- [x] Add AI lesson editing and revision review UI.
 
 Dependency notes:
 - Relies on backend reports and AI endpoints.
 - 422 and fallback semantics must remain stable.
 
 ## Phase 5. Hardening
-- [ ] Add typed frontend API client.
-- [ ] Add global error handling.
-- [ ] Add UI tests and accessibility coverage.
+- [x] Add typed frontend API client.
+- [x] Add global error handling.
+- [x] Add UI tests and accessibility coverage.
 - [ ] Review backend backlog items only when frontend needs them.
 
 ## Next Focus
-1. Reports UI: parent child summary + CSV export.
-2. AI editing UI: edit commands + revision visibility.
-3. Hardening pass: typed client/error boundary/tests/accessibility.
+1. Typed API expansion for additional endpoint surfaces.
+2. Accessibility polish and regression checks on new screens.
+3. Backend maintenance items only when frontend delivery requires them.
 
 Dependency notes:
 - Frontend quality work depends on stable backend error semantics.

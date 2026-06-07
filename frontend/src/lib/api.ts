@@ -16,6 +16,152 @@ type ReportQueryRange = {
   to?: string
 }
 
+export interface AuthUser {
+  id: string
+  role: 'Parent' | 'Child'
+  email: string
+  displayName?: string | null
+}
+
+export interface AuthSessionResponse {
+  accessToken: string
+  refreshToken: string
+  expiresAt: string
+  user: AuthUser
+}
+
+export interface ParentLoginRequest {
+  email: string
+  password: string
+}
+
+export interface ChildLoginRequest {
+  childId: string
+  accessCode: string
+}
+
+export interface ChildSummary {
+  id: string
+  name: string
+  grade: number
+  accessCode?: string | null
+}
+
+export interface LessonsListResponse {
+  items: LessonSummary[]
+  totalCount?: number
+  page?: number
+  pageSize?: number
+}
+
+export interface LessonSummary {
+  id: string
+  title: string
+  subject: string
+  grade: number
+  topic: string
+  difficulty: string
+  createdAt: string
+  questionCount: number
+}
+
+export interface AssignmentResponse {
+  id: string
+  childId: string
+  lessonId: string
+  lessonTitle?: string | null
+  assignedAt: string
+  dueDate?: string | null
+  status: string
+}
+
+export interface AiAnswerOption {
+  id: string
+  answerText: string
+  isCorrect: boolean
+  order: number
+}
+
+export interface AiQuestion {
+  id: string
+  questionText: string
+  explanation: string
+  order: number
+  answers: AiAnswerOption[]
+}
+
+export interface AiLessonDraft {
+  id: string
+  title: string
+  subject: string
+  grade: number
+  topic: string
+  difficulty: string
+  createdAt: string
+  questions: AiQuestion[]
+}
+
+export interface AiProviderMeta {
+  provider: string
+  model: string
+  fallbackUsed: boolean
+  note?: string | null
+}
+
+export interface GenerateAiLessonRequest {
+  subject: string
+  grade: number
+  topic: string
+  questionCount: number
+  difficulty?: string | null
+  language?: string | null
+  questionTypes?: string[] | null
+}
+
+export interface GenerateAiLessonResponse {
+  createdLessonId: string
+  lessonDraft: AiLessonDraft
+  providerMeta: AiProviderMeta
+}
+
+export interface EditAiAnswerInput {
+  answerText: string
+  isCorrect: boolean
+}
+
+export interface EditAiLessonRequest {
+  command: string
+  params?: Record<string, string> | null
+  answers?: EditAiAnswerInput[] | null
+}
+
+export interface EditAiLessonResponse {
+  revisionId: string
+  revisionNumber: number
+  diffSummary: string
+  lessonDraft: AiLessonDraft
+}
+
+export interface AiLessonRevisionSummary {
+  revisionId: string
+  revisionNumber: number
+  diffSummary: string
+  createdAt: string
+}
+
+export interface ChildReportSummary {
+  childId: string
+  completionRate: number
+  averageScore: number
+  solvedCount: number
+  streakDays: number
+}
+
+export interface CsvExportResult {
+  fileBlob: Blob
+  fileName: string
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -53,36 +199,36 @@ function withAuth(accessToken: string, options: RequestOptions = {}): RequestOpt
   }
 }
 
-export async function loginParent(credentials: RequestPayload) {
-  return request('/api/v1/auth/login', {
+export async function loginParent(credentials: ParentLoginRequest): Promise<AuthSessionResponse> {
+  return request<AuthSessionResponse>('/api/v1/auth/login', {
     method: 'POST',
     body: JSON.stringify(credentials),
   })
 }
 
-export async function loginChild(credentials: RequestPayload) {
-  return request('/api/v1/auth/child-login', {
+export async function loginChild(credentials: ChildLoginRequest): Promise<AuthSessionResponse> {
+  return request<AuthSessionResponse>('/api/v1/auth/child-login', {
     method: 'POST',
     body: JSON.stringify(credentials),
   })
 }
 
-export async function refreshSession(refreshToken: string) {
-  return request('/api/v1/auth/refresh', {
+export async function refreshSession(refreshToken: string): Promise<AuthSessionResponse> {
+  return request<AuthSessionResponse>('/api/v1/auth/refresh', {
     method: 'POST',
     body: JSON.stringify({ refreshToken }),
   })
 }
 
-export async function revokeSession(refreshToken: string) {
-  return request('/api/v1/auth/revoke', {
+export async function revokeSession(refreshToken: string): Promise<null> {
+  return request<null>('/api/v1/auth/revoke', {
     method: 'POST',
     body: JSON.stringify({ refreshToken }),
   })
 }
 
-export async function getChildren(accessToken: string) {
-  return request('/api/v1/children', withAuth(accessToken))
+export async function getChildren(accessToken: string): Promise<ChildSummary[]> {
+  return request<ChildSummary[]>('/api/v1/children', withAuth(accessToken))
 }
 
 export async function createChild(accessToken: string, payload: RequestPayload) {
@@ -111,8 +257,8 @@ export async function deleteChild(accessToken: string, childId: string) {
   }))
 }
 
-export async function getLessons(accessToken: string) {
-  return request('/api/v1/lessons', withAuth(accessToken))
+export async function getLessons(accessToken: string): Promise<LessonsListResponse> {
+  return request<LessonsListResponse>('/api/v1/lessons', withAuth(accessToken))
 }
 
 export async function createLesson(accessToken: string, payload: RequestPayload) {
@@ -141,33 +287,33 @@ export async function deleteLesson(accessToken: string, lessonId: string) {
   }))
 }
 
-export async function getAssignments(accessToken: string) {
-  return request('/api/v1/assignments', withAuth(accessToken))
+export async function getAssignments(accessToken: string): Promise<AssignmentResponse[]> {
+  return request<AssignmentResponse[]>('/api/v1/assignments', withAuth(accessToken))
 }
 
-export async function createAssignment(accessToken: string, payload: RequestPayload) {
-  return request('/api/v1/assignments', withAuth(accessToken, {
+export async function createAssignment(accessToken: string, payload: RequestPayload): Promise<AssignmentResponse> {
+  return request<AssignmentResponse>('/api/v1/assignments', withAuth(accessToken, {
     method: 'POST',
     body: JSON.stringify(payload),
   }))
 }
 
-export async function generateParentAiLesson(accessToken: string, payload: RequestPayload) {
-  return request('/api/v1/ai/lessons/generate', withAuth(accessToken, {
+export async function generateParentAiLesson(accessToken: string, payload: GenerateAiLessonRequest): Promise<GenerateAiLessonResponse> {
+  return request<GenerateAiLessonResponse>('/api/v1/ai/lessons/generate', withAuth(accessToken, {
     method: 'POST',
     body: JSON.stringify(payload),
   }))
 }
 
-export async function editParentAiLesson(accessToken: string, lessonId: string, payload: RequestPayload) {
-  return request(`/api/v1/ai/lessons/${lessonId}/edit`, withAuth(accessToken, {
+export async function editParentAiLesson(accessToken: string, lessonId: string, payload: EditAiLessonRequest): Promise<EditAiLessonResponse> {
+  return request<EditAiLessonResponse>(`/api/v1/ai/lessons/${lessonId}/edit`, withAuth(accessToken, {
     method: 'POST',
     body: JSON.stringify(payload),
   }))
 }
 
-export async function getParentAiLessonRevisions(accessToken: string, lessonId: string) {
-  return request(`/api/v1/ai/lessons/${lessonId}/revisions`, withAuth(accessToken))
+export async function getParentAiLessonRevisions(accessToken: string, lessonId: string): Promise<AiLessonRevisionSummary[]> {
+  return request<AiLessonRevisionSummary[]>(`/api/v1/ai/lessons/${lessonId}/revisions`, withAuth(accessToken))
 }
 
 export async function getParentAssignmentForSolving(accessToken: string, assignmentId: string) {
@@ -203,7 +349,7 @@ export async function getChildResultDetail(accessToken: string, resultId: string
   return request(`/api/v1/child/results/${resultId}`, withAuth(accessToken))
 }
 
-export async function getParentChildReportSummary(accessToken: string, childId: string, { from, to }: ReportQueryRange = {}) {
+export async function getParentChildReportSummary(accessToken: string, childId: string, { from, to }: ReportQueryRange = {}): Promise<ChildReportSummary> {
   const query = new URLSearchParams()
 
   if (from) {
@@ -215,10 +361,10 @@ export async function getParentChildReportSummary(accessToken: string, childId: 
   }
 
   const suffix = query.size > 0 ? `?${query.toString()}` : ''
-  return request(`/api/v1/reports/children/${childId}${suffix}`, withAuth(accessToken))
+  return request<ChildReportSummary>(`/api/v1/reports/children/${childId}${suffix}`, withAuth(accessToken))
 }
 
-export async function exportParentChildReportCsv(accessToken: string, childId: string, { from, to }: ReportQueryRange = {}) {
+export async function exportParentChildReportCsv(accessToken: string, childId: string, { from, to }: ReportQueryRange = {}): Promise<CsvExportResult> {
   const query = new URLSearchParams({ format: 'csv' })
 
   if (from) {

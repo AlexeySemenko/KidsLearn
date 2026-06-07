@@ -6,8 +6,8 @@ Responsive full-stack starter. Runs locally with Docker Compose; deploys to a si
 
 - Backend: complete and stable for core domain flows (auth, children, lessons, assignments, child solving, reports, AI generation/edit endpoints).
 - Frontend: foundation and major feature slices are implemented.
-  - Done: auth/session, role-protected shell, parent children/lessons/assignments, child assignments solving + child result detail, AI lesson generation UI.
-  - In progress: reports UI, AI lesson editing UI, quality hardening (typed client/tests/a11y pass).
+  - Done: auth/session, role-protected shell, parent dashboard/children/lessons/assignments/reports, child assignments solving + child result detail, AI lesson generation/editing + revision history.
+  - Hardening delivered: global error boundary, shared typed API module, frontend regression tests in CI, keyboard/focus/accessibility pass on key flows.
 
 ## Stack
 
@@ -121,7 +121,7 @@ git push origin main
 
 GitHub Actions will:
 1. Build & test the .NET project
-2. Build the Vite frontend
+2. Run frontend tests and build the Vite frontend
 3. Build a single image that includes frontend + backend
 4. Deploy one Fly.io app
 
@@ -145,6 +145,7 @@ GitHub Actions will:
 | DELETE | /api/v1/children/{childId} | Delete child |
 | POST   | /api/v1/ai/lessons/generate | Generate AI lesson draft and persist lesson |
 | POST   | /api/v1/ai/lessons/{lessonId}/edit | Apply AI lesson edit command and create revision |
+| GET    | /api/v1/ai/lessons/{lessonId}/revisions | Get AI lesson revision history |
 | POST   | /api/v1/lessons | Create lesson with nested questions and answers |
 | GET    | /api/v1/lessons?page=1&pageSize=20 | List parent lessons with pagination |
 | GET    | /api/v1/lessons/{lessonId} | Get lesson details |

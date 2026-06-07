@@ -146,7 +146,7 @@ export default function LoginPage({ variant }) {
               />
             </div>
 
-            {error ? <div className="alert">{error}</div> : null}
+            {error ? <div className="alert" role="alert" aria-live="assertive">{error}</div> : null}
 
             <div className="button-row">
               <button type="submit" className="button" disabled={isSubmitting}>

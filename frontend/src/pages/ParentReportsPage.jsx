@@ -264,13 +264,13 @@ export default function ParentReportsPage() {
         </form>
 
         {statusMessage ? (
-          <div className="info-block success-block reports-status-block">
+          <div className="info-block success-block reports-status-block" role="status" aria-live="polite">
             <strong>Update</strong>
             <span>{statusMessage}</span>
           </div>
         ) : null}
 
-        {error ? <div className="alert reports-alert">{error}</div> : null}
+        {error ? <div className="alert reports-alert" role="alert" aria-live="assertive">{error}</div> : null}
       </article>
 
       <article className="reports-summary-card">

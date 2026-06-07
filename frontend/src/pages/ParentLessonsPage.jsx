@@ -480,13 +480,13 @@ export default function ParentLessonsPage() {
         </form>
 
         {statusMessage ? (
-          <div className="info-block success-block lessons-status-block">
+          <div className="info-block success-block lessons-status-block" role="status" aria-live="polite">
             <strong>Update</strong>
             <span>{statusMessage}</span>
           </div>
         ) : null}
 
-        {error ? <div className="alert lessons-alert">{error}</div> : null}
+        {error ? <div className="alert lessons-alert" role="alert" aria-live="assertive">{error}</div> : null}
       </article>
 
       <article className="lessons-list-card">
@@ -603,7 +603,7 @@ export default function ParentLessonsPage() {
             <div className="lesson-edit-grid">
               <div className="field">
                 <label htmlFor="modal-lesson-title">Title</label>
-                <input id="modal-lesson-title" className="input" value={editForm.title} onChange={(event) => updateEditField('title', event.target.value)} />
+                <input id="modal-lesson-title" className="input" value={editForm.title} onChange={(event) => updateEditField('title', event.target.value)} autoFocus />
               </div>
               <div className="field">
                 <label htmlFor="modal-lesson-subject">Subject</label>

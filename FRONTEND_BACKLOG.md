@@ -14,13 +14,15 @@ Related files:
 - Delivered in repository:
 	- Epic 1 Authentication and Session: implemented.
 	- Epic 2 App Shell and Navigation: implemented.
-	- Epic 3 Parent Dashboard core flows: implemented (children, lessons, assignments, assignment review).
+	- Epic 3 Parent Dashboard core flows: implemented (live dashboard, children, lessons, assignments, assignment review).
 	- Epic 4 Child Workspace: implemented (list, solving, completion, result detail route).
-	- Epic 6.1 AI lesson generation: implemented (dedicated page + reusable popup from lessons page).
+	- Epic 5 Reports and Analytics: implemented for summary + CSV export scope.
+	- Epic 6.1-6.3 AI lesson workflows: implemented for generation + edit commands + revision history.
+	- Epic 7 hardening baseline: implemented (typed API module, global error boundary, frontend regression tests in CI, key-flow accessibility pass).
 - Remaining high-priority slices:
-	- Epic 5 Reports and Analytics.
-	- Epic 6.2-6.3 AI lesson editing + richer workflow feedback.
-	- Epic 7 hardening (typed client, global error boundary, tests, accessibility).
+	- Epic 7 typed API coverage expansion for all endpoint contracts.
+	- Additional UI/integration regression tests for broader scenario coverage.
+	- Ongoing UX and accessibility polish from usage feedback.
 
 ## Epic 1. Authentication and Session
 
