@@ -11,6 +11,16 @@ Related files:
 - This backlog is the primary delivery track for the UI layer.
 - Backend support is already in place and tracked separately in [BACKEND_BACKLOG.md](BACKEND_BACKLOG.md).
 - The implementation order below follows the master roadmap.
+- Delivered in repository:
+	- Epic 1 Authentication and Session: implemented.
+	- Epic 2 App Shell and Navigation: implemented.
+	- Epic 3 Parent Dashboard core flows: implemented (children, lessons, assignments, assignment review).
+	- Epic 4 Child Workspace: implemented (list, solving, completion, result detail route).
+	- Epic 6.1 AI lesson generation: implemented (dedicated page + reusable popup from lessons page).
+- Remaining high-priority slices:
+	- Epic 5 Reports and Analytics.
+	- Epic 6.2-6.3 AI lesson editing + richer workflow feedback.
+	- Epic 7 hardening (typed client, global error boundary, tests, accessibility).
 
 ## Epic 1. Authentication and Session
 

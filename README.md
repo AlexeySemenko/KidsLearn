@@ -2,6 +2,13 @@
 
 Responsive full-stack starter. Runs locally with Docker Compose; deploys to a single Fly.io app via GitHub Actions.
 
+## Current Status (2026-06-07)
+
+- Backend: complete and stable for core domain flows (auth, children, lessons, assignments, child solving, reports, AI generation/edit endpoints).
+- Frontend: foundation and major feature slices are implemented.
+  - Done: auth/session, role-protected shell, parent children/lessons/assignments, child assignments solving + child result detail, AI lesson generation UI.
+  - In progress: reports UI, AI lesson editing UI, quality hardening (typed client/tests/a11y pass).
+
 ## Stack
 
 | Layer      | Tech                        |
@@ -22,9 +29,10 @@ Responsive full-stack starter. Runs locally with Docker Compose; deploys to a si
 docker compose up --build
 ```
 
-- Frontend → http://localhost:3000  
-- Backend  → http://localhost:8080  
+- App (frontend + backend) → http://localhost:8080  
 - Postgres → localhost:5432
+
+Note: In Docker Compose, frontend static files are served by the backend container.
 
 ### Option B — Run each service manually
 
@@ -50,6 +58,20 @@ npm run dev
 # /api/* proxied to localhost:8080
 ```
 
+### OpenAI config for local compose
+
+`docker-compose.yml` reads:
+
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL` (default `gpt-4o-mini`)
+
+Set these in a root `.env` file:
+
+```env
+OPENAI_API_KEY=<your-key>
+OPENAI_MODEL=gpt-4o-mini
+```
+
 ---
 
 ## Deploy to Fly.io
@@ -69,6 +91,12 @@ Set these on your Fly app:
 
 ```
 fly secrets set DATABASE_URL=<postgres-connection-string> AllowedOrigins__0=https://<your-app>.fly.dev -a <your-app>
+```
+
+For AI generation/editing in production, also set:
+
+```bash
+fly secrets set OpenAI__ApiKey=<openai-key> OpenAI__Model=gpt-4o-mini -a <your-app>
 ```
 
 Use Fly Postgres or any managed Postgres provider and place its connection string in `DATABASE_URL`.
