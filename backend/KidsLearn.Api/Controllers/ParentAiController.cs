@@ -45,6 +45,22 @@ public static class ParentAiController
             };
         });
 
+        parentApi.MapGet("/ai/lessons/{lessonId:guid}/revisions", async (ISender sender, ClaimsPrincipal user, Guid lessonId, CancellationToken cancellationToken) =>
+        {
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
+            {
+                return Results.Unauthorized();
+            }
+
+            var result = await sender.Send(new GetParentAiLessonRevisionsQuery(parentId, lessonId), cancellationToken);
+            return result.StatusCode switch
+            {
+                StatusCodes.Status200OK when result.Response is not null => Results.Ok(result.Response),
+                StatusCodes.Status404NotFound => Results.NotFound(new { error = result.Error ?? "Not found." }),
+                _ => Results.Problem(result.Error ?? "Unexpected error.")
+            };
+        });
+
         return parentApi;
     }
 }

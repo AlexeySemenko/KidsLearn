@@ -30,3 +30,9 @@ public sealed record EditAiLessonResponse(
     int RevisionNumber,
     string DiffSummary,
     LessonDetailResponse LessonDraft);
+
+public sealed record AiLessonRevisionSummaryResponse(
+    Guid RevisionId,
+    int RevisionNumber,
+    string DiffSummary,
+    DateTime CreatedAt);

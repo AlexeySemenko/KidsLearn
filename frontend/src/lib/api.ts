@@ -166,6 +166,10 @@ export async function editParentAiLesson(accessToken: string, lessonId: string, 
   }))
 }
 
+export async function getParentAiLessonRevisions(accessToken: string, lessonId: string) {
+  return request(`/api/v1/ai/lessons/${lessonId}/revisions`, withAuth(accessToken))
+}
+
 export async function getParentAssignmentForSolving(accessToken: string, assignmentId: string) {
   return request(`/api/v1/assignments/${assignmentId}/for-solving`, withAuth(accessToken))
 }

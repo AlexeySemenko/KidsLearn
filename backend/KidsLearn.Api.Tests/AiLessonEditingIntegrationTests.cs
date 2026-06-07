@@ -38,6 +38,15 @@ public class AiLessonEditingIntegrationTests
         Assert.Equal("Hard", editResult.LessonDraft.Difficulty);
         Assert.Contains("Difficulty changed", editResult.DiffSummary);
 
+        var revisionsResponse = await client.GetAsync($"/api/v1/ai/lessons/{generated.CreatedLessonId}/revisions");
+        Assert.Equal(HttpStatusCode.OK, revisionsResponse.StatusCode);
+
+        var revisions = await revisionsResponse.Content.ReadFromJsonAsync<List<AiLessonRevisionSummaryResponse>>();
+        Assert.NotNull(revisions);
+        Assert.Single(revisions!);
+        Assert.Equal(1, revisions[0].RevisionNumber);
+        Assert.Contains("Difficulty changed", revisions[0].DiffSummary);
+
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var revisionsCount = db.LessonRevisions.Count(x => x.LessonId == generated.CreatedLessonId);

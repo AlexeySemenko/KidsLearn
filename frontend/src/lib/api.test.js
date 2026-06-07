@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   editParentAiLesson,
   exportParentChildReportCsv,
+  getParentAiLessonRevisions,
   getParentChildReportSummary,
 } from './api'
 
@@ -84,5 +85,24 @@ describe('api route wiring', () => {
     expect(url).toContain('/api/v1/ai/lessons/lesson-1/edit')
     expect(options.method).toBe('POST')
     expect(options.headers.Authorization).toBe('Bearer token-3')
+  })
+
+  it('calls ai lesson revisions endpoint with lesson id', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: {
+        get: () => 'application/json',
+      },
+      json: async () => ([]),
+    }))
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getParentAiLessonRevisions('token-4', 'lesson-9')
+
+    const [url, options] = fetchMock.mock.calls[0]
+    expect(url).toContain('/api/v1/ai/lessons/lesson-9/revisions')
+    expect(options.headers.Authorization).toBe('Bearer token-4')
   })
 })

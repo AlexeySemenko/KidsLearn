@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AiLessonGenerationModal from '../components/AiLessonGenerationModal'
-import { editParentAiLesson } from '../lib/api'
+import { editParentAiLesson, getParentAiLessonRevisions } from '../lib/api'
 import { useAuth } from '../auth/AuthProvider'
 
 const initialEditForm = {
@@ -24,6 +24,9 @@ export default function ParentAiGenerationPage() {
   const [editError, setEditError] = useState('')
   const [editStatus, setEditStatus] = useState('')
   const [lastRevision, setLastRevision] = useState(null)
+  const [revisionHistory, setRevisionHistory] = useState([])
+  const [isLoadingRevisions, setIsLoadingRevisions] = useState(false)
+  const [revisionsError, setRevisionsError] = useState('')
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false)
 
   const removeQuestionOptions = useMemo(() => {
@@ -37,12 +40,42 @@ export default function ParentAiGenerationPage() {
     }))
   }, [result])
 
-  function handleGenerated(response) {
+  function formatRevisionDate(value) {
+    if (!value) {
+      return 'Unknown date'
+    }
+
+    return new Date(value).toLocaleString()
+  }
+
+  async function loadRevisions(lessonId) {
+    if (!session?.accessToken || !lessonId) {
+      return
+    }
+
+    setIsLoadingRevisions(true)
+    setRevisionsError('')
+
+    try {
+      const response = await getParentAiLessonRevisions(session.accessToken, lessonId)
+      setRevisionHistory(response)
+    } catch (requestError) {
+      setRevisionHistory([])
+      setRevisionsError(requestError.message)
+    } finally {
+      setIsLoadingRevisions(false)
+    }
+  }
+
+  async function handleGenerated(response) {
     setEditError('')
     setEditStatus('')
     setLastRevision(null)
+    setRevisionsError('')
+    setRevisionHistory([])
     setEditForm(initialEditForm)
     setResult(response)
+    await loadRevisions(response.createdLessonId)
   }
 
   function updateEditField(name, value) {
@@ -159,6 +192,7 @@ export default function ParentAiGenerationPage() {
         revisionId: response.revisionId,
       })
       setEditStatus(`Edit applied. Revision #${response.revisionNumber} created.`)
+      await loadRevisions(result.createdLessonId)
 
       if (response.lessonDraft.questions.length > 0 && !response.lessonDraft.questions.some((question) => question.id === editForm.removeQuestionId)) {
         setEditForm((current) => ({
@@ -185,6 +219,7 @@ export default function ParentAiGenerationPage() {
         <div className="badge-row">
           <span className="badge">POST /ai/lessons/generate</span>
           <span className="badge">POST /ai/lessons/{'{id}'}/edit</span>
+          <span className="badge">GET /ai/lessons/{'{id}'}/revisions</span>
           <span className="badge">422-aware errors</span>
           <span className="badge">Revision metadata</span>
         </div>
@@ -347,6 +382,25 @@ export default function ParentAiGenerationPage() {
             <strong>Latest revision</strong>
             <span>Revision #{lastRevision.revisionNumber}</span>
             <span>{lastRevision.diffSummary}</span>
+          </div>
+        ) : null}
+
+        {isLoadingRevisions ? <p className="children-empty">Loading revision history...</p> : null}
+        {revisionsError ? <div className="alert assignments-alert">{revisionsError}</div> : null}
+
+        {!isLoadingRevisions && revisionHistory.length > 0 ? (
+          <div className="children-list">
+            {revisionHistory.map((revision) => (
+              <article key={revision.revisionId} className="assignment-row">
+                <div className="assignment-copy">
+                  <div className="assignment-topline">
+                    <div className="assignment-lesson-title">Revision #{revision.revisionNumber}</div>
+                    <span className="assignment-meta-chip">{formatRevisionDate(revision.createdAt)}</span>
+                  </div>
+                  <div>{revision.diffSummary}</div>
+                </div>
+              </article>
+            ))}
           </div>
         ) : null}
 
