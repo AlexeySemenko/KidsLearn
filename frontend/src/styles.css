@@ -1196,6 +1196,24 @@ select.input:invalid {
   font-family: var(--font-display);
 }
 
+.error-boundary-card {
+  width: min(720px, 100%);
+  display: grid;
+  gap: 1rem;
+}
+
+.error-boundary-card h1 {
+  margin: 0;
+}
+
+.error-boundary-details {
+  margin-top: 0;
+}
+
+.error-boundary-details span {
+  word-break: break-word;
+}
+
 .logout-button {
   border: 1px solid var(--border);
   border-radius: 999px;
