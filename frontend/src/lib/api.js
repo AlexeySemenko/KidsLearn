@@ -188,7 +188,7 @@ export async function getParentChildReportSummary(accessToken, childId, { from, 
   }
 
   const suffix = query.size > 0 ? `?${query.toString()}` : ''
-  return request(`/api/v1/parent/reports/children/${childId}${suffix}`, withAuth(accessToken))
+  return request(`/api/v1/reports/children/${childId}${suffix}`, withAuth(accessToken))
 }
 
 export async function exportParentChildReportCsv(accessToken, childId, { from, to } = {}) {
@@ -202,7 +202,7 @@ export async function exportParentChildReportCsv(accessToken, childId, { from, t
     query.set('to', to)
   }
 
-  const response = await fetch(`${API_BASE}/api/v1/parent/reports/children/${childId}/export?${query.toString()}`, {
+  const response = await fetch(`${API_BASE}/api/v1/reports/children/${childId}/export?${query.toString()}`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },

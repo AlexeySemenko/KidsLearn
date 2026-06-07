@@ -191,8 +191,8 @@ export default function ParentReportsPage() {
           and export CSV for external analysis.
         </p>
         <div className="badge-row">
-          <span className="badge">GET /parent/reports/children/{'{id}'}</span>
-          <span className="badge">GET /parent/reports/children/{'{id}'}/export?format=csv</span>
+          <span className="badge">GET /reports/children/{'{id}'}</span>
+          <span className="badge">GET /reports/children/{'{id}'}/export?format=csv</span>
           <span className="badge">Date range filters</span>
         </div>
       </article>
