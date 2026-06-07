@@ -143,6 +143,13 @@ export async function generateParentAiLesson(accessToken, payload) {
   }))
 }
 
+export async function editParentAiLesson(accessToken, lessonId, payload) {
+  return request(`/api/v1/ai/lessons/${lessonId}/edit`, withAuth(accessToken, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }))
+}
+
 export async function getParentAssignmentForSolving(accessToken, assignmentId) {
   return request(`/api/v1/assignments/${assignmentId}/for-solving`, withAuth(accessToken))
 }
