@@ -175,3 +175,55 @@ export async function completeChildAssignment(accessToken, assignmentId) {
 export async function getChildResultDetail(accessToken, resultId) {
   return request(`/api/v1/child/results/${resultId}`, withAuth(accessToken))
 }
+
+export async function getParentChildReportSummary(accessToken, childId, { from, to } = {}) {
+  const query = new URLSearchParams()
+
+  if (from) {
+    query.set('from', from)
+  }
+
+  if (to) {
+    query.set('to', to)
+  }
+
+  const suffix = query.size > 0 ? `?${query.toString()}` : ''
+  return request(`/api/v1/parent/reports/children/${childId}${suffix}`, withAuth(accessToken))
+}
+
+export async function exportParentChildReportCsv(accessToken, childId, { from, to } = {}) {
+  const query = new URLSearchParams({ format: 'csv' })
+
+  if (from) {
+    query.set('from', from)
+  }
+
+  if (to) {
+    query.set('to', to)
+  }
+
+  const response = await fetch(`${API_BASE}/api/v1/parent/reports/children/${childId}/export?${query.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  })
+
+  if (!response.ok) {
+    const contentType = response.headers.get('content-type') ?? ''
+    const payload = contentType.includes('application/json') ? await response.json() : null
+    const error = payload?.error ?? payload?.title ?? `Request failed with status ${response.status}`
+    const requestError = new Error(error)
+    requestError.status = response.status
+    requestError.payload = payload
+    throw requestError
+  }
+
+  const fileBlob = await response.blob()
+  const contentDisposition = response.headers.get('content-disposition') ?? ''
+  const fileNameMatch = contentDisposition.match(/filename\*?=(?:UTF-8''|\")?([^\";]+)/i)
+
+  return {
+    fileBlob,
+    fileName: fileNameMatch ? decodeURIComponent(fileNameMatch[1].replace(/\"/g, '')) : `child-report-${childId}.csv`,
+  }
+}

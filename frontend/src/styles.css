@@ -1001,6 +1001,82 @@ select.input:invalid {
   padding: 1.5rem;
 }
 
+.reports-hero {
+  grid-column: span 7;
+}
+
+.reports-filter-card {
+  grid-column: span 5;
+}
+
+.reports-summary-card {
+  grid-column: span 12;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-strong) 100%);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow);
+  padding: 1.5rem;
+}
+
+.reports-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.reports-action-row {
+  margin-top: 0.2rem;
+}
+
+.reports-status-block,
+.reports-alert {
+  margin-top: 1rem;
+}
+
+.reports-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.report-metric-card {
+  display: grid;
+  gap: 0.45rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at top right, rgba(244, 211, 94, 0.1), transparent 34%),
+    rgba(255, 255, 255, 0.03);
+}
+
+.report-metric-card strong {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+}
+
+.report-metric-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.report-meter {
+  height: 0.58rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.report-meter span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+}
+
 .assignment-row {
   display: grid;
   gap: 0.85rem;
@@ -1196,14 +1272,19 @@ select.input:invalid {
   .lessons-list-card,
   .assignments-hero,
   .assignments-form-card,
-  .assignments-list-card {
+  .assignments-list-card,
+  .reports-hero,
+  .reports-filter-card,
+  .reports-summary-card {
     grid-column: span 12;
   }
 
   .lesson-edit-grid,
   .lessons-form-grid,
   .lessons-filter-grid,
-  .assignments-form-grid {
+  .assignments-form-grid,
+  .reports-filter-grid,
+  .reports-metrics-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1248,7 +1329,9 @@ select.input:invalid {
   .lesson-edit-grid,
   .lessons-form-grid,
   .lessons-filter-grid,
-  .assignments-form-grid {
+  .assignments-form-grid,
+  .reports-filter-grid,
+  .reports-metrics-grid {
     grid-template-columns: 1fr;
   }
 

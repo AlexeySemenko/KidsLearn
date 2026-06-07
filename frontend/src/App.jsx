@@ -11,7 +11,7 @@ import ParentHomePage from './pages/ParentHomePage'
 import ParentLessonsPage from './pages/ParentLessonsPage'
 import ChildResultsPage from './pages/ChildResultsPage'
 import ParentAiGenerationPage from './pages/ParentAiGenerationPage'
-import PlaceholderSection from './pages/PlaceholderSection'
+import ParentReportsPage from './pages/ParentReportsPage'
 
 function LandingPage() {
   const { isAuthenticated, role } = useAuth()
@@ -50,13 +50,7 @@ export default function App() {
               />
               <Route
                 path="reports"
-                element={
-                  <PlaceholderSection
-                    title="Reports and analytics"
-                    copy="The protected parent shell now has a stable route for child report summaries and CSV export."
-                    epic="Epic 5"
-                  />
-                }
+                element={<ParentReportsPage />}
               />
               <Route path="ai" element={<ParentAiGenerationPage />} />
             </Route>
