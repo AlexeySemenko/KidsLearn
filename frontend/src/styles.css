@@ -270,8 +270,8 @@ button:disabled {
 .header h1 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(2rem, 4vw, 3.4rem);
-  line-height: 0.95;
+  font-size: clamp(1.35rem, 2.3vw, 2.2rem);
+  line-height: 1.05;
 }
 
 .header p {

@@ -141,6 +141,16 @@ In Google Cloud Console, add the production redirect URI to the same OAuth clien
 
 Use Fly Postgres or any managed Postgres provider and place its connection string in `DATABASE_URL`.
 
+### 2.1 — Deploy from repository root
+
+If you run deploy commands from repository root, use the root `fly.toml`:
+
+```bash
+flyctl deploy --remote-only --config fly.toml --app <your-app>
+```
+
+Why: this project keeps `backend/KidsLearn.Api/Dockerfile` outside root. The root `fly.toml` points Fly to the correct Dockerfile path so deploy works without changing directories.
+
 ### 3 — Add GitHub secrets
 
 In your repo → Settings → Secrets and variables → Actions:

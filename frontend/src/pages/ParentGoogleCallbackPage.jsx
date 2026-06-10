@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 
 const errorMessages = {
@@ -27,10 +27,11 @@ function normalizeReturnPath(input) {
 }
 
 export default function ParentGoogleCallbackPage() {
-  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { finalizeParentGoogleLogin } = useAuth()
   const [error, setError] = useState('')
+  const hasStartedFinalize = useRef(false)
+  const finalizeLoginRef = useRef(finalizeParentGoogleLogin)
 
   const authCode = searchParams.get('authCode') ?? ''
   const callbackError = searchParams.get('error') ?? ''
@@ -40,6 +41,15 @@ export default function ParentGoogleCallbackPage() {
   )
 
   useEffect(() => {
+    finalizeLoginRef.current = finalizeParentGoogleLogin
+  }, [finalizeParentGoogleLogin])
+
+  useEffect(() => {
+    if (hasStartedFinalize.current) {
+      return
+    }
+
+    hasStartedFinalize.current = true
     let isMounted = true
 
     async function finalize() {
@@ -59,13 +69,13 @@ export default function ParentGoogleCallbackPage() {
       }
 
       try {
-        const session = await finalizeParentGoogleLogin(authCode)
+        const session = await finalizeLoginRef.current(authCode)
         if (!isMounted) {
           return
         }
 
         const target = session?.user?.role === 'Parent' ? returnPath : '/parent'
-        navigate(target, { replace: true })
+        window.location.replace(target)
       } catch (requestError) {
         if (!isMounted) {
           return
@@ -80,7 +90,7 @@ export default function ParentGoogleCallbackPage() {
     return () => {
       isMounted = false
     }
-  }, [authCode, callbackError, finalizeParentGoogleLogin, navigate, returnPath])
+  }, [authCode, callbackError, returnPath])
 
   return (
     <main className="auth-root">

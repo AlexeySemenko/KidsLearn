@@ -19,6 +19,26 @@ const navByRole = {
   ],
 }
 
+function toNameOnly(value) {
+  if (!value || typeof value !== 'string') {
+    return null
+  }
+
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  const localPart = trimmed.includes('@') ? trimmed.split('@')[0] : trimmed
+  const firstToken = localPart.split(/[._\-\s]+/).find(Boolean) ?? localPart
+
+  if (!firstToken) {
+    return null
+  }
+
+  return `${firstToken.charAt(0).toUpperCase()}${firstToken.slice(1)}`
+}
+
 export default function AppShell() {
   const location = useLocation()
   const { logout, role, user } = useAuth()
@@ -34,7 +54,7 @@ export default function AppShell() {
   })
 
   const resolvedTheme = themeMode === 'system' ? (prefersDark ? 'dark' : 'light') : themeMode
-  const displayName = user?.displayName || user?.email || null
+  const displayName = toNameOnly(user?.displayName) || toNameOnly(user?.email)
   const shellTitle = role === 'Child'
     ? `Hello, ${displayName || 'learner'}!`
     : (displayName || 'KidsLearn session')

@@ -77,15 +77,30 @@ builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+    {
+        var flyClientIp = httpContext.Request.Headers["Fly-Client-IP"].FirstOrDefault();
+        var forwardedFor = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+
+        var ipFromForwardedFor = string.IsNullOrWhiteSpace(forwardedFor)
+            ? null
+            : forwardedFor.Split(',')[0].Trim();
+
+        var partitionKey = !string.IsNullOrWhiteSpace(flyClientIp)
+            ? flyClientIp
+            : !string.IsNullOrWhiteSpace(ipFromForwardedFor)
+                ? ipFromForwardedFor
+                : httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: partitionKey,
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 120,
+                PermitLimit = 600,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0,
                 AutoReplenishment = true
-            }));
+            });
+    });
 });
 
 var jwtKey = builder.Configuration["Jwt:Key"];

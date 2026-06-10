@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using MediatR;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.Caching.Memory;
 public static class AuthController
 {
     private const string GoogleProviderName = "Google";
+    private const int GoogleAuthCodeTtlMinutes = 10;
 
     public static RouteGroupBuilder MapAuthController(this RouteGroupBuilder apiV1)
     {
@@ -166,7 +168,11 @@ public static class AuthController
             }
 
             var httpClient = httpClientFactory.CreateClient();
-            var tokenResponse = await ExchangeGoogleCodeAsync(httpClient, code, clientId, clientSecret, redirectUri, cancellationToken);
+            // Some proxies/frameworks can decode '+' in query values as space.
+            // Google auth codes may contain '+', so normalize before token exchange.
+            var normalizedCode = code.Replace(" ", "+", StringComparison.Ordinal);
+
+            var tokenResponse = await ExchangeGoogleCodeAsync(httpClient, normalizedCode, clientId, clientSecret, redirectUri, logger, cancellationToken);
             if (tokenResponse is null || string.IsNullOrWhiteSpace(tokenResponse.AccessToken))
             {
                 logger.LogWarning("Google token exchange failed.");
@@ -264,33 +270,58 @@ public static class AuthController
                 expiresIn,
                 new AuthUserResponse(user.Id, user.Email, user.Role.ToString(), user.Email));
 
-            var authCode = CreateSecureToken();
-            cache.Set(GetGoogleAuthCodeCacheKey(authCode), authResponse, TimeSpan.FromMinutes(2));
+            var jwtSigningKey = configuration["Jwt:Key"];
+            if (string.IsNullOrWhiteSpace(jwtSigningKey) && string.Equals(configuration["ASPNETCORE_ENVIRONMENT"], "Development", StringComparison.OrdinalIgnoreCase))
+            {
+                jwtSigningKey = "dev-super-secret-key-change-in-production-32chars";
+            }
+
+            if (string.IsNullOrWhiteSpace(jwtSigningKey))
+            {
+                logger.LogWarning("Cannot build Google finalize auth code because Jwt:Key is not configured.");
+                return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_not_configured", null, returnPath));
+            }
+
+            var authCode = CreateSignedAuthCode(authResponse, jwtSigningKey);
 
             return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, null, authCode, returnPath));
         });
 
-        apiV1.MapPost("/auth/google/finalize", (GoogleFinalizeRequest request, IMemoryCache cache) =>
+        apiV1.MapPost("/auth/google/finalize", (GoogleFinalizeRequest request, IMemoryCache cache, IConfiguration configuration) =>
         {
             if (string.IsNullOrWhiteSpace(request.AuthCode))
             {
                 return Results.BadRequest(new { error = "Auth code is required." });
             }
 
+            var jwtSigningKey = configuration["Jwt:Key"];
+            if (string.IsNullOrWhiteSpace(jwtSigningKey) && string.Equals(configuration["ASPNETCORE_ENVIRONMENT"], "Development", StringComparison.OrdinalIgnoreCase))
+            {
+                jwtSigningKey = "dev-super-secret-key-change-in-production-32chars";
+            }
+
+            if (!string.IsNullOrWhiteSpace(jwtSigningKey)
+                && TryReadSignedAuthCode(request.AuthCode, jwtSigningKey, out var signedResponse)
+                && signedResponse is not null)
+            {
+                return Results.Ok(signedResponse);
+            }
+
+            // Backward compatibility for auth codes created by previous in-memory implementation.
             if (cache.TryGetValue<AuthTokenResponse>(GetGoogleUsedAuthCodeCacheKey(request.AuthCode), out var usedResponse)
                 && usedResponse is not null)
             {
                 return Results.Ok(usedResponse);
             }
 
-            if (!cache.TryGetValue<AuthTokenResponse>(GetGoogleAuthCodeCacheKey(request.AuthCode), out var response) || response is null)
+            if (!cache.TryGetValue<AuthTokenResponse>(GetGoogleAuthCodeCacheKey(request.AuthCode), out var cachedResponse) || cachedResponse is null)
             {
                 return Results.Unauthorized();
             }
 
             cache.Remove(GetGoogleAuthCodeCacheKey(request.AuthCode));
-            cache.Set(GetGoogleUsedAuthCodeCacheKey(request.AuthCode), response, TimeSpan.FromMinutes(2));
-            return Results.Ok(response);
+            cache.Set(GetGoogleUsedAuthCodeCacheKey(request.AuthCode), cachedResponse, TimeSpan.FromMinutes(2));
+            return Results.Ok(cachedResponse);
         });
 
         return apiV1;
@@ -335,12 +366,83 @@ public static class AuthController
     private static string CreateSecureToken()
         => WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
 
+    private static string CreateSignedAuthCode(AuthTokenResponse response, string signingKey)
+    {
+        var payload = new GoogleAuthCodePayload(DateTime.UtcNow, response);
+        var payloadJson = JsonSerializer.Serialize(payload);
+        var payloadBytes = Encoding.UTF8.GetBytes(payloadJson);
+        var payloadToken = WebEncoders.Base64UrlEncode(payloadBytes);
+
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(signingKey));
+        var signatureBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(payloadToken));
+        var signatureToken = WebEncoders.Base64UrlEncode(signatureBytes);
+
+        return $"{payloadToken}.{signatureToken}";
+    }
+
+    private static bool TryReadSignedAuthCode(string authCode, string signingKey, out AuthTokenResponse? response)
+    {
+        response = null;
+
+        var parts = authCode.Split('.', 2, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2)
+        {
+            return false;
+        }
+
+        var payloadToken = parts[0];
+        var providedSignatureToken = parts[1];
+
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(signingKey));
+        var expectedSignature = hmac.ComputeHash(Encoding.UTF8.GetBytes(payloadToken));
+
+        byte[] providedSignature;
+        try
+        {
+            providedSignature = WebEncoders.Base64UrlDecode(providedSignatureToken);
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (!CryptographicOperations.FixedTimeEquals(expectedSignature, providedSignature))
+        {
+            return false;
+        }
+
+        GoogleAuthCodePayload? payload;
+        try
+        {
+            var payloadBytes = WebEncoders.Base64UrlDecode(payloadToken);
+            payload = JsonSerializer.Deserialize<GoogleAuthCodePayload>(payloadBytes);
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (payload is null)
+        {
+            return false;
+        }
+
+        if (payload.IssuedAtUtc.AddMinutes(GoogleAuthCodeTtlMinutes) < DateTime.UtcNow)
+        {
+            return false;
+        }
+
+        response = payload.Response;
+        return response is not null;
+    }
+
     private static async Task<GoogleTokenResponse?> ExchangeGoogleCodeAsync(
         HttpClient httpClient,
         string code,
         string clientId,
         string clientSecret,
         string redirectUri,
+        ILogger logger,
         CancellationToken cancellationToken)
     {
         using var content = new FormUrlEncodedContent(new Dictionary<string, string>
@@ -355,6 +457,8 @@ public static class AuthController
         var response = await httpClient.PostAsync("https://oauth2.googleapis.com/token", content, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            logger.LogWarning("Google token endpoint failed with status {StatusCode}. Body: {Body}", (int)response.StatusCode, errorBody);
             return null;
         }
 
@@ -381,6 +485,8 @@ public static class AuthController
     }
 
     private sealed record GoogleAuthStateContext(string FrontendCallbackUrl, string ReturnPath);
+
+    private sealed record GoogleAuthCodePayload(DateTime IssuedAtUtc, AuthTokenResponse Response);
 
     private sealed record GoogleTokenResponse(
         [property: JsonPropertyName("access_token")] string AccessToken);
