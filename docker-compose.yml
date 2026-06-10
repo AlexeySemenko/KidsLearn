@@ -30,6 +30,10 @@ services:
       Jwt__Audience: "KidsLearn.Client"
       Jwt__AccessTokenExpirationMinutes: "30"
       Jwt__RefreshTokenExpirationDays: "14"
+      GoogleAuth__ClientId: "${GOOGLE_AUTH_CLIENT_ID:-}"
+      GoogleAuth__ClientSecret: "${GOOGLE_AUTH_CLIENT_SECRET:-}"
+      GoogleAuth__RedirectUri: "${GOOGLE_AUTH_REDIRECT_URI:-http://localhost:8080/api/v1/auth/google/callback}"
+      GoogleAuth__FrontendCallbackUrl: "${GOOGLE_AUTH_FRONTEND_CALLBACK_URL:-http://localhost:5173/login/parent/google/callback}"
       OpenAI__ApiKey: "${OPENAI_API_KEY:-}"
       OpenAI__Model: "${OPENAI_MODEL:-gpt-4o-mini}"
     depends_on:

@@ -1,7 +1,16 @@
+using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using MediatR;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 public static class AuthController
 {
+    private const string GoogleProviderName = "Google";
+
     public static RouteGroupBuilder MapAuthController(this RouteGroupBuilder apiV1)
     {
         apiV1.MapPost("/auth/register", async (ISender sender, RegisterRequest request) =>
@@ -67,6 +76,317 @@ public static class AuthController
             };
         });
 
+        apiV1.MapGet("/auth/google/start", (HttpContext httpContext, IMemoryCache cache, IConfiguration configuration) =>
+        {
+            var clientId = configuration["GoogleAuth:ClientId"];
+            var redirectUri = configuration["GoogleAuth:RedirectUri"];
+            var frontendCallbackUrl = configuration["GoogleAuth:FrontendCallbackUrl"];
+
+            if (string.IsNullOrWhiteSpace(clientId)
+                || string.IsNullOrWhiteSpace(redirectUri)
+                || string.IsNullOrWhiteSpace(frontendCallbackUrl))
+            {
+                return Results.Problem(
+                    title: "Google auth is not configured.",
+                    detail: "Set GoogleAuth:ClientId, GoogleAuth:RedirectUri, and GoogleAuth:FrontendCallbackUrl.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+
+            var returnPath = httpContext.Request.Query["returnPath"].ToString();
+            if (!IsValidReturnPath(returnPath))
+            {
+                returnPath = "/parent";
+            }
+
+            var state = CreateSecureToken();
+            cache.Set(GetGoogleStateCacheKey(state), new GoogleAuthStateContext(frontendCallbackUrl, returnPath), TimeSpan.FromMinutes(10));
+
+            var authorizationUrl = QueryHelpers.AddQueryString("https://accounts.google.com/o/oauth2/v2/auth", new Dictionary<string, string?>
+            {
+                ["client_id"] = clientId,
+                ["redirect_uri"] = redirectUri,
+                ["response_type"] = "code",
+                ["scope"] = "openid email profile",
+                ["state"] = state,
+                ["prompt"] = "select_account",
+            });
+
+            return Results.Redirect(authorizationUrl);
+        });
+
+        apiV1.MapGet("/auth/google/callback", async (
+            string? code,
+            string? state,
+            string? error,
+            IMemoryCache cache,
+            IConfiguration configuration,
+            IHttpClientFactory httpClientFactory,
+            AppDbContext db,
+            IJwtTokenService tokenService,
+            ILoggerFactory loggerFactory,
+            CancellationToken cancellationToken) =>
+        {
+            var logger = loggerFactory.CreateLogger("GoogleAuth");
+            var defaultFrontendCallback = configuration["GoogleAuth:FrontendCallbackUrl"];
+
+            if (string.IsNullOrWhiteSpace(defaultFrontendCallback))
+            {
+                return Results.Problem(
+                    title: "Google auth is not configured.",
+                    detail: "Set GoogleAuth:FrontendCallbackUrl.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+
+            if (!string.IsNullOrWhiteSpace(error))
+            {
+                return Results.Redirect(BuildFrontendCallbackUrl(defaultFrontendCallback, "google_access_denied", null, "/parent"));
+            }
+
+            if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(state))
+            {
+                return Results.Redirect(BuildFrontendCallbackUrl(defaultFrontendCallback, "google_invalid_callback", null, "/parent"));
+            }
+
+            if (!cache.TryGetValue<GoogleAuthStateContext>(GetGoogleStateCacheKey(state), out var authState) || authState is null)
+            {
+                return Results.Redirect(BuildFrontendCallbackUrl(defaultFrontendCallback, "google_invalid_state", null, "/parent"));
+            }
+
+            cache.Remove(GetGoogleStateCacheKey(state));
+            var frontendCallbackUrl = authState.FrontendCallbackUrl;
+            var returnPath = IsValidReturnPath(authState.ReturnPath) ? authState.ReturnPath : "/parent";
+
+            var clientId = configuration["GoogleAuth:ClientId"];
+            var clientSecret = configuration["GoogleAuth:ClientSecret"];
+            var redirectUri = configuration["GoogleAuth:RedirectUri"];
+
+            if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret) || string.IsNullOrWhiteSpace(redirectUri))
+            {
+                return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_not_configured", null, returnPath));
+            }
+
+            var httpClient = httpClientFactory.CreateClient();
+            var tokenResponse = await ExchangeGoogleCodeAsync(httpClient, code, clientId, clientSecret, redirectUri, cancellationToken);
+            if (tokenResponse is null || string.IsNullOrWhiteSpace(tokenResponse.AccessToken))
+            {
+                logger.LogWarning("Google token exchange failed.");
+                return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_exchange_failed", null, returnPath));
+            }
+
+            var profile = await GetGoogleProfileAsync(httpClient, tokenResponse.AccessToken, cancellationToken);
+            if (profile is null || string.IsNullOrWhiteSpace(profile.Sub) || string.IsNullOrWhiteSpace(profile.Email))
+            {
+                logger.LogWarning("Google profile fetch failed or missing required claims.");
+                return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_profile_invalid", null, returnPath));
+            }
+
+            if (!profile.EmailVerified)
+            {
+                return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_email_not_verified", null, returnPath));
+            }
+
+            var normalizedEmail = profile.Email.Trim().ToLowerInvariant();
+
+            var user = await db.Users.FirstOrDefaultAsync(
+                x => x.ExternalProvider == GoogleProviderName && x.ExternalSubject == profile.Sub,
+                cancellationToken);
+
+            if (user is not null && user.Role != UserRole.Parent)
+            {
+                return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_role_not_allowed", null, returnPath));
+            }
+
+            if (user is null)
+            {
+                var userByEmail = await db.Users.FirstOrDefaultAsync(x => x.Email == normalizedEmail, cancellationToken);
+                if (userByEmail is not null)
+                {
+                    if (userByEmail.Role != UserRole.Parent)
+                    {
+                        return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_role_not_allowed", null, returnPath));
+                    }
+
+                    var hasExternalIdentity = !string.IsNullOrWhiteSpace(userByEmail.ExternalProvider)
+                        || !string.IsNullOrWhiteSpace(userByEmail.ExternalSubject);
+                    var canLinkGoogle = userByEmail.ExternalProvider == GoogleProviderName
+                        && (string.IsNullOrWhiteSpace(userByEmail.ExternalSubject) || userByEmail.ExternalSubject == profile.Sub);
+
+                    if (hasExternalIdentity && !canLinkGoogle)
+                    {
+                        return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_link_conflict", null, returnPath));
+                    }
+
+                    userByEmail.ExternalProvider = GoogleProviderName;
+                    userByEmail.ExternalSubject = profile.Sub;
+                    userByEmail.EmailVerified = true;
+                    user = userByEmail;
+                }
+                else
+                {
+                    user = new AppUser
+                    {
+                        Email = normalizedEmail,
+                        PasswordHash = string.Empty,
+                        Role = UserRole.Parent,
+                        CreatedAt = DateTime.UtcNow,
+                        ExternalProvider = GoogleProviderName,
+                        ExternalSubject = profile.Sub,
+                        EmailVerified = true,
+                    };
+
+                    db.Users.Add(user);
+                }
+            }
+
+            var accessToken = tokenService.CreateAccessToken(user);
+            var refreshToken = tokenService.CreateRefreshToken();
+            var refreshExpiresDays = int.TryParse(configuration["Jwt:RefreshTokenExpirationDays"], out var refreshDays)
+                ? refreshDays
+                : 14;
+
+            db.RefreshTokens.Add(new RefreshToken
+            {
+                UserId = user.Id,
+                Token = refreshToken,
+                CreatedAt = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.AddDays(refreshExpiresDays)
+            });
+
+            await db.SaveChangesAsync(cancellationToken);
+
+            var expiresIn = int.TryParse(configuration["Jwt:AccessTokenExpirationMinutes"], out var accessMinutes)
+                ? accessMinutes * 60
+                : 1800;
+
+            var authResponse = new AuthTokenResponse(
+                accessToken,
+                refreshToken,
+                expiresIn,
+                new AuthUserResponse(user.Id, user.Email, user.Role.ToString(), user.Email));
+
+            var authCode = CreateSecureToken();
+            cache.Set(GetGoogleAuthCodeCacheKey(authCode), authResponse, TimeSpan.FromMinutes(2));
+
+            return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, null, authCode, returnPath));
+        });
+
+        apiV1.MapPost("/auth/google/finalize", (GoogleFinalizeRequest request, IMemoryCache cache) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.AuthCode))
+            {
+                return Results.BadRequest(new { error = "Auth code is required." });
+            }
+
+            if (cache.TryGetValue<AuthTokenResponse>(GetGoogleUsedAuthCodeCacheKey(request.AuthCode), out var usedResponse)
+                && usedResponse is not null)
+            {
+                return Results.Ok(usedResponse);
+            }
+
+            if (!cache.TryGetValue<AuthTokenResponse>(GetGoogleAuthCodeCacheKey(request.AuthCode), out var response) || response is null)
+            {
+                return Results.Unauthorized();
+            }
+
+            cache.Remove(GetGoogleAuthCodeCacheKey(request.AuthCode));
+            cache.Set(GetGoogleUsedAuthCodeCacheKey(request.AuthCode), response, TimeSpan.FromMinutes(2));
+            return Results.Ok(response);
+        });
+
         return apiV1;
     }
+
+    private static bool IsValidReturnPath(string? path)
+    {
+        return !string.IsNullOrWhiteSpace(path)
+            && path.StartsWith('/')
+            && !path.StartsWith("//");
+    }
+
+    private static string BuildFrontendCallbackUrl(string baseCallbackUrl, string? error, string? authCode, string returnPath)
+    {
+        var query = new Dictionary<string, string?>
+        {
+            ["returnPath"] = IsValidReturnPath(returnPath) ? returnPath : "/parent"
+        };
+
+        if (!string.IsNullOrWhiteSpace(error))
+        {
+            query["error"] = error;
+        }
+
+        if (!string.IsNullOrWhiteSpace(authCode))
+        {
+            query["authCode"] = authCode;
+        }
+
+        return QueryHelpers.AddQueryString(baseCallbackUrl, query);
+    }
+
+    private static string GetGoogleStateCacheKey(string state)
+        => $"google-auth-state:{state}";
+
+    private static string GetGoogleAuthCodeCacheKey(string authCode)
+        => $"google-auth-code:{authCode}";
+
+    private static string GetGoogleUsedAuthCodeCacheKey(string authCode)
+        => $"google-auth-code-used:{authCode}";
+
+    private static string CreateSecureToken()
+        => WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
+
+    private static async Task<GoogleTokenResponse?> ExchangeGoogleCodeAsync(
+        HttpClient httpClient,
+        string code,
+        string clientId,
+        string clientSecret,
+        string redirectUri,
+        CancellationToken cancellationToken)
+    {
+        using var content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["code"] = code,
+            ["client_id"] = clientId,
+            ["client_secret"] = clientSecret,
+            ["redirect_uri"] = redirectUri,
+            ["grant_type"] = "authorization_code",
+        });
+
+        var response = await httpClient.PostAsync("https://oauth2.googleapis.com/token", content, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        return await JsonSerializer.DeserializeAsync<GoogleTokenResponse>(stream, cancellationToken: cancellationToken);
+    }
+
+    private static async Task<GoogleUserProfile?> GetGoogleProfileAsync(
+        HttpClient httpClient,
+        string accessToken,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "https://openidconnect.googleapis.com/v1/userinfo");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        var response = await httpClient.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        return await JsonSerializer.DeserializeAsync<GoogleUserProfile>(stream, cancellationToken: cancellationToken);
+    }
+
+    private sealed record GoogleAuthStateContext(string FrontendCallbackUrl, string ReturnPath);
+
+    private sealed record GoogleTokenResponse(
+        [property: JsonPropertyName("access_token")] string AccessToken);
+
+    private sealed record GoogleUserProfile(
+        [property: JsonPropertyName("sub")] string Sub,
+        [property: JsonPropertyName("email")] string Email,
+        [property: JsonPropertyName("email_verified")] bool EmailVerified);
 }

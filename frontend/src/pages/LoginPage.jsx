@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
+import { getParentGoogleStartUrl } from '../lib/api'
 
 const variants = {
   parent: {
@@ -155,6 +156,36 @@ export default function LoginPage({ variant }) {
               <Link className="button-secondary inline-link" to={config.alternateTo}>
                 {config.alternateLabel}
               </Link>
+              {variant === 'parent' ? (
+                <button
+                  type="button"
+                  className="button-secondary google-auth-button"
+                  onClick={() => window.location.assign(getParentGoogleStartUrl(targetPath))}
+                  disabled={isSubmitting}
+                >
+                  <span className="google-auth-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                      <path
+                        fill="#EA4335"
+                        d="M12 10.2v3.9h5.5c-.2 1.3-1.5 3.9-5.5 3.9-3.3 0-6-2.8-6-6.2s2.7-6.2 6-6.2c1.9 0 3.1.8 3.9 1.5l2.7-2.6C16.9 2.8 14.7 2 12 2 6.9 2 2.7 6.4 2.7 11.8s4.2 9.8 9.3 9.8c5.4 0 9-3.8 9-9.1 0-.6-.1-1-.1-1.4H12z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M3.8 7.6l3.2 2.3C7.8 7.6 9.7 6 12 6c1.9 0 3.1.8 3.9 1.5l2.7-2.6C16.9 2.8 14.7 2 12 2 8.4 2 5.2 4.2 3.8 7.6z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M12 22c2.6 0 4.8-.9 6.4-2.6l-3-2.5c-.8.6-2 1.2-3.4 1.2-3.9 0-5.2-2.6-5.5-3.9l-3.1 2.4C4.7 19.9 8 22 12 22z"
+                      />
+                      <path
+                        fill="#4285F4"
+                        d="M21 12.5c0-.7-.1-1.2-.2-1.8H12v3.9h5.1c-.2 1-.8 2.1-1.8 2.8l3 2.5c1.8-1.7 2.7-4.2 2.7-7.4z"
+                      />
+                    </svg>
+                  </span>
+                  <span className="google-auth-label">Sign in with Google</span>
+                </button>
+              ) : null}
             </div>
           </form>
         </article>

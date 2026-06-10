@@ -206,6 +206,22 @@ export async function loginParent(credentials: ParentLoginRequest): Promise<Auth
   })
 }
 
+export function getParentGoogleStartUrl(returnPath = '/parent'): string {
+  const normalizedPath = returnPath.startsWith('/') && !returnPath.startsWith('//')
+    ? returnPath
+    : '/parent'
+
+  const searchParams = new URLSearchParams({ returnPath: normalizedPath })
+  return `${API_BASE}/api/v1/auth/google/start?${searchParams.toString()}`
+}
+
+export async function finalizeGoogleParentAuth(authCode: string): Promise<AuthSessionResponse> {
+  return request<AuthSessionResponse>('/api/v1/auth/google/finalize', {
+    method: 'POST',
+    body: JSON.stringify({ authCode }),
+  })
+}
+
 export async function loginChild(credentials: ChildLoginRequest): Promise<AuthSessionResponse> {
   return request<AuthSessionResponse>('/api/v1/auth/child-login', {
     method: 'POST',

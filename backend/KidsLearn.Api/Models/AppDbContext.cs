@@ -19,8 +19,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             entity.HasKey(x => x.Id);
             entity.HasIndex(x => x.Email).IsUnique();
+            entity.HasIndex(x => new { x.ExternalProvider, x.ExternalSubject }).IsUnique();
             entity.Property(x => x.Email).HasMaxLength(320);
             entity.Property(x => x.PasswordHash).HasMaxLength(500);
+            entity.Property(x => x.ExternalProvider).HasMaxLength(50);
+            entity.Property(x => x.ExternalSubject).HasMaxLength(255);
         });
 
         modelBuilder.Entity<RefreshToken>(entity =>

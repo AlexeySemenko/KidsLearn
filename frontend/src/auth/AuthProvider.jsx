@@ -1,5 +1,11 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { loginChild, loginParent, refreshSession, revokeSession } from '../lib/api'
+import {
+  finalizeGoogleParentAuth,
+  loginChild,
+  loginParent,
+  refreshSession,
+  revokeSession,
+} from '../lib/api'
 
 const STORAGE_KEY = 'kidslearn.session'
 const AuthContext = createContext(null)
@@ -101,6 +107,14 @@ export function AuthProvider({ children }) {
     return nextSession
   }
 
+  async function handleGoogleParentFinalize(authCode) {
+    const response = await finalizeGoogleParentAuth(authCode)
+    const nextSession = normalizeAuthResponse(response)
+    persistSession(nextSession)
+    setSession(nextSession)
+    return nextSession
+  }
+
   async function handleLogout() {
     const refreshToken = session?.refreshToken
     persistSession(null)
@@ -137,6 +151,7 @@ export function AuthProvider({ children }) {
     isBootstrapping,
     loginParent: handleParentLogin,
     loginChild: handleChildLogin,
+    finalizeParentGoogleLogin: handleGoogleParentFinalize,
     logout: handleLogout,
     refreshSession: refreshCurrentSession,
   }

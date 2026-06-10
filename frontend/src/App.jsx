@@ -5,6 +5,7 @@ import AuthBootstrap from './components/AuthBootstrap'
 import ProtectedRoute from './components/ProtectedRoute'
 import ChildHomePage from './pages/ChildHomePage'
 import LoginPage from './pages/LoginPage'
+import ParentGoogleCallbackPage from './pages/ParentGoogleCallbackPage'
 import ParentChildrenPage from './pages/ParentChildrenPage'
 import ParentAssignmentsPage from './pages/ParentAssignmentsPage'
 import ParentHomePage from './pages/ParentHomePage'
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login/parent" element={<LoginPage variant="parent" />} />
           <Route path="/login/child" element={<LoginPage variant="child" />} />
+          <Route path="/login/parent/google/callback" element={<ParentGoogleCallbackPage />} />
 
           <Route element={<ProtectedRoute allowedRoles={['Parent']} />}>
             <Route path="/parent" element={<AppShell />}>

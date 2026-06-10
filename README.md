@@ -72,6 +72,30 @@ OPENAI_API_KEY=<your-key>
 OPENAI_MODEL=gpt-4o-mini
 ```
 
+### Google SSO config for parent login/registration
+
+`docker-compose.yml` also reads:
+
+- `GOOGLE_AUTH_CLIENT_ID`
+- `GOOGLE_AUTH_CLIENT_SECRET`
+- `GOOGLE_AUTH_REDIRECT_URI` (default `http://localhost:8080/api/v1/auth/google/callback`)
+- `GOOGLE_AUTH_FRONTEND_CALLBACK_URL` (default `http://localhost:8080/login/parent/google/callback`)
+
+Google Cloud OAuth app setup notes:
+
+- Authorized redirect URI: `http://localhost:8080/api/v1/auth/google/callback`
+- Frontend callback page (compose flow): `http://localhost:8080/login/parent/google/callback`
+- For local Vite flow, use: `http://localhost:5173/login/parent/google/callback`
+
+Add these to root `.env`:
+
+```env
+GOOGLE_AUTH_CLIENT_ID=<google-client-id>
+GOOGLE_AUTH_CLIENT_SECRET=<google-client-secret>
+GOOGLE_AUTH_REDIRECT_URI=http://localhost:8080/api/v1/auth/google/callback
+GOOGLE_AUTH_FRONTEND_CALLBACK_URL=http://localhost:8080/login/parent/google/callback
+```
+
 ---
 
 ## Deploy to Fly.io
@@ -98,6 +122,22 @@ For AI generation/editing in production, also set:
 ```bash
 fly secrets set OpenAI__ApiKey=<openai-key> OpenAI__Model=gpt-4o-mini -a <your-app>
 ```
+
+For Google SSO in production, set:
+
+```bash
+fly secrets set \
+  GoogleAuth__ClientId=<google-client-id> \
+  GoogleAuth__ClientSecret=<google-client-secret> \
+  GoogleAuth__RedirectUri=https://<your-app>.fly.dev/api/v1/auth/google/callback \
+  GoogleAuth__FrontendCallbackUrl=https://<your-app>.fly.dev/login/parent/google/callback \
+  AllowedOrigins__0=https://<your-app>.fly.dev \
+  -a <your-app>
+```
+
+In Google Cloud Console, add the production redirect URI to the same OAuth client:
+
+- `https://<your-app>.fly.dev/api/v1/auth/google/callback`
 
 Use Fly Postgres or any managed Postgres provider and place its connection string in `DATABASE_URL`.
 
@@ -136,6 +176,9 @@ GitHub Actions will:
 | POST   | /api/v1/auth/register | Register parent account |
 | POST   | /api/v1/auth/login | Get access and refresh token |
 | POST   | /api/v1/auth/child-login | Child login by `childId + accessCode` |
+| GET    | /api/v1/auth/google/start | Start Google OAuth redirect flow for parent auth |
+| GET    | /api/v1/auth/google/callback | Google OAuth callback endpoint |
+| POST   | /api/v1/auth/google/finalize | Exchange one-time auth code for app JWT + refresh tokens |
 | POST   | /api/v1/auth/refresh | Rotate refresh token and issue new access token |
 | POST   | /api/v1/auth/revoke | Revoke refresh token |
 | GET    | /api/v1/children | List children for authenticated parent |
