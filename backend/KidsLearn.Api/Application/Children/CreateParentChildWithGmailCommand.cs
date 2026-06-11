@@ -54,6 +54,16 @@ public sealed class CreateParentChildWithGmailCommandHandler : IRequestHandler<C
             return CreateParentChildWithGmailResult.NotFound("Parent was not found.");
         }
 
+        // Check if parent is trying to add their own email as a child
+        var parentUser = await _db.Users.FirstOrDefaultAsync(
+            x => x.Id == command.ParentId,
+            cancellationToken);
+
+        if (parentUser is not null && parentUser.Email.Equals(gmailEmail, StringComparison.OrdinalIgnoreCase))
+        {
+            return CreateParentChildWithGmailResult.BadRequest("Cannot add your own email as a child.");
+        }
+
         var existingUser = await _db.Users.FirstOrDefaultAsync(
             x => x.Email == gmailEmail && x.ExternalProvider == GoogleProviderName,
             cancellationToken);

@@ -460,6 +460,17 @@ public static class AuthController
 
             var normalizedEmail = profile.Email.Trim().ToLowerInvariant();
 
+            // Check if this email is a parent's email - reject child login attempt
+            var parentUser = await db.Users.AsNoTracking()
+                .FirstOrDefaultAsync(
+                    x => x.Email == normalizedEmail && x.Role == UserRole.Parent,
+                    cancellationToken);
+
+            if (parentUser is not null)
+            {
+                return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "child_not_registered", null, returnPath));
+            }
+
             var childUser = await db.Users.AsNoTracking()
                 .FirstOrDefaultAsync(
                     x => x.ExternalProvider == GoogleProviderName && x.ExternalSubject == profile.Sub && x.Role == UserRole.Child,
