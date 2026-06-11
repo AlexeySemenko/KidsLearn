@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import {
   finalizeGoogleParentAuth,
+  finalizeGoogleChildAuth,
   loginChild,
   loginParent,
   refreshSession,
@@ -115,6 +116,14 @@ export function AuthProvider({ children }) {
     return nextSession
   }
 
+  async function handleGoogleChildFinalize(authCode) {
+    const response = await finalizeGoogleChildAuth(authCode)
+    const nextSession = normalizeAuthResponse(response)
+    persistSession(nextSession)
+    setSession(nextSession)
+    return nextSession
+  }
+
   async function handleLogout() {
     const refreshToken = session?.refreshToken
     persistSession(null)
@@ -152,6 +161,7 @@ export function AuthProvider({ children }) {
     loginParent: handleParentLogin,
     loginChild: handleChildLogin,
     finalizeParentGoogleLogin: handleGoogleParentFinalize,
+    finalizeChildGoogleLogin: handleGoogleChildFinalize,
     logout: handleLogout,
     refreshSession: refreshCurrentSession,
   }

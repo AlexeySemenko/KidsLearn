@@ -37,6 +37,26 @@ public static class ParentChildrenController
             };
         });
 
+        parentApi.MapPost("/children/with-gmail", async (ISender sender, ClaimsPrincipal user, CreateChildWithGmailRequest request) =>
+        {
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
+            {
+                return Results.Unauthorized();
+            }
+
+            var result = await sender.Send(new CreateParentChildWithGmailCommand(parentId, request));
+            return result.StatusCode switch
+            {
+                StatusCodes.Status201Created when result.Response is not null
+                    => Results.Created($"/api/v1/children/{result.Response.Child.Id}", result.Response),
+                StatusCodes.Status400BadRequest
+                    => Results.BadRequest(new { error = result.Error ?? "Bad request." }),
+                StatusCodes.Status404NotFound
+                    => Results.NotFound(new { error = result.Error ?? "Not found." }),
+                _ => Results.Problem(result.Error ?? "Unexpected error.")
+            };
+        });
+
         parentApi.MapPatch("/children/{childId:guid}", async (ISender sender, ClaimsPrincipal user, Guid childId, UpdateChildRequest request) =>
         {
             if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))

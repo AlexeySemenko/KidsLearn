@@ -78,7 +78,7 @@ public static class AuthController
             };
         });
 
-        apiV1.MapGet("/auth/google/start", (HttpContext httpContext, IMemoryCache cache, IConfiguration configuration) =>
+        apiV1.MapGet("/auth/google/start", (HttpContext httpContext, IConfiguration configuration) =>
         {
             var clientId = configuration["GoogleAuth:ClientId"];
             var redirectUri = configuration["GoogleAuth:RedirectUri"];
@@ -100,8 +100,18 @@ public static class AuthController
                 returnPath = "/parent";
             }
 
-            var state = CreateSecureToken();
-            cache.Set(GetGoogleStateCacheKey(state), new GoogleAuthStateContext(frontendCallbackUrl, returnPath), TimeSpan.FromMinutes(10));
+            var jwtSigningKey = configuration["Jwt:Key"];
+            if (string.IsNullOrWhiteSpace(jwtSigningKey) && string.Equals(configuration["ASPNETCORE_ENVIRONMENT"], "Development", StringComparison.OrdinalIgnoreCase))
+            {
+                jwtSigningKey = "dev-super-secret-key-change-in-production-32chars";
+            }
+
+            if (string.IsNullOrWhiteSpace(jwtSigningKey))
+            {
+                return Results.Problem("Jwt:Key is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+
+            var state = CreateSignedStateToken(new GoogleAuthStateContext(frontendCallbackUrl, returnPath), jwtSigningKey);
 
             var authorizationUrl = QueryHelpers.AddQueryString("https://accounts.google.com/o/oauth2/v2/auth", new Dictionary<string, string?>
             {
@@ -149,42 +159,44 @@ public static class AuthController
                 return Results.Redirect(BuildFrontendCallbackUrl(defaultFrontendCallback, "google_invalid_callback", null, "/parent"));
             }
 
-            if (!cache.TryGetValue<GoogleAuthStateContext>(GetGoogleStateCacheKey(state), out var authState) || authState is null)
+            var jwtSigningKey = configuration["Jwt:Key"];
+            if (string.IsNullOrWhiteSpace(jwtSigningKey) && string.Equals(configuration["ASPNETCORE_ENVIRONMENT"], "Development", StringComparison.OrdinalIgnoreCase))
             {
-                return Results.Redirect(BuildFrontendCallbackUrl(defaultFrontendCallback, "google_invalid_state", null, "/parent"));
+                jwtSigningKey = "dev-super-secret-key-change-in-production-32chars";
             }
 
-            cache.Remove(GetGoogleStateCacheKey(state));
-            var frontendCallbackUrl = authState.FrontendCallbackUrl;
-            var returnPath = IsValidReturnPath(authState.ReturnPath) ? authState.ReturnPath : "/parent";
-
-            var clientId = configuration["GoogleAuth:ClientId"];
-            var clientSecret = configuration["GoogleAuth:ClientSecret"];
-            var redirectUri = configuration["GoogleAuth:RedirectUri"];
-
-            if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret) || string.IsNullOrWhiteSpace(redirectUri))
+            if (!string.IsNullOrWhiteSpace(jwtSigningKey) && TryReadSignedStateToken(state, jwtSigningKey, out var authState) && authState is not null)
             {
-                return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_not_configured", null, returnPath));
-            }
+                var frontendCallbackUrl = authState.FrontendCallbackUrl;
+                var returnPath = IsValidReturnPath(authState.ReturnPath) ? authState.ReturnPath : "/parent";
 
-            var httpClient = httpClientFactory.CreateClient();
-            // Some proxies/frameworks can decode '+' in query values as space.
-            // Google auth codes may contain '+', so normalize before token exchange.
-            var normalizedCode = code.Replace(" ", "+", StringComparison.Ordinal);
+                var clientId = configuration["GoogleAuth:ClientId"];
+                var clientSecret = configuration["GoogleAuth:ClientSecret"];
+                var redirectUri = configuration["GoogleAuth:RedirectUri"];
 
-            var tokenResponse = await ExchangeGoogleCodeAsync(httpClient, normalizedCode, clientId, clientSecret, redirectUri, logger, cancellationToken);
-            if (tokenResponse is null || string.IsNullOrWhiteSpace(tokenResponse.AccessToken))
-            {
-                logger.LogWarning("Google token exchange failed.");
-                return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_exchange_failed", null, returnPath));
-            }
+                if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret) || string.IsNullOrWhiteSpace(redirectUri))
+                {
+                    return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_not_configured", null, returnPath));
+                }
 
-            var profile = await GetGoogleProfileAsync(httpClient, tokenResponse.AccessToken, cancellationToken);
-            if (profile is null || string.IsNullOrWhiteSpace(profile.Sub) || string.IsNullOrWhiteSpace(profile.Email))
-            {
-                logger.LogWarning("Google profile fetch failed or missing required claims.");
-                return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_profile_invalid", null, returnPath));
-            }
+                var httpClient = httpClientFactory.CreateClient();
+                // Some proxies/frameworks can decode '+' in query values as space.
+                // Google auth codes may contain '+', so normalize before token exchange.
+                var normalizedCode = code.Replace(" ", "+", StringComparison.Ordinal);
+
+                var tokenResponse = await ExchangeGoogleCodeAsync(httpClient, normalizedCode, clientId, clientSecret, redirectUri, logger, cancellationToken);
+                if (tokenResponse is null || string.IsNullOrWhiteSpace(tokenResponse.AccessToken))
+                {
+                    logger.LogWarning("Google token exchange failed.");
+                    return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_exchange_failed", null, returnPath));
+                }
+
+                var profile = await GetGoogleProfileAsync(httpClient, tokenResponse.AccessToken, cancellationToken);
+                if (profile is null || string.IsNullOrWhiteSpace(profile.Sub) || string.IsNullOrWhiteSpace(profile.Email))
+                {
+                    logger.LogWarning("Google profile fetch failed or missing required claims.");
+                    return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_profile_invalid", null, returnPath));
+                }
 
             if (!profile.EmailVerified)
             {
@@ -270,21 +282,20 @@ public static class AuthController
                 expiresIn,
                 new AuthUserResponse(user.Id, user.Email, user.Role.ToString(), user.Email));
 
-            var jwtSigningKey = configuration["Jwt:Key"];
-            if (string.IsNullOrWhiteSpace(jwtSigningKey) && string.Equals(configuration["ASPNETCORE_ENVIRONMENT"], "Development", StringComparison.OrdinalIgnoreCase))
-            {
-                jwtSigningKey = "dev-super-secret-key-change-in-production-32chars";
-            }
-
-            if (string.IsNullOrWhiteSpace(jwtSigningKey))
-            {
-                logger.LogWarning("Cannot build Google finalize auth code because Jwt:Key is not configured.");
-                return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_not_configured", null, returnPath));
-            }
+                if (string.IsNullOrWhiteSpace(jwtSigningKey))
+                {
+                    logger.LogWarning("Cannot build Google finalize auth code because Jwt:Key is not configured.");
+                    return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_not_configured", null, returnPath));
+                }
 
             var authCode = CreateSignedAuthCode(authResponse, jwtSigningKey);
 
             return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, null, authCode, returnPath));
+            }
+            else
+            {
+                return Results.Redirect(BuildFrontendCallbackUrl(defaultFrontendCallback, "google_invalid_state", null, "/parent"));
+            }
         });
 
         apiV1.MapPost("/auth/google/finalize", (GoogleFinalizeRequest request, IMemoryCache cache, IConfiguration configuration) =>
@@ -324,6 +335,232 @@ public static class AuthController
             return Results.Ok(cachedResponse);
         });
 
+        apiV1.MapGet("/auth/child/google/start", (HttpContext httpContext, IConfiguration configuration) =>
+        {
+            var clientId = configuration["GoogleAuth:ClientId"];
+            var redirectUri = configuration["GoogleAuth:RedirectUri"];
+            var frontendCallbackUrl = configuration["GoogleAuth:FrontendCallbackUrl"];
+
+            if (string.IsNullOrWhiteSpace(clientId)
+                || string.IsNullOrWhiteSpace(redirectUri)
+                || string.IsNullOrWhiteSpace(frontendCallbackUrl))
+            {
+                return Results.Problem(
+                    title: "Google auth is not configured.",
+                    detail: "Set GoogleAuth:ClientId, GoogleAuth:RedirectUri, and GoogleAuth:FrontendCallbackUrl.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+
+            var returnPath = httpContext.Request.Query["returnPath"].ToString();
+            if (!IsValidReturnPath(returnPath))
+            {
+                returnPath = "/child";
+            }
+
+            var jwtSigningKey = configuration["Jwt:Key"];
+            if (string.IsNullOrWhiteSpace(jwtSigningKey) && string.Equals(configuration["ASPNETCORE_ENVIRONMENT"], "Development", StringComparison.OrdinalIgnoreCase))
+            {
+                jwtSigningKey = "dev-super-secret-key-change-in-production-32chars";
+            }
+
+            if (string.IsNullOrWhiteSpace(jwtSigningKey))
+            {
+                return Results.Problem("Jwt:Key is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+
+            var state = CreateSignedStateToken(new GoogleAuthStateContext(frontendCallbackUrl, returnPath), jwtSigningKey);
+
+            var authorizationUrl = QueryHelpers.AddQueryString("https://accounts.google.com/o/oauth2/v2/auth", new Dictionary<string, string?>
+            {
+                ["client_id"] = clientId,
+                ["redirect_uri"] = redirectUri,
+                ["response_type"] = "code",
+                ["scope"] = "openid email profile",
+                ["state"] = state,
+                ["prompt"] = "select_account",
+            });
+
+            return Results.Redirect(authorizationUrl);
+        });
+
+        apiV1.MapGet("/auth/child/google/callback", async (
+            string? code,
+            string? state,
+            string? error,
+            IMemoryCache cache,
+            IConfiguration configuration,
+            IHttpClientFactory httpClientFactory,
+            AppDbContext db,
+            IJwtTokenService tokenService,
+            ILoggerFactory loggerFactory,
+            CancellationToken cancellationToken) =>
+        {
+            var logger = loggerFactory.CreateLogger("GoogleAuth");
+            var defaultFrontendCallback = configuration["GoogleAuth:FrontendCallbackUrl"];
+
+            if (string.IsNullOrWhiteSpace(defaultFrontendCallback))
+            {
+                return Results.Problem(
+                    title: "Google auth is not configured.",
+                    detail: "Set GoogleAuth:FrontendCallbackUrl.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+
+            if (!string.IsNullOrWhiteSpace(error))
+            {
+                return Results.Redirect(BuildFrontendCallbackUrl(defaultFrontendCallback, "google_access_denied", null, "/child"));
+            }
+
+            if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(state))
+            {
+                return Results.Redirect(BuildFrontendCallbackUrl(defaultFrontendCallback, "google_invalid_callback", null, "/child"));
+            }
+
+            var jwtSigningKey = configuration["Jwt:Key"];
+            if (string.IsNullOrWhiteSpace(jwtSigningKey) && string.Equals(configuration["ASPNETCORE_ENVIRONMENT"], "Development", StringComparison.OrdinalIgnoreCase))
+            {
+                jwtSigningKey = "dev-super-secret-key-change-in-production-32chars";
+            }
+
+            if (!string.IsNullOrWhiteSpace(jwtSigningKey) && TryReadSignedStateToken(state, jwtSigningKey, out var authState) && authState is not null)
+            {
+                var frontendCallbackUrl = authState.FrontendCallbackUrl;
+                var returnPath = IsValidReturnPath(authState.ReturnPath) ? authState.ReturnPath : "/child";
+
+            var clientId = configuration["GoogleAuth:ClientId"];
+            var clientSecret = configuration["GoogleAuth:ClientSecret"];
+            var redirectUri = configuration["GoogleAuth:RedirectUri"];
+
+            if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret) || string.IsNullOrWhiteSpace(redirectUri))
+            {
+                return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_not_configured", null, returnPath));
+            }
+
+            var httpClient = httpClientFactory.CreateClient();
+            var normalizedCode = code.Replace(" ", "+", StringComparison.Ordinal);
+
+            var tokenResponse = await ExchangeGoogleCodeAsync(httpClient, normalizedCode, clientId, clientSecret, redirectUri, logger, cancellationToken);
+            if (tokenResponse is null || string.IsNullOrWhiteSpace(tokenResponse.AccessToken))
+            {
+                logger.LogWarning("Google token exchange failed for child login.");
+                return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_exchange_failed", null, returnPath));
+            }
+
+            var profile = await GetGoogleProfileAsync(httpClient, tokenResponse.AccessToken, cancellationToken);
+            if (profile is null || string.IsNullOrWhiteSpace(profile.Sub) || string.IsNullOrWhiteSpace(profile.Email))
+            {
+                logger.LogWarning("Google profile fetch failed or missing required claims for child.");
+                return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_profile_invalid", null, returnPath));
+            }
+
+            if (!profile.EmailVerified)
+            {
+                return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_email_not_verified", null, returnPath));
+            }
+
+            var normalizedEmail = profile.Email.Trim().ToLowerInvariant();
+
+            var childUser = await db.Users.AsNoTracking()
+                .FirstOrDefaultAsync(
+                    x => x.ExternalProvider == GoogleProviderName && x.ExternalSubject == profile.Sub && x.Role == UserRole.Child,
+                    cancellationToken);
+
+            if (childUser is null)
+            {
+                childUser = await db.Users.AsNoTracking()
+                    .FirstOrDefaultAsync(
+                        x => x.Email == normalizedEmail && x.Role == UserRole.Child,
+                        cancellationToken);
+            }
+
+            if (childUser is null)
+            {
+                return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "child_not_registered", null, returnPath));
+            }
+
+            var child = await db.Children
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.UserId == childUser.Id, cancellationToken);
+
+            if (child is null || child.ParentId == Guid.Empty)
+            {
+                return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "child_not_registered", null, returnPath));
+            }
+
+            if (childUser.ExternalProvider != GoogleProviderName || childUser.ExternalSubject != profile.Sub)
+            {
+                childUser.ExternalProvider = GoogleProviderName;
+                childUser.ExternalSubject = profile.Sub;
+                childUser.EmailVerified = true;
+                db.Users.Update(childUser);
+                await db.SaveChangesAsync(cancellationToken);
+            }
+
+            var accessToken = tokenService.CreateAccessToken(childUser);
+            var refreshToken = tokenService.CreateRefreshToken();
+            var refreshExpiresDays = int.TryParse(configuration["Jwt:RefreshTokenExpirationDays"], out var refreshDays)
+                ? refreshDays
+                : 14;
+
+            db.RefreshTokens.Add(new RefreshToken
+            {
+                UserId = childUser.Id,
+                Token = refreshToken,
+                CreatedAt = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.AddDays(refreshExpiresDays)
+            });
+
+            await db.SaveChangesAsync(cancellationToken);
+
+            var expiresIn = int.TryParse(configuration["Jwt:AccessTokenExpirationMinutes"], out var accessMinutes)
+                ? accessMinutes * 60
+                : 1800;
+
+            var authResponse = new AuthTokenResponse(
+                accessToken,
+                refreshToken,
+                expiresIn,
+                new AuthUserResponse(childUser.Id, childUser.Email, childUser.Role.ToString(), child.Name));
+
+                if (string.IsNullOrWhiteSpace(jwtSigningKey))
+                {
+                    logger.LogWarning("Cannot build child Google finalize auth code because Jwt:Key is not configured.");
+                    return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_not_configured", null, returnPath));
+                }
+
+                var authCode = CreateSignedAuthCode(authResponse, jwtSigningKey);
+
+                return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, null, authCode, returnPath));
+            }
+            else
+            {
+                return Results.Redirect(BuildFrontendCallbackUrl(defaultFrontendCallback, "google_invalid_state", null, "/child"));
+            }
+        });
+
+        apiV1.MapPost("/auth/child/google/finalize", (ChildGoogleFinalizeRequest request, IMemoryCache cache, IConfiguration configuration) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.AuthCode))
+            {
+                return Results.BadRequest(new { error = "Auth code is required." });
+            }
+
+            var jwtSigningKey = configuration["Jwt:Key"];
+            if (string.IsNullOrWhiteSpace(jwtSigningKey) && string.Equals(configuration["ASPNETCORE_ENVIRONMENT"], "Development", StringComparison.OrdinalIgnoreCase))
+            {
+                jwtSigningKey = "dev-super-secret-key-change-in-production-32chars";
+            }
+
+            if (!string.IsNullOrWhiteSpace(jwtSigningKey)
+                && TryReadSignedAuthCode(request.AuthCode, jwtSigningKey, out var signedResponse)
+                && signedResponse is not null)
+            {
+                return Results.Ok(signedResponse);
+            }
+
+            return Results.Unauthorized();
+        });
+
         return apiV1;
     }
 
@@ -354,9 +591,6 @@ public static class AuthController
         return QueryHelpers.AddQueryString(baseCallbackUrl, query);
     }
 
-    private static string GetGoogleStateCacheKey(string state)
-        => $"google-auth-state:{state}";
-
     private static string GetGoogleAuthCodeCacheKey(string authCode)
         => $"google-auth-code:{authCode}";
 
@@ -365,6 +599,20 @@ public static class AuthController
 
     private static string CreateSecureToken()
         => WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
+
+    private static string CreateSignedStateToken(GoogleAuthStateContext context, string signingKey)
+    {
+        var payload = new GoogleAuthStatePayload(DateTime.UtcNow, context);
+        var payloadJson = JsonSerializer.Serialize(payload);
+        var payloadBytes = Encoding.UTF8.GetBytes(payloadJson);
+        var payloadToken = WebEncoders.Base64UrlEncode(payloadBytes);
+
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(signingKey));
+        var signatureBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(payloadToken));
+        var signatureToken = WebEncoders.Base64UrlEncode(signatureBytes);
+
+        return $"{payloadToken}.{signatureToken}";
+    }
 
     private static string CreateSignedAuthCode(AuthTokenResponse response, string signingKey)
     {
@@ -378,6 +626,63 @@ public static class AuthController
         var signatureToken = WebEncoders.Base64UrlEncode(signatureBytes);
 
         return $"{payloadToken}.{signatureToken}";
+    }
+
+    private static bool TryReadSignedStateToken(string stateToken, string signingKey, out GoogleAuthStateContext? context)
+    {
+        context = null;
+
+        var parts = stateToken.Split('.', 2, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2)
+        {
+            return false;
+        }
+
+        var payloadToken = parts[0];
+        var providedSignatureToken = parts[1];
+
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(signingKey));
+        var expectedSignature = hmac.ComputeHash(Encoding.UTF8.GetBytes(payloadToken));
+
+        byte[] providedSignature;
+        try
+        {
+            providedSignature = WebEncoders.Base64UrlDecode(providedSignatureToken);
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (!CryptographicOperations.FixedTimeEquals(expectedSignature, providedSignature))
+        {
+            return false;
+        }
+
+        GoogleAuthStatePayload? payload;
+        try
+        {
+            var payloadBytes = WebEncoders.Base64UrlDecode(payloadToken);
+            payload = JsonSerializer.Deserialize<GoogleAuthStatePayload>(payloadBytes);
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (payload is null)
+        {
+            return false;
+        }
+
+        const int StateTokenTtlMinutes = 10;
+        if (payload.IssuedAtUtc.AddMinutes(StateTokenTtlMinutes) < DateTime.UtcNow)
+        {
+            return false;
+        }
+
+        context = payload.Context;
+        return context is not null;
     }
 
     private static bool TryReadSignedAuthCode(string authCode, string signingKey, out AuthTokenResponse? response)
@@ -485,6 +790,8 @@ public static class AuthController
     }
 
     private sealed record GoogleAuthStateContext(string FrontendCallbackUrl, string ReturnPath);
+
+    private sealed record GoogleAuthStatePayload(DateTime IssuedAtUtc, GoogleAuthStateContext Context);
 
     private sealed record GoogleAuthCodePayload(DateTime IssuedAtUtc, AuthTokenResponse Response);
 

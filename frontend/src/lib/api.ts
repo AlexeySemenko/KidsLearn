@@ -222,6 +222,22 @@ export async function finalizeGoogleParentAuth(authCode: string): Promise<AuthSe
   })
 }
 
+export function getChildGoogleStartUrl(returnPath = '/child'): string {
+  const normalizedPath = returnPath.startsWith('/') && !returnPath.startsWith('//')
+    ? returnPath
+    : '/child'
+
+  const searchParams = new URLSearchParams({ returnPath: normalizedPath })
+  return `${API_BASE}/api/v1/auth/child/google/start?${searchParams.toString()}`
+}
+
+export async function finalizeGoogleChildAuth(authCode: string): Promise<AuthSessionResponse> {
+  return request<AuthSessionResponse>('/api/v1/auth/child/google/finalize', {
+    method: 'POST',
+    body: JSON.stringify({ authCode }),
+  })
+}
+
 export async function loginChild(credentials: ChildLoginRequest): Promise<AuthSessionResponse> {
   return request<AuthSessionResponse>('/api/v1/auth/child-login', {
     method: 'POST',
@@ -249,6 +265,13 @@ export async function getChildren(accessToken: string): Promise<ChildSummary[]> 
 
 export async function createChild(accessToken: string, payload: RequestPayload) {
   return request('/api/v1/children', withAuth(accessToken, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }))
+}
+
+export async function createChildWithGmail(accessToken: string, payload: RequestPayload) {
+  return request('/api/v1/children/with-gmail', withAuth(accessToken, {
     method: 'POST',
     body: JSON.stringify(payload),
   }))

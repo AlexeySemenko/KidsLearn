@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { createChild, deleteChild, getChildren, resetChildAccessCode, updateChild } from '../lib/api'
+import { createChild, createChildWithGmail, deleteChild, getChildren, resetChildAccessCode, updateChild } from '../lib/api'
 import { useAuth } from '../auth/AuthProvider'
 
 function validateChildPayload({ name, grade, accessCode }, { requireAccessCode = false } = {}) {
@@ -36,6 +36,9 @@ export default function ParentChildrenPage() {
   const [isDeletingChildId, setIsDeletingChildId] = useState(null)
   const [isResettingChildId, setIsResettingChildId] = useState(null)
   const [statusMessage, setStatusMessage] = useState('')
+  const [gmailForm, setGmailForm] = useState({ gmailEmail: '', name: '', grade: '1' })
+  const [isSubmittingGmail, setIsSubmittingGmail] = useState(false)
+  const [gmailTab, setGmailTab] = useState(false)
 
   useEffect(() => {
     let isMounted = true
@@ -132,6 +135,59 @@ export default function ParentChildrenPage() {
       setError(requestError.message)
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  function updateGmailField(name, value) {
+    setGmailForm((current) => ({ ...current, [name]: value }))
+  }
+
+  async function handleCreateChildWithGmail(event) {
+    event.preventDefault()
+    if (!session?.accessToken) {
+      return
+    }
+
+    const trimmedEmail = gmailForm.gmailEmail.trim().toLowerCase()
+    const trimmedName = gmailForm.name.trim()
+    const parsedGrade = Number(gmailForm.grade)
+
+    if (!trimmedEmail.endsWith('@gmail.com')) {
+      setError('Please enter a valid Gmail address (must end with @gmail.com).')
+      setStatusMessage('')
+      return
+    }
+
+    if (!trimmedName) {
+      setError('Name is required.')
+      setStatusMessage('')
+      return
+    }
+
+    if (!Number.isInteger(parsedGrade) || parsedGrade < 1 || parsedGrade > 12) {
+      setError('Grade must be a whole number between 1 and 12.')
+      setStatusMessage('')
+      return
+    }
+
+    setIsSubmittingGmail(true)
+    setError('')
+    setStatusMessage('')
+
+    try {
+      const payload = {
+        gmailEmail: trimmedEmail,
+        name: trimmedName,
+        grade: parsedGrade,
+      }
+      const response = await createChildWithGmail(session.accessToken, payload)
+      setChildren((current) => [...current, response.child])
+      setStatusMessage(`${response.child.name} was created with Gmail SSO. They can now sign in using Google.`)
+      setGmailForm({ gmailEmail: '', name: '', grade: '1' })
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setIsSubmittingGmail(false)
     }
   }
 
@@ -243,58 +299,133 @@ export default function ParentChildrenPage() {
       </article>
 
       <article className="panel-card children-form-card">
-        <h3>Create child</h3>
-        <p>Add a child profile and optionally set a custom access code.</p>
-
-        <form className="auth-form compact-form" onSubmit={handleCreateChild}>
-          <div className="field">
-            <label htmlFor="child-name">Name</label>
-            <input
-              id="child-name"
-              className="input"
-              value={form.name}
-              onChange={(event) => updateField('name', event.target.value)}
-              placeholder="Mia"
-              required
-            />
+        <div style={{ marginBottom: '1rem' }}>
+          <div className="button-row" style={{ gap: '0.5rem' }}>
+            <button
+              type="button"
+              className={gmailTab ? 'button-secondary' : 'button-secondary' + (gmailTab ? '' : ' active')}
+              onClick={() => setGmailTab(false)}
+              style={{ backgroundColor: gmailTab ? 'transparent' : 'var(--accent)', color: gmailTab ? 'var(--text)' : 'var(--bg)' }}
+            >
+              Access Code
+            </button>
+            <button
+              type="button"
+              className={gmailTab ? 'button-secondary' + ' active' : 'button-secondary'}
+              onClick={() => setGmailTab(true)}
+              style={{ backgroundColor: gmailTab ? 'var(--accent)' : 'transparent', color: gmailTab ? 'var(--bg)' : 'var(--text)' }}
+            >
+              Gmail SSO
+            </button>
           </div>
+        </div>
 
-          <div className="field">
-            <label htmlFor="child-grade">Grade</label>
-            <input
-              id="child-grade"
-              className="input"
-              type="number"
-              min="1"
-              max="12"
-              value={form.grade}
-              onChange={(event) => updateField('grade', event.target.value)}
-              required
-            />
-          </div>
+        {!gmailTab ? (
+          <>
+            <h3>Create child with access code</h3>
+            <p>Add a child profile and optionally set a custom access code.</p>
 
-          <div className="field">
-            <label htmlFor="child-access-code">Custom access code</label>
-            <input
-              id="child-access-code"
-              className="input"
-              value={form.accessCode}
-              onChange={(event) => updateField('accessCode', event.target.value)}
-              placeholder="Optional, min 4 chars"
-            />
-          </div>
+            <form className="auth-form compact-form" onSubmit={handleCreateChild}>
+              <div className="field">
+                <label htmlFor="child-name">Name</label>
+                <input
+                  id="child-name"
+                  className="input"
+                  value={form.name}
+                  onChange={(event) => updateField('name', event.target.value)}
+                  placeholder="Mia"
+                  required
+                />
+              </div>
 
-          <button type="submit" className="button" disabled={isSubmitting}>
-            {isSubmitting ? 'Creating...' : 'Create child'}
-          </button>
-        </form>
+              <div className="field">
+                <label htmlFor="child-grade">Grade</label>
+                <input
+                  id="child-grade"
+                  className="input"
+                  type="number"
+                  min="1"
+                  max="12"
+                  value={form.grade}
+                  onChange={(event) => updateField('grade', event.target.value)}
+                  required
+                />
+              </div>
 
-        {freshAccessCode ? (
-          <div className="info-block success-block">
-            <strong>Issued access code</strong>
-            <span>{freshAccessCode}</span>
-          </div>
-        ) : null}
+              <div className="field">
+                <label htmlFor="child-access-code">Custom access code</label>
+                <input
+                  id="child-access-code"
+                  className="input"
+                  value={form.accessCode}
+                  onChange={(event) => updateField('accessCode', event.target.value)}
+                  placeholder="Optional, min 4 chars"
+                />
+              </div>
+
+              <button type="submit" className="button" disabled={isSubmitting}>
+                {isSubmitting ? 'Creating...' : 'Create child'}
+              </button>
+            </form>
+
+            {freshAccessCode ? (
+              <div className="info-block success-block">
+                <strong>Issued access code</strong>
+                <span>{freshAccessCode}</span>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <h3>Create child with Gmail SSO</h3>
+            <p>Add a child with Gmail address. They can sign in using Google.</p>
+
+            <form className="auth-form compact-form" onSubmit={handleCreateChildWithGmail}>
+              <div className="field">
+                <label htmlFor="child-gmail">Gmail address</label>
+                <input
+                  id="child-gmail"
+                  className="input"
+                  type="email"
+                  value={gmailForm.gmailEmail}
+                  onChange={(event) => updateGmailField('gmailEmail', event.target.value)}
+                  placeholder="child@gmail.com"
+                  required
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="child-gmail-name">Name</label>
+                <input
+                  id="child-gmail-name"
+                  className="input"
+                  value={gmailForm.name}
+                  onChange={(event) => updateGmailField('name', event.target.value)}
+                  placeholder="Mia"
+                  required
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="child-gmail-grade">Grade</label>
+                <input
+                  id="child-gmail-grade"
+                  className="input"
+                  type="number"
+                  min="1"
+                  max="12"
+                  value={gmailForm.grade}
+                  onChange={(event) => updateGmailField('grade', event.target.value)}
+                  required
+                />
+              </div>
+
+              <button type="submit" className="button" disabled={isSubmittingGmail}>
+                {isSubmittingGmail ? 'Creating...' : 'Create child with Gmail'}
+              </button>
+            </form>
+          </>
+        )}
 
         {statusMessage ? (
           <div className="info-block success-block children-status-block">
