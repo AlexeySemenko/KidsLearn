@@ -82,7 +82,7 @@ public static class AuthController
         {
             var clientId = configuration["GoogleAuth:ClientId"];
             var redirectUri = configuration["GoogleAuth:RedirectUri"];
-            var frontendCallbackUrl = configuration["GoogleAuth:FrontendCallbackUrl"];
+            var frontendCallbackUrl = configuration["GoogleAuth:ParentFrontendCallbackUrl"];
 
             if (string.IsNullOrWhiteSpace(clientId)
                 || string.IsNullOrWhiteSpace(redirectUri)
@@ -139,13 +139,13 @@ public static class AuthController
             CancellationToken cancellationToken) =>
         {
             var logger = loggerFactory.CreateLogger("GoogleAuth");
-            var defaultFrontendCallback = configuration["GoogleAuth:FrontendCallbackUrl"];
+            var defaultFrontendCallback = configuration["GoogleAuth:ParentFrontendCallbackUrl"];
 
             if (string.IsNullOrWhiteSpace(defaultFrontendCallback))
             {
                 return Results.Problem(
                     title: "Google auth is not configured.",
-                    detail: "Set GoogleAuth:FrontendCallbackUrl.",
+                    detail: "Set GoogleAuth:ParentFrontendCallbackUrl.",
                     statusCode: StatusCodes.Status503ServiceUnavailable);
             }
 
@@ -338,8 +338,8 @@ public static class AuthController
         apiV1.MapGet("/auth/child/google/start", (HttpContext httpContext, IConfiguration configuration) =>
         {
             var clientId = configuration["GoogleAuth:ClientId"];
-            var redirectUri = configuration["GoogleAuth:RedirectUri"];
-            var frontendCallbackUrl = configuration["GoogleAuth:FrontendCallbackUrl"];
+            var redirectUri = configuration["GoogleAuth:ChildRedirectUri"] ?? configuration["GoogleAuth:RedirectUri"];
+            var frontendCallbackUrl = configuration["GoogleAuth:ChildFrontendCallbackUrl"];
 
             if (string.IsNullOrWhiteSpace(clientId)
                 || string.IsNullOrWhiteSpace(redirectUri)
@@ -396,13 +396,13 @@ public static class AuthController
             CancellationToken cancellationToken) =>
         {
             var logger = loggerFactory.CreateLogger("GoogleAuth");
-            var defaultFrontendCallback = configuration["GoogleAuth:FrontendCallbackUrl"];
+            var defaultFrontendCallback = configuration["GoogleAuth:ChildFrontendCallbackUrl"];
 
             if (string.IsNullOrWhiteSpace(defaultFrontendCallback))
             {
                 return Results.Problem(
                     title: "Google auth is not configured.",
-                    detail: "Set GoogleAuth:FrontendCallbackUrl.",
+                    detail: "Set GoogleAuth:ChildFrontendCallbackUrl.",
                     statusCode: StatusCodes.Status503ServiceUnavailable);
             }
 
@@ -429,7 +429,7 @@ public static class AuthController
 
             var clientId = configuration["GoogleAuth:ClientId"];
             var clientSecret = configuration["GoogleAuth:ClientSecret"];
-            var redirectUri = configuration["GoogleAuth:RedirectUri"];
+            var redirectUri = configuration["GoogleAuth:ChildRedirectUri"] ?? configuration["GoogleAuth:RedirectUri"];
 
             if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret) || string.IsNullOrWhiteSpace(redirectUri))
             {
@@ -468,6 +468,7 @@ public static class AuthController
 
             if (parentUser is not null)
             {
+                logger.LogWarning("Attempted child login with parent email: {Email}", normalizedEmail);
                 return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "child_not_registered", null, returnPath));
             }
 
@@ -486,6 +487,7 @@ public static class AuthController
 
             if (childUser is null)
             {
+                logger.LogWarning("Child login attempted with unregistered email: {Email}", normalizedEmail);
                 return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "child_not_registered", null, returnPath));
             }
 
@@ -495,6 +497,7 @@ public static class AuthController
 
             if (child is null || child.ParentId == Guid.Empty)
             {
+                logger.LogWarning("Child login: Child record not found or parent not assigned for UserId: {UserId}", childUser.Id);
                 return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "child_not_registered", null, returnPath));
             }
 
