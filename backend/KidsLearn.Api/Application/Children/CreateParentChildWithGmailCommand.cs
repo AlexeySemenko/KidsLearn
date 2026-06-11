@@ -65,11 +65,16 @@ public sealed class CreateParentChildWithGmailCommandHandler : IRequestHandler<C
         }
 
         var existingUser = await _db.Users.FirstOrDefaultAsync(
-            x => x.Email == gmailEmail && x.ExternalProvider == GoogleProviderName,
+            x => x.Email == gmailEmail,
             cancellationToken);
 
         if (existingUser is not null)
         {
+            if (existingUser.Role != UserRole.Child)
+            {
+                return CreateParentChildWithGmailResult.BadRequest("This Gmail is already used by a non-child account.");
+            }
+
             var existingChild = await _db.Children.FirstOrDefaultAsync(
                 x => x.UserId == existingUser.Id,
                 cancellationToken);
@@ -84,6 +89,8 @@ public sealed class CreateParentChildWithGmailCommandHandler : IRequestHandler<C
                 return CreateParentChildWithGmailResult.Created(new CreatedChildWithGmailResponse(
                     new ChildResponse(existingChild.Id, existingChild.ParentId, existingChild.Name, existingChild.Grade)));
             }
+
+            existingUser.ExternalProvider = GoogleProviderName;
         }
 
         var childUser = existingUser ?? new AppUser

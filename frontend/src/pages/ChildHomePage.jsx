@@ -188,39 +188,68 @@ export default function ChildHomePage() {
   }
 
   return (
-    <section className="panel-grid">
-      <article className="hero-card assignments-hero">
-        <div className="brand-kicker">Epic 4.1</div>
-        <h2>Assigned work is now loaded from the child API.</h2>
-        <p>
-          This screen now shows real assignments for the logged-in child account.
-          Solving and results detail can build directly on top of this list.
-        </p>
-        <div className="badge-row">
-          <span className="badge">GET /child/assignments</span>
-          <span className="badge">Child scope only</span>
-          <span className="badge">Ready for solving flow</span>
+    <section className="panel-grid child-panel-grid">
+      <div className="child-dashboard-bubbles" aria-hidden="true">
+        <span className="child-dash-bubble d1">⭐</span>
+        <span className="child-dash-bubble d2">🎈</span>
+        <span className="child-dash-bubble d3">🌟</span>
+        <span className="child-dash-bubble d4">✨</span>
+        <span className="child-dash-bubble d5">🚀</span>
+      </div>
+
+      <article className="hero-card assignments-hero child-assignments-hero">
+        <div className="child-hero-topline">
+          <div>
+            <div className="brand-kicker">Mission board</div>
+            <h2>Ready for today&apos;s learning adventure?</h2>
+            <p>
+              Your assignments are waiting. Open one mission, solve the questions,
+              and earn your score.
+            </p>
+          </div>
+
+          <div className="child-hero-mascot" aria-hidden="true">
+            <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="60" cy="48" r="26" fill="#f4d35e" />
+              <ellipse cx="60" cy="82" rx="28" ry="20" fill="#f4d35e" />
+              <circle cx="51" cy="44" r="5" fill="#0f2745" />
+              <circle cx="69" cy="44" r="5" fill="#0f2745" />
+              <circle cx="53" cy="42" r="2" fill="white" />
+              <circle cx="71" cy="42" r="2" fill="white" />
+              <path d="M50 56 Q60 65 70 56" stroke="#0f2745" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+              <rect x="38" y="22" width="44" height="7" rx="3.5" fill="#1a3a5c" />
+              <polygon points="60,13 82,25 38,25" fill="#1a3a5c" />
+              <line x1="82" y1="25" x2="86" y2="36" stroke="#1a3a5c" strokeWidth="2" />
+              <circle cx="86" cy="38" r="3.5" fill="#ffb703" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="badge-row child-sticker-row">
+          <span className="badge child-sticker">Math + Reading</span>
+          <span className="badge child-sticker">Try your best</span>
+          <span className="badge child-sticker">Level up daily</span>
         </div>
       </article>
 
-      <article className="panel-card assignments-form-card">
-        <h3>Workload snapshot</h3>
-        <p>Track what is assigned and what still needs to be completed.</p>
+      <article className="panel-card assignments-form-card child-metric-card">
+        <h3>Your mission counter</h3>
+        <p>See how many assignments you can finish today.</p>
         <div className="metric">{assignments.length}</div>
-        <div className="metric-copy">Total assignments in your queue</div>
+        <div className="metric-copy">Missions in your queue</div>
       </article>
 
       <article className="assignments-list-card">
         <div className="children-list-header">
           <div>
-            <h3>My assignments</h3>
-            <p>Latest assigned work available for solving.</p>
+            <h3>My missions</h3>
+            <p>Pick one and start solving.</p>
           </div>
           <span className="badge">{assignments.length} records</span>
         </div>
 
-        {isLoading ? <p className="children-empty">Loading assignments...</p> : null}
-        {!isLoading && assignments.length === 0 ? <p className="children-empty">No assignments yet. New work will appear here.</p> : null}
+        {isLoading ? <p className="children-empty child-empty">Loading your missions...</p> : null}
+        {!isLoading && assignments.length === 0 ? <p className="children-empty child-empty">No missions yet. Check back soon.</p> : null}
         {error ? <div className="alert assignments-alert">{error}</div> : null}
 
         {!isLoading && assignments.length > 0 ? (
@@ -244,11 +273,11 @@ export default function ChildHomePage() {
                 <div className="button-row child-actions">
                   <button
                     type="button"
-                    className="button-secondary"
+                    className="button-secondary child-start-button"
                     disabled={isOpening}
                     onClick={() => handleOpenAssignment(assignment.id)}
                   >
-                    {isOpening ? 'Opening...' : 'Solve'}
+                    {isOpening ? '⏳ Opening...' : '🚀 Start mission'}
                   </button>
                 </div>
               </article>
@@ -262,10 +291,10 @@ export default function ChildHomePage() {
           <section className="modal-card lesson-modal" role="dialog" aria-modal="true" aria-labelledby="solve-assignment-title" onClick={(event) => event.stopPropagation()}>
             <div className="children-list-header modal-header">
               <div>
-                <h3 id="solve-assignment-title">Solve assignment</h3>
+                <h3 id="solve-assignment-title">Mission time!</h3>
                 <p>{solvingAssignment.lessonTitle} · {solvingAssignment.questions.length} questions</p>
               </div>
-              <button type="button" className="button-secondary" onClick={closeSolvingModal}>Close</button>
+              <button type="button" className="button-secondary" onClick={closeSolvingModal}>Back</button>
             </div>
 
             <div className="children-list">
@@ -276,7 +305,7 @@ export default function ChildHomePage() {
                       <div className="child-name">Question {index + 1}</div>
                       {instantCheckMap[question.questionId] ? (
                         <span className={`assignment-status-pill ${instantCheckMap[question.questionId].correct ? 'status-success' : 'status-danger'}`}>
-                          {instantCheckMap[question.questionId].correct ? 'Correct' : 'Try again'}
+                          {instantCheckMap[question.questionId].correct ? '✅ Nice Job!' : '❌ Try once more'}
                         </span>
                       ) : null}
                     </div>
@@ -307,14 +336,14 @@ export default function ChildHomePage() {
 
             {partialScore !== null ? (
               <div className="info-block success-block assignments-status-block">
-                <strong>Current score</strong>
+                <strong>Your score right now</strong>
                 <span>{partialScore}%</span>
               </div>
             ) : null}
 
             {completion ? (
               <div className="info-block success-block assignments-status-block">
-                <strong>Assignment completed</strong>
+                <strong>Mission completed</strong>
                 <span>Score: {completion.score}% · Correct: {completion.correctAnswers}/{completion.totalQuestions}</span>
                 <div className="button-row">
                   <button
@@ -322,7 +351,7 @@ export default function ChildHomePage() {
                     className="button-secondary"
                     onClick={() => navigate(`/child/results?resultId=${completion.resultId}`)}
                   >
-                    View result details
+                    View my results
                   </button>
                 </div>
               </div>
@@ -330,10 +359,10 @@ export default function ChildHomePage() {
 
             <div className="button-row modal-actions">
               <button type="button" className="button-secondary" disabled={isSubmitting || isCompleting} onClick={handleCheckAnswers}>
-                {isSubmitting ? 'Checking...' : 'Check answers'}
+                {isSubmitting ? 'Checking...' : 'Check my answers'}
               </button>
               <button type="button" className="button" disabled={isSubmitting || isCompleting || solvingAssignment.status === 'Completed'} onClick={handleCompleteAssignment}>
-                {isCompleting ? 'Completing...' : (solvingAssignment.status === 'Completed' ? 'Completed' : 'Complete assignment')}
+                {isCompleting ? 'Finishing...' : (solvingAssignment.status === 'Completed' ? 'Completed' : 'Finish mission')}
               </button>
             </div>
           </section>

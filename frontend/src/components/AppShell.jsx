@@ -117,7 +117,7 @@ export default function AppShell() {
   }
 
   return (
-    <div className={`app-shell${isSidebarOpen ? ' nav-open' : ''}`}>
+    <div className={`app-shell${isSidebarOpen ? ' nav-open' : ''}${role === 'Child' ? ' child-shell' : ''}`}>
       <div className="mobile-shell-bar">
         <span className="mobile-shell-title">{role === 'Child' ? 'Child workspace' : 'Parent workspace'}</span>
         <button
@@ -181,14 +181,27 @@ export default function AppShell() {
         </div>
       </aside>
 
-      <main className="content">
-        <header className="header">
+      <main className={`content${role === 'Child' ? ' child-shell-content' : ''}`}>
+        {role === 'Child' ? (
+          <div className="child-shell-bubbles" aria-hidden="true">
+            <span className="child-shell-bubble c1">⭐</span>
+            <span className="child-shell-bubble c2">🎈</span>
+            <span className="child-shell-bubble c3">✨</span>
+            <span className="child-shell-bubble c4">🚀</span>
+            <span className="child-shell-bubble c5">🌟</span>
+            <span className="child-shell-bubble c6">☁️</span>
+          </div>
+        ) : null}
+
+        <header className={`header${role === 'Child' ? ' child-shell-header' : ''}`}>
           <div className="header-copy">
-            <span className="header-eyebrow">Authenticated shell</span>
+            <span className="header-eyebrow">{role === 'Child' ? 'Learning adventure' : 'Authenticated shell'}</span>
             <h1>{shellTitle}</h1>
             <p>
-              Route: {location.pathname}. This foundation now supports role-aware navigation,
-              persisted auth state, and clean next steps for dashboard screens.
+              {role === 'Child'
+                ? 'Your missions, progress, and results all live here. Pick a mission and have fun learning.'
+                : `Route: ${location.pathname}. This foundation now supports role-aware navigation,
+              persisted auth state, and clean next steps for dashboard screens.`}
             </p>
           </div>
 
