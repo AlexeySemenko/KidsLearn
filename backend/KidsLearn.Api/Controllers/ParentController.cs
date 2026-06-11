@@ -10,6 +10,7 @@ public static class ParentController
         parentApi.MapParentLessonsEndpoints();
         parentApi.MapParentAssignmentsEndpoints();
         parentApi.MapParentReportsEndpoints();
+        parentApi.MapParentManageEndpoints();
 
         return apiV1;
     }

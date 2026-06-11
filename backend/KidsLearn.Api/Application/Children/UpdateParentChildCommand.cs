@@ -28,8 +28,10 @@ public sealed class UpdateParentChildCommandHandler : IRequestHandler<UpdatePare
 
     public async Task<UpdateParentChildResult> Handle(UpdateParentChildCommand command, CancellationToken cancellationToken)
     {
+        var scopedParentIds = await ApiEndpointHelpers.ResolveParentScopeIdsAsync(_db, command.ParentId);
+
         var child = await _db.Children.FirstOrDefaultAsync(
-            x => x.Id == command.ChildId && x.ParentId == command.ParentId,
+            x => x.Id == command.ChildId && scopedParentIds.Contains(x.ParentId),
             cancellationToken);
 
         if (child is null)

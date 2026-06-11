@@ -25,8 +25,10 @@ public sealed class ResetParentChildAccessCodeCommandHandler : IRequestHandler<R
 
     public async Task<ResetParentChildAccessCodeResult> Handle(ResetParentChildAccessCodeCommand command, CancellationToken cancellationToken)
     {
+        var scopedParentIds = await ApiEndpointHelpers.ResolveParentScopeIdsAsync(_db, command.ParentId);
+
         var child = await _db.Children.FirstOrDefaultAsync(
-            x => x.Id == command.ChildId && x.ParentId == command.ParentId,
+            x => x.Id == command.ChildId && scopedParentIds.Contains(x.ParentId),
             cancellationToken);
 
         if (child is null || !child.UserId.HasValue)

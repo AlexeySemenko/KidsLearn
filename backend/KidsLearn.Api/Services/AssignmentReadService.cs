@@ -10,9 +10,11 @@ public sealed class AssignmentReadService(AppDbContext db) : IAssignmentReadServ
 {
     public async Task<IReadOnlyList<AssignmentResponse>> ListForParentAsync(Guid parentId, Guid? childId)
     {
+        var scopedParentIds = await ApiEndpointHelpers.ResolveParentScopeIdsAsync(db, parentId);
+
         var query = db.Assignments
             .AsNoTracking()
-            .Where(x => x.Child.ParentId == parentId);
+            .Where(x => scopedParentIds.Contains(x.Child.ParentId));
 
         if (childId.HasValue)
         {

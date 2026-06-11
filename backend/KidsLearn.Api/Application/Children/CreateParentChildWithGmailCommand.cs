@@ -28,6 +28,7 @@ public sealed class CreateParentChildWithGmailCommandHandler : IRequestHandler<C
     public async Task<CreateParentChildWithGmailResult> Handle(CreateParentChildWithGmailCommand command, CancellationToken cancellationToken)
     {
         var request = command.Request;
+        var scopedParentIds = await ApiEndpointHelpers.ResolveParentScopeIdsAsync(_db, command.ParentId);
 
         if (string.IsNullOrWhiteSpace(request.Name))
         {
@@ -79,12 +80,12 @@ public sealed class CreateParentChildWithGmailCommandHandler : IRequestHandler<C
                 x => x.UserId == existingUser.Id,
                 cancellationToken);
 
-            if (existingChild is not null && existingChild.ParentId != command.ParentId)
+            if (existingChild is not null && !scopedParentIds.Contains(existingChild.ParentId))
             {
                 return CreateParentChildWithGmailResult.BadRequest("This Gmail is already linked to another child.");
             }
 
-            if (existingChild is not null && existingChild.ParentId == command.ParentId)
+            if (existingChild is not null && scopedParentIds.Contains(existingChild.ParentId))
             {
                 return CreateParentChildWithGmailResult.Created(new CreatedChildWithGmailResponse(
                     new ChildResponse(existingChild.Id, existingChild.ParentId, existingChild.Name, existingChild.Grade)));

@@ -29,12 +29,18 @@ public class AssignmentSolvingService(AppDbContext db) : IAssignmentSolvingServi
 {
     public async Task<ServiceResult<AssignmentForSolvingResponse>> GetForSolvingAsync(AssignmentAccessScope scope, Guid scopeId, Guid assignmentId)
     {
+        HashSet<Guid>? parentScopeIds = null;
+        if (scope == AssignmentAccessScope.Parent)
+        {
+            parentScopeIds = await ApiEndpointHelpers.ResolveParentScopeIdsAsync(db, scopeId);
+        }
+
         var assignment = await db.Assignments
             .AsNoTracking()
             .Include(x => x.Lesson)
             .ThenInclude(x => x.Questions.OrderBy(q => q.Order))
             .ThenInclude(q => q.Answers.OrderBy(a => a.Order))
-            .FirstOrDefaultAsync(AccessPredicate(scope, scopeId, assignmentId));
+            .FirstOrDefaultAsync(AccessPredicate(scope, scopeId, assignmentId, parentScopeIds));
 
         if (assignment is null)
         {
@@ -67,6 +73,12 @@ public class AssignmentSolvingService(AppDbContext db) : IAssignmentSolvingServi
 
     public async Task<ServiceResult<SubmitAssignmentAnswersResponse>> SubmitAnswersAsync(AssignmentAccessScope scope, Guid scopeId, Guid assignmentId, SubmitAssignmentAnswersRequest request)
     {
+        HashSet<Guid>? parentScopeIds = null;
+        if (scope == AssignmentAccessScope.Parent)
+        {
+            parentScopeIds = await ApiEndpointHelpers.ResolveParentScopeIdsAsync(db, scopeId);
+        }
+
         if (request.Answers is null || request.Answers.Count == 0)
         {
             return ServiceResult<SubmitAssignmentAnswersResponse>.Fail(400, "At least one answer is required.");
@@ -76,7 +88,7 @@ public class AssignmentSolvingService(AppDbContext db) : IAssignmentSolvingServi
             .Include(x => x.Lesson)
             .ThenInclude(x => x.Questions)
             .ThenInclude(q => q.Answers)
-            .FirstOrDefaultAsync(AccessPredicate(scope, scopeId, assignmentId));
+            .FirstOrDefaultAsync(AccessPredicate(scope, scopeId, assignmentId, parentScopeIds));
 
         if (assignment is null)
         {
@@ -159,10 +171,16 @@ public class AssignmentSolvingService(AppDbContext db) : IAssignmentSolvingServi
 
     public async Task<ServiceResult<CompleteAssignmentResponse>> CompleteAsync(AssignmentAccessScope scope, Guid scopeId, Guid assignmentId)
     {
+        HashSet<Guid>? parentScopeIds = null;
+        if (scope == AssignmentAccessScope.Parent)
+        {
+            parentScopeIds = await ApiEndpointHelpers.ResolveParentScopeIdsAsync(db, scopeId);
+        }
+
         var assignment = await db.Assignments
             .Include(x => x.Lesson)
             .ThenInclude(x => x.Questions)
-            .FirstOrDefaultAsync(AccessPredicate(scope, scopeId, assignmentId));
+            .FirstOrDefaultAsync(AccessPredicate(scope, scopeId, assignmentId, parentScopeIds));
 
         if (assignment is null)
         {
@@ -208,11 +226,17 @@ public class AssignmentSolvingService(AppDbContext db) : IAssignmentSolvingServi
 
     public async Task<ServiceResult<ResultDetailResponse>> GetResultAsync(AssignmentAccessScope scope, Guid scopeId, Guid resultId)
     {
+        HashSet<Guid>? parentScopeIds = null;
+        if (scope == AssignmentAccessScope.Parent)
+        {
+            parentScopeIds = await ApiEndpointHelpers.ResolveParentScopeIdsAsync(db, scopeId);
+        }
+
         var result = scope == AssignmentAccessScope.Parent
             ? await db.Results
                 .AsNoTracking()
                 .Include(x => x.Assignment)
-                .FirstOrDefaultAsync(x => x.Id == resultId && x.Assignment.Child.ParentId == scopeId)
+                .FirstOrDefaultAsync(x => x.Id == resultId && parentScopeIds!.Contains(x.Assignment.Child.ParentId))
             : await db.Results
                 .AsNoTracking()
                 .Include(x => x.Assignment)
@@ -240,8 +264,8 @@ public class AssignmentSolvingService(AppDbContext db) : IAssignmentSolvingServi
             breakdown));
     }
 
-    private static System.Linq.Expressions.Expression<Func<Assignment, bool>> AccessPredicate(AssignmentAccessScope scope, Guid scopeId, Guid assignmentId)
+    private static System.Linq.Expressions.Expression<Func<Assignment, bool>> AccessPredicate(AssignmentAccessScope scope, Guid scopeId, Guid assignmentId, HashSet<Guid>? parentScopeIds)
         => scope == AssignmentAccessScope.Parent
-            ? x => x.Id == assignmentId && x.Child.ParentId == scopeId
+            ? x => x.Id == assignmentId && parentScopeIds!.Contains(x.Child.ParentId)
             : x => x.Id == assignmentId && x.ChildId == scopeId;
 }

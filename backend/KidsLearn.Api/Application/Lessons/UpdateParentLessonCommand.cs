@@ -30,8 +30,10 @@ public sealed class UpdateParentLessonCommandHandler : IRequestHandler<UpdatePar
 
     public async Task<UpdateParentLessonResult> Handle(UpdateParentLessonCommand command, CancellationToken cancellationToken)
     {
+        var scopedParentIds = await ApiEndpointHelpers.ResolveParentScopeIdsAsync(_db, command.ParentId);
+
         var lesson = await _db.Lessons.FirstOrDefaultAsync(
-            x => x.Id == command.LessonId && x.CreatedBy == command.ParentId,
+            x => x.Id == command.LessonId && scopedParentIds.Contains(x.CreatedBy),
             cancellationToken);
 
         if (lesson is null)

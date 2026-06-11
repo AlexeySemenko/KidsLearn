@@ -30,11 +30,13 @@ public sealed class DuplicateParentLessonCommandHandler : IRequestHandler<Duplic
 
     public async Task<DuplicateParentLessonResult> Handle(DuplicateParentLessonCommand command, CancellationToken cancellationToken)
     {
+        var scopedParentIds = await ApiEndpointHelpers.ResolveParentScopeIdsAsync(_db, command.ParentId);
+
         var sourceLesson = await _db.Lessons
             .AsNoTracking()
             .Include(x => x.Questions.OrderBy(q => q.Order))
             .ThenInclude(q => q.Answers.OrderBy(a => a.Order))
-            .FirstOrDefaultAsync(x => x.Id == command.LessonId && x.CreatedBy == command.ParentId, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Id == command.LessonId && scopedParentIds.Contains(x.CreatedBy), cancellationToken);
 
         if (sourceLesson is null)
         {

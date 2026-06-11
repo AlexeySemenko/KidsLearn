@@ -10,6 +10,8 @@ public sealed class AiLessonEditingService(AppDbContext db) : IAiLessonEditingSe
 {
     public async Task<ServiceResult<EditAiLessonResponse>> EditAsync(Guid parentId, Guid lessonId, EditAiLessonRequest request, CancellationToken cancellationToken = default)
     {
+        var scopedParentIds = await ApiEndpointHelpers.ResolveParentScopeIdsAsync(db, parentId);
+
         if (string.IsNullOrWhiteSpace(request.Command))
         {
             return ServiceResult<EditAiLessonResponse>.Fail(400, "Command is required.");
@@ -18,7 +20,7 @@ public sealed class AiLessonEditingService(AppDbContext db) : IAiLessonEditingSe
         var lesson = await db.Lessons
             .Include(x => x.Questions.OrderBy(q => q.Order))
             .ThenInclude(q => q.Answers.OrderBy(a => a.Order))
-            .FirstOrDefaultAsync(x => x.Id == lessonId && x.CreatedBy == parentId, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Id == lessonId && scopedParentIds.Contains(x.CreatedBy), cancellationToken);
 
         if (lesson is null)
         {

@@ -14,6 +14,7 @@ import ParentLessonsPage from './pages/ParentLessonsPage'
 import ChildResultsPage from './pages/ChildResultsPage'
 import ParentAiGenerationPage from './pages/ParentAiGenerationPage'
 import ParentReportsPage from './pages/ParentReportsPage'
+import ParentManagePage from './pages/ParentManagePage'
 
 function LandingPage() {
   const { isAuthenticated, role } = useAuth()
@@ -57,6 +58,7 @@ export default function App() {
                 element={<ParentReportsPage />}
               />
               <Route path="ai" element={<ParentAiGenerationPage />} />
+              <Route path="manage" element={<ParentManagePage />} />
             </Route>
           </Route>
 

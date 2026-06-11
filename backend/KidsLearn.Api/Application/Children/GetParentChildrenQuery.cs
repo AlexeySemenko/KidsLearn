@@ -14,9 +14,11 @@ public sealed class GetParentChildrenQueryHandler : IRequestHandler<GetParentChi
 
     public async Task<IReadOnlyList<ChildResponse>> Handle(GetParentChildrenQuery query, CancellationToken cancellationToken)
     {
+        var scopedParentIds = await ApiEndpointHelpers.ResolveParentScopeIdsAsync(_db, query.ParentId);
+
         return await _db.Children
             .AsNoTracking()
-            .Where(x => x.ParentId == query.ParentId)
+            .Where(x => scopedParentIds.Contains(x.ParentId))
             .Select(x => new ChildResponse(x.Id, x.ParentId, x.Name, x.Grade))
             .ToListAsync(cancellationToken);
     }

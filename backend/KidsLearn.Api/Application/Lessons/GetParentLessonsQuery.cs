@@ -28,10 +28,11 @@ public sealed class GetParentLessonsQueryHandler : IRequestHandler<GetParentLess
     {
         var page = Math.Max(query.Page, 1);
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var scopedParentIds = await ApiEndpointHelpers.ResolveParentScopeIdsAsync(_db, query.ParentId);
 
         var lessonsQuery = _db.Lessons
             .AsNoTracking()
-            .Where(x => x.CreatedBy == query.ParentId);
+            .Where(x => scopedParentIds.Contains(x.CreatedBy));
 
         if (!string.IsNullOrWhiteSpace(query.Subject))
         {

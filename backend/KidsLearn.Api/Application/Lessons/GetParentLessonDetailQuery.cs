@@ -23,11 +23,13 @@ public sealed class GetParentLessonDetailQueryHandler : IRequestHandler<GetParen
 
     public async Task<GetParentLessonDetailResult> Handle(GetParentLessonDetailQuery query, CancellationToken cancellationToken)
     {
+        var scopedParentIds = await ApiEndpointHelpers.ResolveParentScopeIdsAsync(_db, query.ParentId);
+
         var lesson = await _db.Lessons
             .AsNoTracking()
             .Include(x => x.Questions.OrderBy(q => q.Order))
             .ThenInclude(q => q.Answers.OrderBy(a => a.Order))
-            .FirstOrDefaultAsync(x => x.Id == query.LessonId && x.CreatedBy == query.ParentId, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Id == query.LessonId && scopedParentIds.Contains(x.CreatedBy), cancellationToken);
 
         if (lesson is null)
         {

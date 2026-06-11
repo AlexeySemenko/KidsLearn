@@ -25,9 +25,11 @@ public sealed class GetParentAiLessonRevisionsQueryHandler
 
     public async Task<GetParentAiLessonRevisionsResult> Handle(GetParentAiLessonRevisionsQuery query, CancellationToken cancellationToken)
     {
+        var scopedParentIds = await ApiEndpointHelpers.ResolveParentScopeIdsAsync(_db, query.ParentId);
+
         var ownsLesson = await _db.Lessons
             .AsNoTracking()
-            .AnyAsync(x => x.Id == query.LessonId && x.CreatedBy == query.ParentId, cancellationToken);
+            .AnyAsync(x => x.Id == query.LessonId && scopedParentIds.Contains(x.CreatedBy), cancellationToken);
 
         if (!ownsLesson)
         {

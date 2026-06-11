@@ -53,7 +53,37 @@ public static class ApiEndpointHelpers
 
     public static async Task<bool> EnsureParentOwnsChildAsync(AppDbContext db, Guid parentId, Guid childId)
     {
-        return await db.Children.AnyAsync(x => x.Id == childId && x.ParentId == parentId);
+        var scopedParentIds = await ResolveParentScopeIdsAsync(db, parentId);
+        return await db.Children.AnyAsync(x => x.Id == childId && scopedParentIds.Contains(x.ParentId));
+    }
+
+    public static async Task<HashSet<Guid>> ResolveParentScopeIdsAsync(AppDbContext db, Guid parentId)
+    {
+        var linkedParentIds = await db.ParentAccountLinks
+            .AsNoTracking()
+            .Where(x => x.ParentAId == parentId || x.ParentBId == parentId)
+            .Select(x => x.ParentAId == parentId ? x.ParentBId : x.ParentAId)
+            .ToListAsync();
+
+        var scopedIds = new HashSet<Guid>(linkedParentIds)
+        {
+            parentId
+        };
+
+        return scopedIds;
+    }
+
+    public static async Task<bool> AreParentsLinkedAsync(AppDbContext db, Guid parentId, Guid linkedParentId)
+    {
+        var (parentAId, parentBId) = NormalizeParentLinkPair(parentId, linkedParentId);
+        return await db.ParentAccountLinks.AnyAsync(x => x.ParentAId == parentAId && x.ParentBId == parentBId);
+    }
+
+    public static (Guid ParentAId, Guid ParentBId) NormalizeParentLinkPair(Guid parentId, Guid linkedParentId)
+    {
+        return parentId.CompareTo(linkedParentId) <= 0
+            ? (parentId, linkedParentId)
+            : (linkedParentId, parentId);
     }
 
 }

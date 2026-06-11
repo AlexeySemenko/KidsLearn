@@ -162,6 +162,12 @@ export interface CsvExportResult {
   fileName: string
 }
 
+export interface LinkedParent {
+  parentId: string
+  email: string
+  linkedAt: string
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -438,4 +444,21 @@ export async function exportParentChildReportCsv(accessToken: string, childId: s
     fileBlob,
     fileName: fileNameMatch ? decodeURIComponent(fileNameMatch[1].replace(/\"/g, '')) : `child-report-${childId}.csv`,
   }
+}
+
+export async function getLinkedParents(accessToken: string): Promise<LinkedParent[]> {
+  return request<LinkedParent[]>('/api/v1/manage/linked-parents', withAuth(accessToken))
+}
+
+export async function linkParentAccount(accessToken: string, email: string): Promise<LinkedParent> {
+  return request<LinkedParent>('/api/v1/manage/linked-parents', withAuth(accessToken, {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  }))
+}
+
+export async function unlinkParentAccount(accessToken: string, linkedParentId: string): Promise<null> {
+  return request<null>(`/api/v1/manage/linked-parents/${linkedParentId}`, withAuth(accessToken, {
+    method: 'DELETE',
+  }))
 }

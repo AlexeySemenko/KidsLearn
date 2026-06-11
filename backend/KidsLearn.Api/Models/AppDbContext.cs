@@ -12,6 +12,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AssignmentAnswer> AssignmentAnswers => Set<AssignmentAnswer>();
     public DbSet<AssignmentResult> Results => Set<AssignmentResult>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<ParentAccountLink> ParentAccountLinks => Set<ParentAccountLink>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -34,6 +35,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(x => x.User)
                 .WithMany(x => x.RefreshTokens)
                 .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ParentAccountLink>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.ParentAId, x.ParentBId }).IsUnique();
+
+            entity.HasOne(x => x.ParentA)
+                .WithMany()
+                .HasForeignKey(x => x.ParentAId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.ParentB)
+                .WithMany()
+                .HasForeignKey(x => x.ParentBId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
