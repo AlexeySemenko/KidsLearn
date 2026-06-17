@@ -2001,6 +2001,10 @@ select.input:invalid {
     z-index: 40;
   }
 
+  .shell-main {
+    padding: 0.75rem;
+  }
+
   .sidebar {
     border-right: 1px solid var(--border);
   }
@@ -2905,9 +2909,9 @@ select.input:invalid {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  padding: 1.5rem;
   max-width: 1100px;
   margin: 0 auto;
+  width: 100%;
 }
 
 /* ── Children pillars ── */
@@ -3066,17 +3070,30 @@ select.input:invalid {
 }
 
 @media (max-width: 560px) {
+  .parent-dash-page {
+    gap: 1rem;
+  }
+
   .parent-dash-pillars {
     gap: 0.5rem;
   }
 
   .parent-child-pillar {
-    min-width: 90px;
-    padding: 0.75rem 0.9rem;
+    min-width: 80px;
+    padding: 0.65rem 0.75rem;
+  }
+
+  .pillar-avatar {
+    font-size: 1.6rem;
   }
 
   .parent-overview-grid {
     grid-template-columns: repeat(2, 1fr);
+    gap: 0.65rem;
+  }
+
+  .parent-ov-value {
+    font-size: 1.5rem;
   }
 }
 

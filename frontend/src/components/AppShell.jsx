@@ -7,7 +7,7 @@ const THEME_STORAGE_KEY = 'kidslearn.theme.mode'
 
 const navByRole = {
   Parent: [
-    { to: '/parent', label: 'Dashboard' },
+    { to: '/parent', label: 'Home' },
     { to: '/parent/children', label: 'Children' },
     { to: '/parent/lessons', label: 'Lessons' },
     { to: '/parent/assignments', label: 'Assignments' },
@@ -16,7 +16,7 @@ const navByRole = {
     { to: '/parent/manage', label: 'Manage' },
   ],
   Child: [
-    { to: '/child', label: 'Assignments' },
+    { to: '/child', label: 'Home' },
     { to: '/child/results', label: 'Results' },
   ],
 }
@@ -211,7 +211,7 @@ export default function AppShell() {
   return (
     <div className={`app-shell${isSidebarOpen ? ' nav-open' : ''}${role === 'Child' ? ' child-shell' : ''}`}>
       <div className="mobile-shell-bar">
-        <span className="mobile-shell-title">{role === 'Child' ? 'Child workspace' : 'Parent workspace'}</span>
+        <span className="mobile-shell-title">KidsLearnAI</span>
 
         <div className="mobile-shell-bar-right">
           {/* User menu visible only on mobile, no role badge */}
@@ -244,7 +244,7 @@ export default function AppShell() {
       <aside className={`sidebar${isSidebarOpen ? ' open' : ''}`}>
         <div className="brand">
           <span className="brand-kicker">KidsLearn Platform</span>
-          <span className="brand-title">{role === 'Child' ? 'Child workspace' : 'Parent workspace'}</span>
+          <span className="brand-title">KidsLearnAI</span>
         </div>
 
         <nav id="app-sidebar-nav">
