@@ -642,8 +642,8 @@ export async function getFriendResults(accessToken: string, friendChildId: strin
   return request<ResultListItem[]>(`/api/v1/child/friends/${friendChildId}/results`, withAuth(accessToken))
 }
 
-export async function getFriendNote(accessToken: string, friendChildId: string): Promise<{ lastNoteText: string | null; lastNoteIsFromMe: boolean; myNote: string | null }> {
-  return request<{ lastNoteText: string | null; lastNoteIsFromMe: boolean; myNote: string | null }>(`/api/v1/child/friends/${friendChildId}/note`, withAuth(accessToken))
+export async function getFriendNote(accessToken: string, friendChildId: string): Promise<{ lastNoteText: string | null; lastNoteIsFromMe: boolean; myNote: string | null; theirNote: string | null }> {
+  return request<{ lastNoteText: string | null; lastNoteIsFromMe: boolean; myNote: string | null; theirNote: string | null }>(`/api/v1/child/friends/${friendChildId}/note`, withAuth(accessToken))
 }
 
 export async function updateFriendNote(accessToken: string, friendChildId: string, note: string | null): Promise<void> {

@@ -3568,6 +3568,7 @@ select.input:invalid {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+  overflow: visible;
 }
 
 .parent-child-pillar {
@@ -3901,99 +3902,48 @@ select.input:invalid {
   color: var(--muted);
 }
 
-/* ── Friend note bubble ─────────────────────────────────────────────────── */
+/* ── Friend card wrapper (relative container for envelope + bubble) ───────── */
 
-.friend-note-bubble-wrap {
-  flex: 1 1 auto;
-  min-width: 180px;
-  max-width: 340px;
-}
-
-.friend-note-bubble {
+.friend-card-wrap {
   position: relative;
-  background: rgba(99, 102, 241, 0.12);
-  border: 1.5px solid rgba(99, 102, 241, 0.35);
-  border-radius: 1rem 1rem 1rem 0;
-  padding: 0.6rem 0.85rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  width: 100%;
-  text-align: left;
-  transition: background 0.15s;
 }
 
-.friend-note-bubble--view {
-  cursor: pointer;
-}
+/* ── Friend envelope button (always visible, blinks when unread) ──────────── */
 
-.friend-note-bubble--view:hover {
-  background: rgba(99, 102, 241, 0.2);
-}
-
-.friend-note-bubble-tail {
-  position: absolute;
-  bottom: -10px;
-  left: 18px;
-  width: 0;
-  height: 0;
-  border-left: 10px solid transparent;
-  border-right: 0 solid transparent;
-  border-top: 10px solid rgba(99, 102, 241, 0.35);
-}
-
-.friend-note-text {
-  font-size: 0.88rem;
-  color: var(--fg);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.friend-note-placeholder {
-  font-size: 0.85rem;
-  color: var(--muted);
-  font-style: italic;
-}
-
-.friend-note-edit-hint {
-  font-size: 0.75rem;
-  color: var(--muted);
-  align-self: flex-end;
-}
-
-.friend-note-bubble--editing {
-  cursor: default;
-}
-
-.friend-note-textarea {
-  background: transparent;
-  border: none;
-  outline: none;
-  resize: none;
-  width: 100%;
-  font-size: 0.88rem;
-  color: var(--fg);
-  font-family: inherit;
-  line-height: 1.4;
-}
-
-.friend-note-actions {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: flex-end;
-  margin-top: 0.25rem;
-}
-
-/* ── Friend unread envelope icon ──────────────────────────────────────────── */
-
-.friend-unread-envelope {
+.friend-envelope-btn {
   position: absolute;
   top: 6px;
   right: 6px;
-  font-size: 1rem;
+  z-index: 2;
+  background: rgba(99, 102, 241, 0.18);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  cursor: pointer;
+  padding: 4px 5px;
+  border-radius: 7px;
+  color: rgba(180, 182, 255, 0.85);
+  opacity: 0.8;
+  transition: opacity 0.15s, transform 0.15s, background 0.15s, box-shadow 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
+}
+
+.friend-envelope-btn:hover {
+  opacity: 1;
+  background: rgba(99, 102, 241, 0.32);
+  color: #fff;
+  transform: scale(1.12);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+}
+
+.friend-envelope-btn.is-unread {
+  opacity: 1;
+  background: rgba(99, 102, 241, 0.35);
+  color: #fff;
+  border-color: rgba(99, 102, 241, 0.7);
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.5);
   animation: envelope-blink 1.2s ease-in-out infinite;
-  pointer-events: none;
 }
 
 @keyframes envelope-blink {
@@ -4001,28 +3951,104 @@ select.input:invalid {
   50%       { opacity: 0.3; transform: scale(0.85); }
 }
 
+/* ── Friend note popover (positioned above the card, right-aligned) ─────── */
+
+.friend-note-popover {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 90%;
+  z-index: 100;
+  width: 310px;
+}
+
+.friend-note-bubble {
+  position: relative;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1.5px solid rgba(99, 102, 241, 0.35);
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  text-align: left;
+}
+
+/* tail points down toward the envelope at top-right of card */
+.friend-note-bubble-tail {
+  position: absolute;
+  bottom: -8px;
+  left: 8px;
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid rgba(99, 102, 241, 0.35);
+}
+
+.friend-note-view-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.friend-note-label {
+  font-size: 0.68rem;
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.friend-note-text {
+  font-size: 0.82rem;
+  color: var(--fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.friend-note-placeholder {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.friend-note-textarea {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 0.35rem;
+  outline: none;
+  resize: none;
+  width: 100%;
+  font-size: 0.82rem;
+  color: var(--fg);
+  font-family: inherit;
+  line-height: 1.35;
+  padding: 0.25rem 0.4rem;
+}
+
+.friend-note-textarea:focus {
+  border-color: rgba(99, 102, 241, 0.55);
+}
+
+.friend-note-actions {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+  margin-top: 0.1rem;
+}
+
 :root[data-theme='light'] .friend-note-bubble {
   background: rgba(99, 102, 241, 0.07);
   border-color: rgba(99, 102, 241, 0.3);
 }
 
-:root[data-theme='light'] .friend-note-bubble--view:hover {
-  background: rgba(99, 102, 241, 0.14);
-}
-
-.friend-note-bubble--theirs {
-  background: rgba(16, 185, 129, 0.1);
-  border-color: rgba(16, 185, 129, 0.35);
-  margin-bottom: 0.5rem;
-}
-
-.friend-note-bubble-tail--mine {
-  border-top-color: rgba(99, 102, 241, 0.35);
-}
-
-.friend-note-label {
-  font-size: 0.75rem;
-  color: var(--muted);
-  font-weight: 600;
-  letter-spacing: 0.01em;
+:root[data-theme='light'] .friend-note-textarea {
+  background: rgba(0, 0, 0, 0.03);
 }

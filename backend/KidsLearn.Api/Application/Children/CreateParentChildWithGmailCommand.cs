@@ -47,7 +47,7 @@ public sealed class CreateParentChildWithGmailCommandHandler : IRequestHandler<C
         }
 
         var parentExists = await _db.Users.AnyAsync(
-            x => x.Id == command.ParentId && x.Role == UserRole.Parent,
+            x => x.Id == command.ParentId && (x.Role == UserRole.Parent || x.Role == UserRole.Admin),
             cancellationToken);
 
         if (!parentExists)

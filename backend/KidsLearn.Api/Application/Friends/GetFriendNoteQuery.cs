@@ -2,7 +2,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 public sealed record GetFriendNoteQuery(Guid RequestingChildId, Guid FriendChildId) : IRequest<GetFriendNoteResult>;
-public sealed record GetFriendNoteResult(int StatusCode, string? LastNoteText, bool LastNoteIsFromMe, string? MyNote, string? Error = null);
+public sealed record GetFriendNoteResult(int StatusCode, string? LastNoteText, bool LastNoteIsFromMe, string? MyNote, string? TheirNote, string? Error = null);
 
 public sealed class GetFriendNoteQueryHandler(AppDbContext db)
     : IRequestHandler<GetFriendNoteQuery, GetFriendNoteResult>
@@ -16,7 +16,7 @@ public sealed class GetFriendNoteQueryHandler(AppDbContext db)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (friendship == null)
-            return new GetFriendNoteResult(StatusCodes.Status403Forbidden, null, false, null, "Not friends.");
+            return new GetFriendNoteResult(StatusCodes.Status403Forbidden, null, false, null, null, "Not friends.");
 
         bool iAmRequester = friendship.RequesterId == query.RequestingChildId;
         var myNote   = iAmRequester ? friendship.NoteFromRequester : friendship.NoteFromAcceptor;
@@ -52,6 +52,6 @@ public sealed class GetFriendNoteQueryHandler(AppDbContext db)
             friendship.NoteFromRequesterReadAt = now;
 
         await db.SaveChangesAsync(cancellationToken);
-        return new GetFriendNoteResult(StatusCodes.Status200OK, lastNoteText, lastIsFromMe, myNote);
+        return new GetFriendNoteResult(StatusCodes.Status200OK, lastNoteText, lastIsFromMe, myNote, theirNote);
     }
 }
