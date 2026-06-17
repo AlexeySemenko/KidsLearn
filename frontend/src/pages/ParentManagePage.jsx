@@ -69,6 +69,12 @@ export default function ParentManagePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [modalError, setModalError] = useState('')
   const [unlinkingId, setUnlinkingId] = useState(null)
+  const [toast, setToast] = useState(null)
+
+  function showToast(message, type = 'success') {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 5000)
+  }
 
   useEffect(() => {
     let mounted = true
@@ -91,13 +97,18 @@ export default function ParentManagePage() {
     setIsSubmitting(true)
     setModalError('')
     try {
-      const linked = await linkParentAccount(session.accessToken, email)
+      const result = await linkParentAccount(session.accessToken, email)
       setLinkedParents((cur) =>
-        cur.some((p) => p.parentId === linked.parentId)
+        cur.some((p) => p.parentId === result.linkedParent.parentId)
           ? cur
-          : [...cur, linked].sort((a, b) => a.email.localeCompare(b.email))
+          : [...cur, result.linkedParent].sort((a, b) => a.email.localeCompare(b.email))
       )
       setIsModalOpen(false)
+      if (result.emailSent) {
+        showToast(`${result.linkedParent.email} linked. Notification email sent.`)
+      } else {
+        showToast(`${result.linkedParent.email} linked. Notification email could not be sent.`, 'warn')
+      }
     } catch (err) {
       setModalError(err.message)
     } finally {
@@ -167,6 +178,13 @@ export default function ParentManagePage() {
           ))}
         </div>
       )}
+
+      {toast ? (
+        <div className={`admin-toast admin-toast--${toast.type}`} role="status">
+          {toast.message}
+          <button type="button" className="admin-toast-close" onClick={() => setToast(null)} aria-label="Dismiss">✕</button>
+        </div>
+      ) : null}
 
       {isModalOpen ? (
         <LinkParentModal

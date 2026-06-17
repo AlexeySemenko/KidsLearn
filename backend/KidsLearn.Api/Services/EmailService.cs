@@ -4,7 +4,7 @@ using System.Net.Mail;
 public interface IEmailService
 {
     Task<bool> SendInvitationAsync(string toEmail, string? displayName, string inviterName);
-    Task SendParentLinkedAsync(string toEmail, string? displayName, string linkedByEmail);
+    Task<bool> SendParentLinkedAsync(string toEmail, string? displayName, string linkedByEmail);
 }
 
 public class EmailService(IConfiguration config, ILogger<EmailService> logger) : IEmailService
@@ -70,7 +70,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         }
     }
 
-    public async Task SendParentLinkedAsync(string toEmail, string? displayName, string linkedByEmail)
+    public async Task<bool> SendParentLinkedAsync(string toEmail, string? displayName, string linkedByEmail)
     {
         var host = config["Email:SmtpHost"];
         if (string.IsNullOrWhiteSpace(host))
@@ -78,7 +78,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
             logger.LogInformation(
                 "Email not configured — parent link notification would be sent to {Email} (linked by {LinkedBy})",
                 toEmail, linkedByEmail);
-            return;
+            return false;
         }
 
         var port = int.TryParse(config["Email:SmtpPort"], out var p) ? p : 587;
@@ -123,10 +123,12 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
 
             await client.SendMailAsync(message);
             logger.LogInformation("Parent link notification sent to {Email}", toEmail);
+            return true;
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to send parent link notification to {Email}", toEmail);
+            return false;
         }
     }
 }

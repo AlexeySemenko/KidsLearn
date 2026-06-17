@@ -25,7 +25,7 @@ public static class ParentManageController
             {
                 StatusCodes.Status201Created => Results.Created(
                     $"/api/v1/manage/linked-parents/{result.Response!.ParentId}",
-                    result.Response),
+                    new LinkParentAccountResponse(result.Response, result.EmailSent)),
                 StatusCodes.Status404NotFound => Results.NotFound(new { error = result.Error }),
                 _ => Results.BadRequest(new { error = result.Error }),
             };

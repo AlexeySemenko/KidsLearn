@@ -239,10 +239,10 @@ public class ManageCommandHandlersUnitTests
         public Task<bool> SendInvitationAsync(string toEmail, string? displayName, string inviterName)
             => Task.FromResult(true);
 
-        public Task SendParentLinkedAsync(string toEmail, string? displayName, string linkedByEmail)
+        public Task<bool> SendParentLinkedAsync(string toEmail, string? displayName, string linkedByEmail)
         {
             ParentLinkedEmailSent = true;
-            return Task.CompletedTask;
+            return Task.FromResult(true);
         }
     }
 }

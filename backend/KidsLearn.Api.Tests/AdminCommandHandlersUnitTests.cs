@@ -280,7 +280,7 @@ public class AdminCommandHandlersUnitTests
         public Task<bool> SendInvitationAsync(string toEmail, string? displayName, string inviterName)
             => Task.FromResult(invitationResult);
 
-        public Task SendParentLinkedAsync(string toEmail, string? displayName, string linkedByEmail)
-            => Task.CompletedTask;
+        public Task<bool> SendParentLinkedAsync(string toEmail, string? displayName, string linkedByEmail)
+            => Task.FromResult(true);
     }
 }

@@ -3,16 +3,16 @@ using Microsoft.EntityFrameworkCore;
 
 public sealed record LinkParentAccountCommand(Guid ParentId, string Email) : IRequest<LinkParentAccountResult>;
 
-public sealed record LinkParentAccountResult(LinkedParentResponse? Response, string? Error, int StatusCode)
+public sealed record LinkParentAccountResult(LinkedParentResponse? Response, bool EmailSent, string? Error, int StatusCode)
 {
     public static LinkParentAccountResult BadRequest(string error)
-        => new(null, error, StatusCodes.Status400BadRequest);
+        => new(null, false, error, StatusCodes.Status400BadRequest);
 
     public static LinkParentAccountResult NotFound(string error)
-        => new(null, error, StatusCodes.Status404NotFound);
+        => new(null, false, error, StatusCodes.Status404NotFound);
 
-    public static LinkParentAccountResult Created(LinkedParentResponse response)
-        => new(response, null, StatusCodes.Status201Created);
+    public static LinkParentAccountResult Created(LinkedParentResponse response, bool emailSent)
+        => new(response, emailSent, null, StatusCodes.Status201Created);
 }
 
 public sealed class LinkParentAccountCommandHandler : IRequestHandler<LinkParentAccountCommand, LinkParentAccountResult>
@@ -66,8 +66,8 @@ public sealed class LinkParentAccountCommandHandler : IRequestHandler<LinkParent
         _db.ParentAccountLinks.Add(link);
         await _db.SaveChangesAsync(cancellationToken);
 
-        _ = _emailService.SendParentLinkedAsync(otherParent.Email, otherParent.DisplayName, parentUser.Email);
+        var emailSent = await _emailService.SendParentLinkedAsync(otherParent.Email, otherParent.DisplayName, parentUser.Email);
 
-        return LinkParentAccountResult.Created(new LinkedParentResponse(otherParent.Id, otherParent.Email, link.CreatedAt));
+        return LinkParentAccountResult.Created(new LinkedParentResponse(otherParent.Id, otherParent.Email, link.CreatedAt), emailSent);
     }
 }

@@ -577,8 +577,13 @@ export async function getLinkedParents(accessToken: string): Promise<LinkedParen
   return request<LinkedParent[]>('/api/v1/manage/linked-parents', withAuth(accessToken))
 }
 
-export async function linkParentAccount(accessToken: string, email: string): Promise<LinkedParent> {
-  return request<LinkedParent>('/api/v1/manage/linked-parents', withAuth(accessToken, {
+export interface LinkParentAccountResponse {
+  linkedParent: LinkedParent
+  emailSent: boolean
+}
+
+export async function linkParentAccount(accessToken: string, email: string): Promise<LinkParentAccountResponse> {
+  return request<LinkParentAccountResponse>('/api/v1/manage/linked-parents', withAuth(accessToken, {
     method: 'POST',
     body: JSON.stringify({ email }),
   }))
