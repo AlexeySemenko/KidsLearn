@@ -809,6 +809,227 @@ button:disabled {
   margin-top: 1.5rem;
 }
 
+/* ═══════════════════════════════════════
+   KIDSLEARNAI UNIFIED LOGIN PAGE
+═══════════════════════════════════════ */
+
+.kl-login-root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2.5rem;
+  padding: 2rem 1rem;
+  background:
+    radial-gradient(ellipse at 20% 10%, rgba(96, 165, 250, 0.18), transparent 50%),
+    radial-gradient(ellipse at 80% 85%, rgba(167, 139, 250, 0.18), transparent 50%),
+    linear-gradient(160deg, #05111f 0%, #091a35 50%, #050c1c 100%);
+  overflow: hidden;
+  position: relative;
+}
+
+/* ── Floating stars background ── */
+.kl-login-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.kl-star {
+  position: absolute;
+  opacity: 0;
+  animation: kl-star-drift linear infinite;
+}
+
+.kl-star-1  { left: 5%;  bottom: -5%; font-size: 1.4rem; animation-duration: 14s; animation-delay: 0s; }
+.kl-star-2  { left: 14%; bottom: -5%; font-size: 1rem;   animation-duration: 18s; animation-delay: 2s; }
+.kl-star-3  { left: 25%; bottom: -5%; font-size: 1.6rem; animation-duration: 12s; animation-delay: 1s; }
+.kl-star-4  { left: 38%; bottom: -5%; font-size: 1.1rem; animation-duration: 16s; animation-delay: 3.5s; }
+.kl-star-5  { left: 50%; bottom: -5%; font-size: 1.4rem; animation-duration: 11s; animation-delay: 0.8s; }
+.kl-star-6  { left: 62%; bottom: -5%; font-size: 1.2rem; animation-duration: 15s; animation-delay: 4s; }
+.kl-star-7  { left: 73%; bottom: -5%; font-size: 1.7rem; animation-duration: 13s; animation-delay: 1.5s; }
+.kl-star-8  { left: 82%; bottom: -5%; font-size: 1rem;   animation-duration: 17s; animation-delay: 5s; }
+.kl-star-9  { left: 90%; bottom: -5%; font-size: 1.5rem; animation-duration: 10s; animation-delay: 2.5s; }
+.kl-star-10 { left: 32%; bottom: -5%; font-size: 1.3rem; animation-duration: 19s; animation-delay: 6s; }
+
+@keyframes kl-star-drift {
+  0%   { transform: translateY(0) rotate(0deg);    opacity: 0; }
+  6%   { opacity: 0.25; }
+  90%  { opacity: 0.2; }
+  100% { transform: translateY(-110vh) rotate(30deg); opacity: 0; }
+}
+
+/* ── Logo ── */
+.kl-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+  z-index: 1;
+}
+
+.kl-logo-rocket {
+  font-size: 4rem;
+  line-height: 1;
+  animation: kl-rocket-float 4s ease-in-out infinite;
+  filter: drop-shadow(0 0 24px rgba(96, 165, 250, 0.5));
+}
+
+@keyframes kl-rocket-float {
+  0%, 100% { transform: translateY(0) rotate(-8deg); }
+  50%       { transform: translateY(-14px) rotate(4deg); }
+}
+
+.kl-logo-wordmark {
+  font-family: var(--font-display);
+  font-size: clamp(2.6rem, 8vw, 4rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  animation: kl-logo-fadein 0.8s ease both;
+}
+
+@keyframes kl-logo-fadein {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.kl-wm-kids  { color: #f4d35e; }
+.kl-wm-learn { color: #f6f8fb; }
+.kl-wm-ai {
+  background: linear-gradient(135deg, #60a5fa, #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.kl-logo-tagline {
+  font-size: 0.95rem;
+  color: rgba(246, 248, 251, 0.5);
+  margin: 0;
+  letter-spacing: 0.04em;
+  animation: kl-logo-fadein 1s 0.3s ease both;
+}
+
+/* ── Role cards ── */
+.kl-role-row {
+  display: flex;
+  gap: 1.25rem;
+  position: relative;
+  z-index: 1;
+  animation: kl-logo-fadein 0.9s 0.5s ease both;
+}
+
+.kl-role-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 2rem 1.75rem;
+  border-radius: 28px;
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  width: 220px;
+  text-align: center;
+  color: var(--text);
+}
+
+.kl-role-card:hover {
+  transform: translateY(-6px);
+  background: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+.kl-role-parent {
+  border-color: rgba(96, 165, 250, 0.3);
+}
+
+.kl-role-parent:hover {
+  border-color: rgba(96, 165, 250, 0.7);
+  box-shadow: 0 20px 60px rgba(96, 165, 250, 0.2);
+}
+
+.kl-role-child {
+  border-color: rgba(244, 211, 94, 0.3);
+}
+
+.kl-role-child:hover {
+  border-color: rgba(244, 211, 94, 0.7);
+  box-shadow: 0 20px 60px rgba(244, 211, 94, 0.18);
+}
+
+.kl-role-emoji {
+  font-size: 3rem;
+  line-height: 1;
+  display: block;
+}
+
+.kl-role-title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.kl-role-sub {
+  font-size: 0.8rem;
+  color: rgba(246, 248, 251, 0.5);
+  line-height: 1.4;
+}
+
+.kl-google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  margin-top: 0.5rem;
+  padding: 0.65rem 1.1rem;
+  border-radius: 50px;
+  background: #fff;
+  color: #1a1a1a;
+  font-family: var(--font-display);
+  font-size: 0.88rem;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.kl-role-card:hover .kl-google-btn {
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+  transform: scale(1.03);
+}
+
+.google-icon-svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 520px) {
+  .kl-role-row {
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+    max-width: 320px;
+  }
+
+  .kl-role-card {
+    width: 100%;
+    padding: 1.5rem 1.25rem;
+  }
+
+  .kl-logo-rocket {
+    font-size: 3rem;
+  }
+}
+
 .field {
   display: grid;
   gap: 0.55rem;

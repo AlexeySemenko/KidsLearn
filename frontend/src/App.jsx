@@ -20,7 +20,7 @@ function LandingPage() {
   const { isAuthenticated, role } = useAuth()
 
   if (!isAuthenticated) {
-    return <Navigate to="/login/parent" replace />
+    return <Navigate to="/login" replace />
   }
 
   return <Navigate to={role === 'Child' ? '/child' : '/parent'} replace />
@@ -33,8 +33,9 @@ export default function App() {
         <AuthBootstrap />
         <Routes>
           <Route path="/" element={<LandingPage />} />
-          <Route path="/login/parent" element={<LoginPage variant="parent" />} />
-          <Route path="/login/child" element={<LoginPage variant="child" />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/login/parent" element={<Navigate to="/login" replace />} />
+          <Route path="/login/child" element={<Navigate to="/login" replace />} />
           <Route path="/login/parent/google/callback" element={<ParentGoogleCallbackPage />} />
           <Route path="/login/child/google/callback" element={<ChildGoogleCallbackPage />} />
 
