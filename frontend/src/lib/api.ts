@@ -636,3 +636,7 @@ export async function acceptChildFriendInvite(accessToken: string, token: string
     method: 'POST',
   }))
 }
+
+export async function getFriendResults(accessToken: string, friendChildId: string): Promise<ResultListItem[]> {
+  return request<ResultListItem[]>(`/api/v1/child/friends/${friendChildId}/results`, withAuth(accessToken))
+}

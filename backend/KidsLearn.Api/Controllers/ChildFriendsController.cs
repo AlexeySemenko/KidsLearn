@@ -66,6 +66,21 @@ public static class ChildFriendsController
             };
         });
 
+        friendsApi.MapGet("/{friendChildId:guid}/results", async (AppDbContext db, ISender sender, ClaimsPrincipal user, Guid friendChildId) =>
+        {
+            var childId = await ApiEndpointHelpers.ResolveChildIdAsync(db, user);
+            if (!childId.HasValue) return Results.Unauthorized();
+
+            var result = await sender.Send(new GetFriendResultsQuery(childId.Value, friendChildId));
+
+            return result.StatusCode switch
+            {
+                StatusCodes.Status200OK when result.Results is not null => Results.Ok(result.Results),
+                StatusCodes.Status403Forbidden => Results.Forbid(),
+                _ => Results.Problem(result.Error ?? "Unexpected error.")
+            };
+        });
+
         return childApi;
     }
 }

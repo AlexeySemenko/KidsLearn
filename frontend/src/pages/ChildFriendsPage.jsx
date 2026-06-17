@@ -1,14 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
-import { getChildFriends, sendChildFriendInvite } from '../lib/api'
+import ChildStatsPanel from '../components/ChildStatsPanel'
+import { getFriendResults, getChildFriends, sendChildFriendInvite } from '../lib/api'
 
 const FRIEND_EMOJIS = ['🐼', '🦊', '🐸', '🦁', '🐨', '🐯', '🦄', '🐻', '🐙', '🦋']
 const FRIEND_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#84cc16']
-
-function formatDate(value) {
-  if (!value) return ''
-  return new Date(value).toLocaleDateString()
-}
 
 export default function ChildFriendsPage() {
   const { session } = useAuth()
@@ -23,6 +19,8 @@ export default function ChildFriendsPage() {
   const [inviteSuccess, setInviteSuccess] = useState('')
 
   const [selectedFriend, setSelectedFriend] = useState(null)
+  const [friendResults, setFriendResults] = useState([])
+  const [friendResultsLoading, setFriendResultsLoading] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -40,6 +38,26 @@ export default function ChildFriendsPage() {
     load()
     return () => { mounted = false }
   }, [session?.accessToken])
+
+  async function handleFriendClick(friend) {
+    if (selectedFriend?.friendshipId === friend.friendshipId) {
+      setSelectedFriend(null)
+      setFriendResults([])
+      return
+    }
+
+    setSelectedFriend(friend)
+    setFriendResults([])
+    setFriendResultsLoading(true)
+    try {
+      const results = await getFriendResults(session.accessToken, friend.childId)
+      setFriendResults(results)
+    } catch {
+      setFriendResults([])
+    } finally {
+      setFriendResultsLoading(false)
+    }
+  }
 
   async function handleSendInvite(event) {
     event.preventDefault()
@@ -92,20 +110,36 @@ export default function ChildFriendsPage() {
       ) : null}
 
       {!isLoading && friends.length > 0 ? (
-        <div className="parent-dash-pillars" style={{ flexWrap: 'wrap', gap: '1rem' }}>
+        <div className="parent-dash-pillars" style={{ flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
           {friends.map((friend, i) => (
             <button
               key={friend.friendshipId}
               type="button"
-              className="parent-child-pillar"
+              className={`parent-child-pillar${selectedFriend?.friendshipId === friend.friendshipId ? ' is-active' : ''}`}
               style={{ '--pillar-color': FRIEND_COLORS[i % FRIEND_COLORS.length] }}
-              onClick={() => setSelectedFriend(friend)}
+              onClick={() => handleFriendClick(friend)}
             >
               <span className="pillar-avatar">{FRIEND_EMOJIS[i % FRIEND_EMOJIS.length]}</span>
               <span className="pillar-name">{friend.name}</span>
               <span className="pillar-grade">Grade {friend.grade}</span>
+              {selectedFriend?.friendshipId === friend.friendshipId ? (
+                <span className="pillar-active-hint">tap to close</span>
+              ) : null}
             </button>
           ))}
+        </div>
+      ) : null}
+
+      {selectedFriend ? (
+        <div className="parent-child-stats-view">
+          <div className="parent-child-stats-header">
+            <h3>
+              {FRIEND_EMOJIS[friends.findIndex((f) => f.friendshipId === selectedFriend.friendshipId) % FRIEND_EMOJIS.length]}{' '}
+              {selectedFriend.name}'s progress
+            </h3>
+            <span className="badge">Grade {selectedFriend.grade}</span>
+          </div>
+          <ChildStatsPanel results={friendResults} isLoading={friendResultsLoading} pendingCount={0} />
         </div>
       ) : null}
 
@@ -150,38 +184,6 @@ export default function ChildFriendsPage() {
                 </div>
               </form>
             )}
-          </section>
-        </div>
-      ) : null}
-
-      {/* Friend detail modal */}
-      {selectedFriend ? (
-        <div className="modal-overlay" role="presentation">
-          <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="friend-detail-title">
-            <div className="children-list-header modal-header">
-              <div>
-                <h3 id="friend-detail-title">
-                  {FRIEND_EMOJIS[friends.indexOf(selectedFriend) % FRIEND_EMOJIS.length]} {selectedFriend.name}
-                </h3>
-                <p>Friend details</p>
-              </div>
-              <button type="button" className="button-secondary" onClick={() => setSelectedFriend(null)}>Close</button>
-            </div>
-
-            <div className="child-detail-grid" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0.5rem 0' }}>
-              <div className="child-detail-row">
-                <span className="child-meta">Grade</span>
-                <strong>{selectedFriend.grade}</strong>
-              </div>
-              <div className="child-detail-row">
-                <span className="child-meta">Friends since</span>
-                <strong>{formatDate(selectedFriend.friendsSince)}</strong>
-              </div>
-            </div>
-
-            <div className="button-row modal-actions">
-              <button type="button" className="button-secondary" onClick={() => setSelectedFriend(null)}>Close</button>
-            </div>
           </section>
         </div>
       ) : null}
