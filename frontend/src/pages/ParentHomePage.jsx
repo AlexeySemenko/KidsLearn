@@ -1,11 +1,30 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { getAssignments, getChildren, getLessons, getParentChildResults } from '../lib/api'
-import ChildStatsPanel from '../components/ChildStatsPanel'
+import ChildStatsPanel, { SUBJECT_EMOJI, scoreEmoji, scoreVariant } from '../components/ChildStatsPanel'
 
 const PILLAR_COLORS = ['#60a5fa', '#34d399', '#a78bfa', '#f87171', '#fbbf24', '#fb923c']
 const PILLAR_EMOJIS = ['🦊', '🐻', '🐼', '🦁', '🐸', '🦋']
+
+const STATUS_PILL = {
+  Assigned:   { cls: 'status-new', label: '✨ Assigned' },
+  InProgress: { cls: '',           label: '⚡ In progress' },
+  Completed:  { cls: 'status-success', label: '✅ Done' },
+}
+
+function formatRelative(iso) {
+  if (!iso) return ''
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins  = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days  = Math.floor(diff / 86400000)
+  if (mins < 2)   return 'just now'
+  if (mins < 60)  return `${mins}m ago`
+  if (hours < 24) return `${hours}h ago`
+  if (days < 7)   return `${days}d ago`
+  return new Date(iso).toLocaleDateString()
+}
 
 export default function ParentHomePage() {
   const { session } = useAuth()
@@ -81,6 +100,24 @@ export default function ParentHomePage() {
     ? 0
     : Math.round((completedAssignments / assignments.length) * 100)
 
+  const recentLessons = useMemo(() =>
+    [...lessons].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 3),
+    [lessons])
+
+  const recentAssigned = useMemo(() =>
+    [...assignments]
+      .filter((a) => a.status !== 'Completed')
+      .sort((a, b) => new Date(b.assignedAt) - new Date(a.assignedAt))
+      .slice(0, 3),
+    [assignments])
+
+  const recentSolved = useMemo(() =>
+    [...assignments]
+      .filter((a) => a.status === 'Completed')
+      .sort((a, b) => new Date(b.assignedAt) - new Date(a.assignedAt))
+      .slice(0, 3),
+    [assignments])
+
   return (
     <section className="parent-dash-page">
       {error ? <div className="alert" style={{ marginBottom: '1rem' }}>{error}</div> : null}
@@ -102,7 +139,7 @@ export default function ParentHomePage() {
                 <span className="pillar-name">{child.name}</span>
                 <span className="pillar-grade">Grade {child.grade}</span>
                 {selectedChildId === child.id ? (
-                  <span className="pillar-active-hint">tap to go back</span>
+                  <span className="pillar-active-hint">tap to close</span>
                 ) : null}
               </button>
             ))}
@@ -124,22 +161,22 @@ export default function ParentHomePage() {
         </div>
       ) : (
         <>
-          {/* ── Parent overview stats ── */}
           {isLoading ? (
             <p className="children-empty" style={{ padding: '2rem 0' }}>Loading dashboard...</p>
           ) : (
             <>
+              {/* ── Overview stats ── */}
               <div className="parent-overview-grid">
-                <div className="parent-overview-card" data-accent="blue">
+                <Link to="/parent/children" className="parent-overview-card parent-overview-card--link" data-accent="blue">
                   <span className="parent-ov-icon">👦</span>
                   <span className="parent-ov-value">{children.length}</span>
                   <span className="parent-ov-label">Children</span>
-                </div>
-                <div className="parent-overview-card" data-accent="green">
+                </Link>
+                <Link to="/parent/lessons" className="parent-overview-card parent-overview-card--link" data-accent="green">
                   <span className="parent-ov-icon">📚</span>
                   <span className="parent-ov-value">{lessons.length}</span>
                   <span className="parent-ov-label">Lessons</span>
-                </div>
+                </Link>
                 <div className="parent-overview-card" data-accent="yellow">
                   <span className="parent-ov-icon">✅</span>
                   <span className="parent-ov-value">{completionRate}%</span>
@@ -152,18 +189,75 @@ export default function ParentHomePage() {
                 </div>
               </div>
 
-              <div className="parent-dash-actions-card">
-                <div className="children-list-header">
-                  <div>
-                    <h3>Quick actions</h3>
-                    <p>Open the target workspace in one click.</p>
+              {/* ── Recent activity ── */}
+              <div className="parent-dash-recent-grid">
+                {/* Last created lessons */}
+                <div className="parent-dash-recent-card">
+                  <div className="parent-dash-recent-header">
+                    <h4>📚 Recent lessons</h4>
+                    <Link to="/parent/lessons" className="parent-dash-recent-link">View all →</Link>
                   </div>
+                  {recentLessons.length === 0 ? (
+                    <p className="parent-dash-recent-empty">No lessons yet.</p>
+                  ) : recentLessons.map((lesson) => (
+                    <div key={lesson.id} className="parent-dash-recent-item">
+                      <div className="parent-dash-recent-main">
+                        <span className="parent-dash-recent-title">
+                          {SUBJECT_EMOJI[lesson.subject] || '📚'} {lesson.title}
+                        </span>
+                        <span className="parent-dash-recent-meta">Grade {lesson.grade} · {lesson.subject}</span>
+                      </div>
+                      <span className="parent-dash-recent-time">{formatRelative(lesson.createdAt)}</span>
+                    </div>
+                  ))}
                 </div>
-                <div className="button-row">
-                  <Link className="button-secondary inline-link" to="/parent/children">Manage children</Link>
-                  <Link className="button-secondary inline-link" to="/parent/lessons">Manage lessons</Link>
-                  <Link className="button-secondary inline-link" to="/parent/assignments">Assignments</Link>
-                  <Link className="button-secondary inline-link" to="/parent/reports">Reports</Link>
+
+                {/* Last assigned */}
+                <div className="parent-dash-recent-card">
+                  <div className="parent-dash-recent-header">
+                    <h4>📋 Recently assigned</h4>
+                    <Link to="/parent/assignments" className="parent-dash-recent-link">View all →</Link>
+                  </div>
+                  {recentAssigned.length === 0 ? (
+                    <p className="parent-dash-recent-empty">No active assignments.</p>
+                  ) : recentAssigned.map((a) => (
+                    <div key={a.id} className="parent-dash-recent-item">
+                      <div className="parent-dash-recent-main">
+                        <span className="parent-dash-recent-title">{a.childName}</span>
+                        <span className="parent-dash-recent-meta">
+                          {SUBJECT_EMOJI[a.lessonSubject] || '📚'} {a.lessonTitle}
+                        </span>
+                      </div>
+                      <span className={`assignment-status-pill ${STATUS_PILL[a.status]?.cls ?? ''}`} style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem' }}>
+                        {STATUS_PILL[a.status]?.label ?? a.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Last solved */}
+                <div className="parent-dash-recent-card">
+                  <div className="parent-dash-recent-header">
+                    <h4>🏆 Recently solved</h4>
+                    <Link to="/parent/assignments" className="parent-dash-recent-link">View all →</Link>
+                  </div>
+                  {recentSolved.length === 0 ? (
+                    <p className="parent-dash-recent-empty">No completed assignments yet.</p>
+                  ) : recentSolved.map((a) => (
+                    <div key={a.id} className="parent-dash-recent-item">
+                      <div className="parent-dash-recent-main">
+                        <span className="parent-dash-recent-title">{a.childName}</span>
+                        <span className="parent-dash-recent-meta">
+                          {SUBJECT_EMOJI[a.lessonSubject] || '📚'} {a.lessonTitle}
+                        </span>
+                      </div>
+                      {a.score != null ? (
+                        <span className={`assignment-status-pill ${scoreVariant(a.score)}`} style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem' }}>
+                          {scoreEmoji(a.score)} {a.score}%
+                        </span>
+                      ) : null}
+                    </div>
+                  ))}
                 </div>
               </div>
             </>

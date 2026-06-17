@@ -2546,6 +2546,16 @@ select.input:invalid {
     z-index: 35;
   }
 
+  .topbar {
+    display: none;
+  }
+
+  .mobile-shell-page-title {
+    font-size: 0.85rem;
+    font-weight: 500;
+    opacity: 0.65;
+  }
+
   .mobile-user-slot {
     display: block;
   }
@@ -2584,7 +2594,7 @@ select.input:invalid {
   }
 
   .shell-main {
-    padding: 0.75rem;
+    padding: 0.75rem 0.75rem 3rem;
   }
 
   .sidebar {
@@ -3510,9 +3520,7 @@ select.input:invalid {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  max-width: 1100px;
-  margin: 0 auto;
-  width: 100%;
+  padding-bottom: 2rem;
 }
 
 /* ── Children pillars ── */
@@ -3654,6 +3662,136 @@ select.input:invalid {
   border: 1px solid var(--border);
   background: var(--panel-soft);
   padding: 1.5rem;
+}
+
+/* ── Overview card link variant ── */
+.parent-overview-card--link {
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.parent-overview-card--link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.parent-overview-card--link .parent-ov-value,
+.parent-overview-card--link .parent-ov-label {
+  color: inherit;
+}
+
+/* ── Recent activity grid ── */
+.parent-dash-recent-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.parent-dash-recent-card {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.parent-dash-recent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.parent-dash-recent-header h4 {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.parent-dash-recent-link {
+  font-size: 0.72rem;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+  opacity: 0.8;
+  transition: opacity 0.15s;
+}
+
+.parent-dash-recent-link:hover { opacity: 1; }
+
+.parent-dash-recent-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.parent-dash-recent-item:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.parent-dash-recent-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.parent-dash-recent-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.parent-dash-recent-meta {
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.parent-dash-recent-time {
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.parent-dash-recent-empty {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0;
+  padding: 0.25rem 0;
+}
+
+@media (max-width: 900px) {
+  .parent-dash-recent-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Light mode: recent cards ── */
+:root[data-theme='light'] .parent-dash-recent-card {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+:root[data-theme='light'] .parent-overview-card--link:hover {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
 }
 
 /* ── Child stats panel wrapper ── */

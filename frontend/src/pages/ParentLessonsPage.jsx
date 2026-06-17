@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { deleteLesson, duplicateLesson, getLesson, getLessons, updateLesson } from '../lib/api'
+import { createAssignment, deleteLesson, duplicateLesson, getChildren, getLesson, getLessons, updateLesson } from '../lib/api'
 import { useAuth } from '../auth/AuthProvider'
 import AiLessonGenerationModal from '../components/AiLessonGenerationModal'
 import LessonViewModal from '../components/LessonViewModal'
+import CreateAssignmentModal from '../components/CreateAssignmentModal'
 
 const LESSONS_FILTERS_STORAGE_KEY = 'kidslearn.parent.lessons.filters.v1'
 
@@ -64,6 +65,12 @@ export default function ParentLessonsPage() {
   const [viewingLesson, setViewingLesson] = useState(null)
   const [isLoadingView, setIsLoadingView] = useState(false)
   const [viewError, setViewError] = useState('')
+
+  const [children, setChildren] = useState([])
+  const [showAssignModal, setShowAssignModal] = useState(false)
+  const [assignPreselectedLessonId, setAssignPreselectedLessonId] = useState('')
+  const [isCreatingAssignment, setIsCreatingAssignment] = useState(false)
+  const [assignError, setAssignError] = useState('')
 
   const availableGrades = useMemo(() => {
     return [...new Set(lessons.map((lesson) => String(lesson.grade)))].sort((a, b) => Number(a) - Number(b))
@@ -138,9 +145,13 @@ export default function ParentLessonsPage() {
       try {
         setError('')
         setStatusMessage('')
-        const response = await getLessons(session.accessToken)
+        const [lessonsResponse, childrenData] = await Promise.all([
+          getLessons(session.accessToken),
+          getChildren(session.accessToken),
+        ])
         if (isMounted) {
-          setLessons(response.items)
+          setLessons(lessonsResponse.items)
+          setChildren(childrenData)
         }
       } catch (requestError) {
         if (isMounted) {
@@ -324,6 +335,23 @@ export default function ParentLessonsPage() {
     setStatusMessage(`AI lesson "${draft.title}" was generated.`)
     setIsAiModalOpen(false)
     setViewingLesson(draft)
+    setAssignPreselectedLessonId(draft.id)
+    setAssignError('')
+    setShowAssignModal(true)
+  }
+
+  async function handleCreateAssignment(payload) {
+    setIsCreatingAssignment(true)
+    setAssignError('')
+    try {
+      await createAssignment(session.accessToken, payload)
+      setShowAssignModal(false)
+      setStatusMessage('Assignment created.')
+    } catch (err) {
+      setAssignError(err.message)
+    } finally {
+      setIsCreatingAssignment(false)
+    }
   }
 
   return (
@@ -501,6 +529,18 @@ export default function ParentLessonsPage() {
         title="Generate AI lesson"
         description="Create a lesson draft from prompt settings without leaving lessons."
       />
+
+      {showAssignModal ? (
+        <CreateAssignmentModal
+          children={children}
+          lessons={lessons}
+          preselectedLessonId={assignPreselectedLessonId}
+          onSave={handleCreateAssignment}
+          onClose={() => setShowAssignModal(false)}
+          isSaving={isCreatingAssignment}
+          error={assignError}
+        />
+      ) : null}
     </article>
   )
 }

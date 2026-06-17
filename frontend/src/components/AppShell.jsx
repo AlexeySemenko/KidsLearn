@@ -11,7 +11,6 @@ const navByRole = {
     { to: '/parent/children', label: 'Children' },
     { to: '/parent/lessons', label: 'Lessons' },
     { to: '/parent/assignments', label: 'Assignments' },
-    { to: '/parent/ai', label: 'AI Lessons' },
     { to: '/parent/reports', label: 'Reports' },
     { to: '/parent/manage', label: 'Link parent' },
   ],
@@ -24,7 +23,6 @@ const navByRole = {
     { to: '/parent/children', label: 'Children' },
     { to: '/parent/lessons', label: 'Lessons' },
     { to: '/parent/assignments', label: 'Assignments' },
-    { to: '/parent/ai', label: 'AI Lessons' },
     { to: '/parent/reports', label: 'Reports' },
     { to: '/parent/manage', label: 'Link parent' },
     { to: '/admin/users', label: 'Users', adminBadge: true },
@@ -221,7 +219,10 @@ export default function AppShell() {
   return (
     <div className={`app-shell${isSidebarOpen ? ' nav-open' : ''}${role === 'Child' ? ' child-shell' : ''}`}>
       <div className="mobile-shell-bar">
-        <span className="mobile-shell-title">KidsLearnAI</span>
+        <span className="mobile-shell-title">
+          KidsLearnAI
+          {pageTitle ? <span className="mobile-shell-page-title"> › {pageTitle}</span> : null}
+        </span>
 
         <div className="mobile-shell-bar-right">
           {/* User menu visible only on mobile, no role badge */}

@@ -13,7 +13,6 @@ import ParentAssignmentsPage from './pages/ParentAssignmentsPage'
 import ParentHomePage from './pages/ParentHomePage'
 import ParentLessonsPage from './pages/ParentLessonsPage'
 import ChildResultsPage from './pages/ChildResultsPage'
-import ParentAiGenerationPage from './pages/ParentAiGenerationPage'
 import ParentReportsPage from './pages/ParentReportsPage'
 import ParentManagePage from './pages/ParentManagePage'
 
@@ -61,7 +60,6 @@ export default function App() {
                 path="reports"
                 element={<ParentReportsPage />}
               />
-              <Route path="ai" element={<ParentAiGenerationPage />} />
               <Route path="manage" element={<ParentManagePage />} />
             </Route>
           </Route>
