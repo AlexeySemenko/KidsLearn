@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 
@@ -40,29 +41,100 @@ function toNameOnly(value) {
   return `${firstToken.charAt(0).toUpperCase()}${firstToken.slice(1)}`
 }
 
+function UserMenu({ displayName, userInitial, role, user, isOpen, onToggle, onLogout, showRole }) {
+  const btnRef = useRef(null)
+  const [dropdownStyle, setDropdownStyle] = useState({})
+
+  useEffect(() => {
+    if (isOpen && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      setDropdownStyle({
+        position: 'fixed',
+        top: rect.bottom + 6,
+        right: window.innerWidth - rect.right,
+      })
+    }
+  }, [isOpen])
+
+  return (
+    <div className="user-menu">
+      <button
+        ref={btnRef}
+        type="button"
+        className="user-avatar-btn"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        aria-haspopup="true"
+      >
+        <span className="user-avatar-initial" aria-hidden="true">{userInitial}</span>
+        <span className="user-avatar-name">{displayName || user?.email}</span>
+        {showRole ? <span className="user-avatar-role">{role}</span> : null}
+      </button>
+
+      {isOpen ? createPortal(
+        <div className="user-dropdown" role="menu" style={dropdownStyle} data-user-dropdown="true">
+          <div className="user-dropdown-header">
+            <strong>{displayName || '—'}</strong>
+            {user?.email ? <span>{user.email}</span> : null}
+            <span className="user-dropdown-role">{role}</span>
+          </div>
+          <hr className="user-dropdown-divider" />
+          <button
+            type="button"
+            className="user-dropdown-item"
+            role="menuitem"
+            onClick={onLogout}
+          >
+            Log out
+          </button>
+        </div>,
+        document.body
+      ) : null}
+    </div>
+  )
+}
+
 export default function AppShell() {
   const location = useLocation()
   const { logout, role, user } = useAuth()
   const navItems = navByRole[role] ?? []
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [themeMode, setThemeMode] = useState('system')
   const [prefersDark, setPrefersDark] = useState(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
       return false
     }
-
     return window.matchMedia('(prefers-color-scheme: dark)').matches
   })
 
   const resolvedTheme = themeMode === 'system' ? (prefersDark ? 'dark' : 'light') : themeMode
   const displayName = toNameOnly(user?.displayName) || toNameOnly(user?.email)
-  const shellTitle = role === 'Child'
-    ? `Hello, ${displayName || 'learner'}!`
-    : (displayName || 'KidsLearn session')
+  const userInitial = (displayName || user?.email || '?').charAt(0).toUpperCase()
+
+  const currentNavItem = navItems
+    .filter((item) => location.pathname === item.to || location.pathname.startsWith(item.to + '/'))
+    .sort((a, b) => b.to.length - a.to.length)[0]
+  const pageTitle = currentNavItem?.label ?? ''
 
   useEffect(() => {
     setIsSidebarOpen(false)
   }, [location.pathname, role])
+
+  useEffect(() => {
+    if (!isUserMenuOpen) {
+      return undefined
+    }
+
+    function handleClickOutside(event) {
+      if (!event.target.closest('.user-menu') && !event.target.closest('[data-user-dropdown]')) {
+        setIsUserMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isUserMenuOpen])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -117,20 +189,47 @@ export default function AppShell() {
     })
   }
 
+  function handleUserMenuToggle() {
+    setIsUserMenuOpen((v) => !v)
+  }
+
+  function handleLogout() {
+    setIsUserMenuOpen(false)
+    logout()
+  }
+
+  const userMenuProps = {
+    displayName,
+    userInitial,
+    role,
+    user,
+    isOpen: isUserMenuOpen,
+    onToggle: handleUserMenuToggle,
+    onLogout: handleLogout,
+  }
+
   return (
     <div className={`app-shell${isSidebarOpen ? ' nav-open' : ''}${role === 'Child' ? ' child-shell' : ''}`}>
       <div className="mobile-shell-bar">
         <span className="mobile-shell-title">{role === 'Child' ? 'Child workspace' : 'Parent workspace'}</span>
-        <button
-          type="button"
-          className="mobile-menu-button"
-          aria-expanded={isSidebarOpen}
-          aria-controls="app-sidebar-nav"
-          aria-label={isSidebarOpen ? 'Close navigation menu' : 'Open navigation menu'}
-          onClick={() => setIsSidebarOpen((current) => !current)}
-        >
-          <span aria-hidden="true">{isSidebarOpen ? '×' : '☰'}</span>
-        </button>
+
+        <div className="mobile-shell-bar-right">
+          {/* User menu visible only on mobile, no role badge */}
+          <div className="mobile-user-slot">
+            <UserMenu {...userMenuProps} showRole={false} />
+          </div>
+
+          <button
+            type="button"
+            className="mobile-menu-button"
+            aria-expanded={isSidebarOpen}
+            aria-controls="app-sidebar-nav"
+            aria-label={isSidebarOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            onClick={() => setIsSidebarOpen((current) => !current)}
+          >
+            <span aria-hidden="true">{isSidebarOpen ? '×' : '☰'}</span>
+          </button>
+        </div>
       </div>
 
       {isSidebarOpen ? (
@@ -146,9 +245,6 @@ export default function AppShell() {
         <div className="brand">
           <span className="brand-kicker">KidsLearn Platform</span>
           <span className="brand-title">{role === 'Child' ? 'Child workspace' : 'Parent workspace'}</span>
-          <span className="brand-copy">
-            Single-container app shell for the first frontend delivery slice.
-          </span>
         </div>
 
         <nav id="app-sidebar-nav">
@@ -182,7 +278,7 @@ export default function AppShell() {
         </div>
       </aside>
 
-      <main className={`content${role === 'Child' ? ' child-shell-content' : ''}`}>
+      <div className={`content${role === 'Child' ? ' child-shell-content' : ''}`}>
         {role === 'Child' ? (
           <div className="child-shell-bubbles" aria-hidden="true">
             <span className="child-shell-bubble c1">⭐</span>
@@ -194,28 +290,19 @@ export default function AppShell() {
           </div>
         ) : null}
 
-        <header className={`header${role === 'Child' ? ' child-shell-header' : ''}`}>
-          <div className="header-copy">
-            <span className="header-eyebrow">{role === 'Child' ? 'Learning adventure' : 'Authenticated shell'}</span>
-            <h1>{shellTitle}</h1>
-            <p>
-              {role === 'Child'
-                ? 'Your missions, progress, and results all live here. Pick a mission and have fun learning.'
-                : `Route: ${location.pathname}. This foundation now supports role-aware navigation,
-              persisted auth state, and clean next steps for dashboard screens.`}
-            </p>
-          </div>
+        <div className="topbar">
+          <span className="topbar-title">{pageTitle}</span>
 
-          <div className="button-row">
-            <span className="badge">Role: {role ?? 'Unknown'}</span>
-            <button type="button" className="logout-button" onClick={logout}>
-              Log out
-            </button>
+          {/* User menu visible only on desktop, with role badge */}
+          <div className="desktop-user-slot">
+            <UserMenu {...userMenuProps} showRole={true} />
           </div>
-        </header>
+        </div>
 
-        <Outlet />
-      </main>
+        <main className="shell-main">
+          <Outlet />
+        </main>
+      </div>
     </div>
   )
 }

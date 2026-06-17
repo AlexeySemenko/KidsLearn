@@ -8,16 +8,33 @@ public sealed record SubmitAssignmentAnswersResponse(List<InstantCheckItemRespon
 
 public sealed record CompleteAssignmentResponse(Guid ResultId, decimal Score, DateTime CompletedAt, int CorrectAnswers, int TotalQuestions);
 
-public sealed record ResultBreakdownItemResponse(Guid QuestionId, bool Correct);
+public sealed record ResultBreakdownAnswerResponse(Guid AnswerId, string AnswerText, bool IsCorrect);
+
+public sealed record ResultBreakdownItemResponse(
+    Guid QuestionId,
+    string QuestionText,
+    bool Correct,
+    Guid? SelectedAnswerOptionId,
+    List<ResultBreakdownAnswerResponse> Answers);
 
 public sealed record ResultDetailResponse(
     Guid ResultId,
     Guid AssignmentId,
+    string LessonTitle,
     decimal Score,
     DateTime CompletedAt,
     int CorrectAnswers,
     int TotalQuestions,
     List<ResultBreakdownItemResponse> Breakdown);
+
+public sealed record ResultListItemResponse(
+    Guid ResultId,
+    Guid AssignmentId,
+    string LessonTitle,
+    decimal Score,
+    DateTime CompletedAt,
+    int CorrectAnswers,
+    int TotalQuestions);
 
 public sealed record AssignmentQuestionAnswerResponse(Guid AnswerId, string AnswerText, int Order);
 

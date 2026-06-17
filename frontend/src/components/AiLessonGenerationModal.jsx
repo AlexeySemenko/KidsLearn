@@ -1,20 +1,30 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { generateParentAiLesson } from '../lib/api'
 
+const SUBJECTS = ['Math', 'English', 'Hebrew']
+const DIFFICULTIES = ['Easy', 'Medium', 'Hard']
+const LANGUAGES = ['English', 'Hebrew', 'Russian']
+const QUESTION_TYPE_OPTIONS = [
+  { value: 'mixed',       label: 'Mixed' },
+  { value: 'multiple-4',  label: 'Multiple choice (4 options)' },
+  { value: 'multiple-2',  label: 'Multiple choice (2 options)' },
+]
+
 const emptyForm = {
-  subject: '',
-  grade: '3',
+  subject: 'Math',
+  grade: '2',
   topic: '',
-  questionCount: '5',
+  questionCount: '10',
   difficulty: 'Medium',
   language: 'English',
-  questionTypes: '',
+  questionTypes: 'mixed',
 }
 
 function validateAiForm(form) {
-  if (!form.subject.trim() || !form.topic.trim()) {
-    return 'Subject and topic are required.'
+  if (!form.topic.trim()) {
+    return 'Topic is required.'
   }
 
   const grade = Number(form.grade)
@@ -30,11 +40,10 @@ function validateAiForm(form) {
   return null
 }
 
-function parseQuestionTypes(value) {
-  return value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean)
+function resolveQuestionTypes(value) {
+  if (value === 'multiple-4') return ['multiple-choice']
+  if (value === 'multiple-2') return ['true-false']
+  return null
 }
 
 export default function AiLessonGenerationModal({
@@ -49,7 +58,6 @@ export default function AiLessonGenerationModal({
   const [form, setForm] = useState(emptyForm)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState('')
-  const [status, setStatus] = useState('')
   const [providerMeta, setProviderMeta] = useState(null)
 
   useEffect(() => {
@@ -58,14 +66,14 @@ export default function AiLessonGenerationModal({
     }
 
     function handleKeyDown(event) {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !isGenerating) {
         handleClose()
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen])
+  }, [isOpen, isGenerating])
 
   if (!isOpen) {
     return null
@@ -79,7 +87,6 @@ export default function AiLessonGenerationModal({
     setForm(emptyForm)
     setIsGenerating(false)
     setError('')
-    setStatus('')
     setProviderMeta(null)
     onClose()
   }
@@ -94,40 +101,32 @@ export default function AiLessonGenerationModal({
     const validationError = validateAiForm(form)
     if (validationError) {
       setError(validationError)
-      setStatus('')
       return
     }
 
     setError('')
-    setStatus('')
     setProviderMeta(null)
     setIsGenerating(true)
 
     try {
-      const questionTypes = parseQuestionTypes(form.questionTypes)
       const response = await generateParentAiLesson(session.accessToken, {
-        subject: form.subject.trim(),
+        subject: form.subject,
         grade: Number(form.grade),
         topic: form.topic.trim(),
         questionCount: Number(form.questionCount),
-        difficulty: form.difficulty.trim() || null,
-        language: form.language.trim() || null,
-        questionTypes: questionTypes.length > 0 ? questionTypes : null,
+        difficulty: form.difficulty,
+        language: form.language,
+        questionTypes: resolveQuestionTypes(form.questionTypes),
       })
 
       setProviderMeta(response.providerMeta)
-      if (response.providerMeta.fallbackUsed) {
-        setStatus('Lesson generated with fallback mode.')
-      } else {
-        setStatus('Lesson generated successfully.')
-      }
 
       if (typeof onGenerated === 'function') {
         onGenerated(response)
       }
     } catch (requestError) {
       if (requestError.status === 422) {
-        setError(`AI schema validation failed: ${requestError.message}`)
+        setError(`AI validation failed: ${requestError.message}`)
       } else {
         setError(requestError.message)
       }
@@ -136,134 +135,149 @@ export default function AiLessonGenerationModal({
     }
   }
 
-  return (
-    <div className="modal-overlay" role="presentation" onClick={handleClose}>
+  return createPortal(
+    <div className="modal-overlay" role="presentation">
       <section
         className="modal-card lesson-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby={`${idPrefix}-title`}
-        onClick={(event) => event.stopPropagation()}
       >
         <div className="children-list-header modal-header">
           <div>
             <h3 id={`${idPrefix}-title`}>{title}</h3>
             <p>{description}</p>
           </div>
-          <button type="button" className="button-secondary" onClick={handleClose}>Close</button>
+          <button type="button" className="button-secondary" onClick={handleClose} disabled={isGenerating}>Close</button>
         </div>
 
-        <form className="auth-form compact-form" onSubmit={handleGenerate}>
-          <div className="lessons-form-grid">
+        {isGenerating ? (
+          <div className="ai-generating">
+            <div className="ai-generating-rings">
+              <div className="ai-ring" />
+              <div className="ai-ring" />
+              <div className="ai-ring" />
+              <div className="ai-orb">AI</div>
+            </div>
+            <p className="ai-generating-label">Generating your lesson…</p>
+            <div className="ai-generating-dots">
+              <span /><span /><span />
+            </div>
+            {form.topic ? (
+              <p className="ai-generating-hint">
+                {form.subject} · Grade {form.grade}<br />{form.topic}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <form className="auth-form compact-form" onSubmit={handleGenerate}>
+            <div className="lessons-form-grid">
+              <div className="field">
+                <label htmlFor={`${idPrefix}-subject`}>Subject</label>
+                <select
+                  id={`${idPrefix}-subject`}
+                  className="input"
+                  value={form.subject}
+                  onChange={(event) => updateField('subject', event.target.value)}
+                >
+                  {SUBJECTS.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+
+              <div className="field">
+                <label htmlFor={`${idPrefix}-grade`}>Grade</label>
+                <input
+                  id={`${idPrefix}-grade`}
+                  className="input"
+                  type="number"
+                  min="1"
+                  max="12"
+                  value={form.grade}
+                  onChange={(event) => updateField('grade', event.target.value)}
+                  autoFocus
+                  required
+                />
+              </div>
+            </div>
+
             <div className="field">
-              <label htmlFor={`${idPrefix}-subject`}>Subject</label>
+              <label htmlFor={`${idPrefix}-topic`}>Topic</label>
               <input
-                id={`${idPrefix}-subject`}
+                id={`${idPrefix}-topic`}
                 className="input"
-                value={form.subject}
-                onChange={(event) => updateField('subject', event.target.value)}
-                placeholder="Math"
-                autoFocus
+                value={form.topic}
+                onChange={(event) => updateField('topic', event.target.value)}
+                placeholder="e.g. Equivalent fractions"
                 required
               />
             </div>
 
-            <div className="field">
-              <label htmlFor={`${idPrefix}-grade`}>Grade</label>
-              <input
-                id={`${idPrefix}-grade`}
-                className="input"
-                type="number"
-                min="1"
-                max="12"
-                value={form.grade}
-                onChange={(event) => updateField('grade', event.target.value)}
-                required
-              />
-            </div>
-          </div>
+            <div className="lessons-form-grid">
+              <div className="field">
+                <label htmlFor={`${idPrefix}-question-count`}>Questions</label>
+                <input
+                  id={`${idPrefix}-question-count`}
+                  className="input"
+                  type="number"
+                  min="1"
+                  max="25"
+                  value={form.questionCount}
+                  onChange={(event) => updateField('questionCount', event.target.value)}
+                  required
+                />
+              </div>
 
-          <div className="field">
-            <label htmlFor={`${idPrefix}-topic`}>Topic</label>
-            <input
-              id={`${idPrefix}-topic`}
-              className="input"
-              value={form.topic}
-              onChange={(event) => updateField('topic', event.target.value)}
-              placeholder="Equivalent fractions"
-              required
-            />
-          </div>
-
-          <div className="lessons-form-grid">
-            <div className="field">
-              <label htmlFor={`${idPrefix}-question-count`}>Question count</label>
-              <input
-                id={`${idPrefix}-question-count`}
-                className="input"
-                type="number"
-                min="1"
-                max="25"
-                value={form.questionCount}
-                onChange={(event) => updateField('questionCount', event.target.value)}
-                required
-              />
+              <div className="field">
+                <label htmlFor={`${idPrefix}-difficulty`}>Difficulty</label>
+                <select
+                  id={`${idPrefix}-difficulty`}
+                  className="input"
+                  value={form.difficulty}
+                  onChange={(event) => updateField('difficulty', event.target.value)}
+                >
+                  {DIFFICULTIES.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
             </div>
 
-            <div className="field">
-              <label htmlFor={`${idPrefix}-difficulty`}>Difficulty</label>
-              <input
-                id={`${idPrefix}-difficulty`}
-                className="input"
-                value={form.difficulty}
-                onChange={(event) => updateField('difficulty', event.target.value)}
-                placeholder="Medium"
-              />
+            <div className="lessons-form-grid">
+              <div className="field">
+                <label htmlFor={`${idPrefix}-language`}>Language</label>
+                <select
+                  id={`${idPrefix}-language`}
+                  className="input"
+                  value={form.language}
+                  onChange={(event) => updateField('language', event.target.value)}
+                >
+                  {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
+
+              <div className="field">
+                <label htmlFor={`${idPrefix}-question-types`}>Question type</label>
+                <select
+                  id={`${idPrefix}-question-types`}
+                  className="input"
+                  value={form.questionTypes}
+                  onChange={(event) => updateField('questionTypes', event.target.value)}
+                >
+                  {QUESTION_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
-          </div>
 
-          <div className="lessons-form-grid">
-            <div className="field">
-              <label htmlFor={`${idPrefix}-language`}>Language</label>
-              <input
-                id={`${idPrefix}-language`}
-                className="input"
-                value={form.language}
-                onChange={(event) => updateField('language', event.target.value)}
-                placeholder="English"
-              />
+            <div className="button-row modal-actions">
+              <button type="submit" className="button">Generate lesson</button>
+              <button type="button" className="button-secondary" onClick={handleClose}>Cancel</button>
             </div>
-
-            <div className="field">
-              <label htmlFor={`${idPrefix}-question-types`}>Question types</label>
-              <input
-                id={`${idPrefix}-question-types`}
-                className="input"
-                value={form.questionTypes}
-                onChange={(event) => updateField('questionTypes', event.target.value)}
-                placeholder="multiple-choice, true-false"
-              />
-            </div>
-          </div>
-
-          <div className="button-row modal-actions">
-            <button type="submit" className="button" disabled={isGenerating}>
-              {isGenerating ? 'Generating...' : 'Generate lesson'}
-            </button>
-            <button type="button" className="button-secondary" onClick={handleClose}>Cancel</button>
-          </div>
-        </form>
-
-        {status ? (
-          <div className="info-block success-block lessons-status-block" role="status" aria-live="polite">
-            <strong>Update</strong>
-            <span>{status}</span>
-            {providerMeta?.note ? <span>{providerMeta.note}</span> : null}
-          </div>
-        ) : null}
+          </form>
+        )}
 
         {error ? <div className="alert lessons-alert" role="alert" aria-live="assertive">{error}</div> : null}
       </section>
-    </div>
+    </div>,
+    document.body
   )
 }

@@ -23,6 +23,7 @@ public interface IAssignmentSolvingService
     Task<ServiceResult<SubmitAssignmentAnswersResponse>> SubmitAnswersAsync(AssignmentAccessScope scope, Guid scopeId, Guid assignmentId, SubmitAssignmentAnswersRequest request);
     Task<ServiceResult<CompleteAssignmentResponse>> CompleteAsync(AssignmentAccessScope scope, Guid scopeId, Guid assignmentId);
     Task<ServiceResult<ResultDetailResponse>> GetResultAsync(AssignmentAccessScope scope, Guid scopeId, Guid resultId);
+    Task<List<ResultListItemResponse>> GetResultsAsync(Guid childId);
 }
 
 public class AssignmentSolvingService(AppDbContext db) : IAssignmentSolvingService
@@ -236,10 +237,16 @@ public class AssignmentSolvingService(AppDbContext db) : IAssignmentSolvingServi
             ? await db.Results
                 .AsNoTracking()
                 .Include(x => x.Assignment)
+                    .ThenInclude(x => x.Lesson)
+                        .ThenInclude(x => x.Questions.OrderBy(q => q.Order))
+                            .ThenInclude(q => q.Answers.OrderBy(a => a.Order))
                 .FirstOrDefaultAsync(x => x.Id == resultId && parentScopeIds!.Contains(x.Assignment.Child.ParentId))
             : await db.Results
                 .AsNoTracking()
                 .Include(x => x.Assignment)
+                    .ThenInclude(x => x.Lesson)
+                        .ThenInclude(x => x.Questions.OrderBy(q => q.Order))
+                            .ThenInclude(q => q.Answers.OrderBy(a => a.Order))
                 .FirstOrDefaultAsync(x => x.Id == resultId && x.Assignment.ChildId == scopeId);
 
         if (result is null)
@@ -247,21 +254,60 @@ public class AssignmentSolvingService(AppDbContext db) : IAssignmentSolvingServi
             return ServiceResult<ResultDetailResponse>.Fail(404, "Result not found.");
         }
 
-        var breakdown = await db.AssignmentAnswers
+        var submittedAnswers = await db.AssignmentAnswers
             .AsNoTracking()
             .Where(x => x.AssignmentId == result.AssignmentId)
-            .OrderBy(x => x.SubmittedAt)
-            .Select(x => new ResultBreakdownItemResponse(x.QuestionId, x.IsCorrect))
             .ToListAsync();
+
+        var latestByQuestion = submittedAnswers
+            .GroupBy(x => x.QuestionId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.SubmittedAt).First());
+
+        var breakdown = result.Assignment.Lesson.Questions
+            .OrderBy(q => q.Order)
+            .Select(q =>
+            {
+                var submitted = latestByQuestion.GetValueOrDefault(q.Id);
+                var answers = q.Answers.OrderBy(a => a.Order)
+                    .Select(a => new ResultBreakdownAnswerResponse(a.Id, a.AnswerText, a.IsCorrect))
+                    .ToList();
+                return new ResultBreakdownItemResponse(
+                    q.Id,
+                    q.QuestionText,
+                    submitted?.IsCorrect ?? false,
+                    submitted?.SelectedAnswerOptionId,
+                    answers);
+            })
+            .ToList();
 
         return ServiceResult<ResultDetailResponse>.Success(new ResultDetailResponse(
             result.Id,
             result.AssignmentId,
+            result.Assignment.Lesson.Title,
             result.Score,
             result.CompletedAt,
             result.CorrectAnswers,
             result.TotalQuestions,
             breakdown));
+    }
+
+    public async Task<List<ResultListItemResponse>> GetResultsAsync(Guid childId)
+    {
+        return await db.Results
+            .AsNoTracking()
+            .Include(x => x.Assignment)
+                .ThenInclude(x => x.Lesson)
+            .Where(x => x.Assignment.ChildId == childId)
+            .OrderByDescending(x => x.CompletedAt)
+            .Select(x => new ResultListItemResponse(
+                x.Id,
+                x.AssignmentId,
+                x.Assignment.Lesson.Title,
+                x.Score,
+                x.CompletedAt,
+                x.CorrectAnswers,
+                x.TotalQuestions))
+            .ToListAsync();
     }
 
     private static System.Linq.Expressions.Expression<Func<Assignment, bool>> AccessPredicate(AssignmentAccessScope scope, Guid scopeId, Guid assignmentId, HashSet<Guid>? parentScopeIds)

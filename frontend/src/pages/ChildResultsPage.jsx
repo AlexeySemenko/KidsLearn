@@ -1,158 +1,180 @@
-import { useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
-import { getChildResultDetail } from '../lib/api'
+import { getChildResultDetail, getChildResults } from '../lib/api'
+import LessonViewModal from '../components/LessonViewModal'
 
 function formatDate(value) {
-  if (!value) {
-    return 'Unknown date'
-  }
+  if (!value) return 'Unknown date'
+  return new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
 
-  return new Date(value).toLocaleString()
+function scoreEmoji(score) {
+  if (score >= 90) return '🌟'
+  if (score >= 70) return '😊'
+  if (score >= 50) return '👍'
+  return '😅'
 }
 
 function scoreVariant(score) {
-  if (score >= 85) {
-    return 'status-success'
-  }
-
-  if (score >= 60) {
-    return ''
-  }
-
+  if (score >= 85) return 'status-success'
+  if (score >= 60) return ''
   return 'status-danger'
 }
 
 export default function ChildResultsPage() {
   const { session } = useAuth()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const initialResultId = searchParams.get('resultId') ?? ''
-  const [resultIdInput, setResultIdInput] = useState(initialResultId)
-  const [result, setResult] = useState(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [results, setResults] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const [viewingResult, setViewingResult] = useState(null)
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false)
 
-  const breakdown = useMemo(() => result?.breakdown ?? [], [result])
+  useEffect(() => {
+    let isMounted = true
 
-  async function handleLoadResult(event) {
-    event.preventDefault()
+    async function load() {
+      if (!session?.accessToken) {
+        if (isMounted) setIsLoading(false)
+        return
+      }
 
-    if (!session?.accessToken) {
-      return
+      try {
+        const data = await getChildResults(session.accessToken)
+        if (isMounted) setResults(data)
+      } catch (err) {
+        if (isMounted) setError(err.message)
+      } finally {
+        if (isMounted) setIsLoading(false)
+      }
     }
 
-    const normalizedResultId = resultIdInput.trim()
-    if (!normalizedResultId) {
-      setError('Result ID is required.')
-      setResult(null)
-      return
-    }
+    load()
+    return () => { isMounted = false }
+  }, [session?.accessToken])
 
-    setIsLoading(true)
+  async function handleView(resultId) {
+    if (!session?.accessToken) return
+    setIsLoadingDetail(true)
     setError('')
-
     try {
-      const response = await getChildResultDetail(session.accessToken, normalizedResultId)
-      setResult(response)
-      setSearchParams({ resultId: normalizedResultId })
-    } catch (requestError) {
-      setResult(null)
-      setError(requestError.message)
+      const detail = await getChildResultDetail(session.accessToken, resultId)
+      setViewingResult(detail)
+    } catch (err) {
+      setError(err.message)
     } finally {
-      setIsLoading(false)
+      setIsLoadingDetail(false)
     }
   }
 
   return (
-    <section className="panel-grid">
-      <article className="hero-card">
-        <div className="brand-kicker">Epic 4.3</div>
-        <h2>Child result details</h2>
-        <p>
-          Load a completed assignment result to review score and per-question correctness.
-          This screen calls the protected child result endpoint.
-        </p>
-        <div className="badge-row">
-          <span className="badge">GET /child/results/{'{resultId}'}</span>
-          <span className="badge">Child-only access</span>
-          <span className="badge">Score + breakdown</span>
-        </div>
-      </article>
-
-      <article className="panel-card assignments-form-card">
-        <h3>Open result</h3>
-        <p>Enter a result ID or use the View result details button after completing an assignment.</p>
-
-        <form className="auth-form compact-form" onSubmit={handleLoadResult}>
-          <div className="field">
-            <label htmlFor="result-id-input">Result ID</label>
-            <input
-              id="result-id-input"
-              className="input"
-              value={resultIdInput}
-              onChange={(event) => setResultIdInput(event.target.value)}
-              placeholder="00000000-0000-0000-0000-000000000000"
-              required
-            />
-          </div>
-
-          <button type="submit" className="button" disabled={isLoading}>
-            {isLoading ? 'Loading...' : 'Load result'}
-          </button>
-        </form>
-
-        {error ? <div className="alert assignments-alert">{error}</div> : null}
-      </article>
-
+    <section className="panel-grid child-panel-grid">
       <article className="assignments-list-card">
         <div className="children-list-header">
           <div>
-            <h3>Result detail</h3>
-            <p>Current result payload from the backend.</p>
+            <h3>My results</h3>
+            <p>All completed missions and your scores.</p>
           </div>
-          <span className="badge">{result ? 'Loaded' : 'Not loaded'}</span>
+          <span className="badge">{results.length} results</span>
         </div>
 
-        {!result ? (
-          <p className="children-empty">Load a result to see score and correctness breakdown.</p>
-        ) : (
+        {isLoading ? <p className="children-empty child-empty">Loading results...</p> : null}
+        {!isLoading && results.length === 0 && !error ? (
+          <p className="children-empty child-empty">No completed missions yet. Finish a mission to see your results here.</p>
+        ) : null}
+        {error ? <div className="alert assignments-alert">{error}</div> : null}
+
+        {!isLoading && results.length > 0 ? (
           <div className="children-list">
-            <article className="assignment-row">
+            {results.map((result) => (
+              <article key={result.resultId} className="assignment-row">
+                <div className="assignment-copy">
+                  <div className="assignment-topline">
+                    <div className="child-name">{result.lessonTitle}</div>
+                    <span className={`assignment-status-pill ${scoreVariant(result.score)}`}>
+                      {scoreEmoji(result.score)} {result.score}%
+                    </span>
+                  </div>
+                  <div className="assignment-timeline">
+                    <span className="assignment-meta-chip">Completed {formatDate(result.completedAt)}</span>
+                    <span className="assignment-meta-chip">{result.correctAnswers}/{result.totalQuestions} correct</span>
+                  </div>
+                </div>
+                <div className="button-row child-actions">
+                  <button
+                    type="button"
+                    className="button-secondary child-start-button"
+                    disabled={isLoadingDetail}
+                    onClick={() => handleView(result.resultId)}
+                  >
+                    {isLoadingDetail ? '⏳' : '📋 View result'}
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : null}
+      </article>
+
+      {viewingResult ? (
+        <LessonViewModal
+          title={viewingResult.lessonTitle}
+          subtitle={`${scoreEmoji(viewingResult.score)} ${viewingResult.score}% · ${viewingResult.correctAnswers}/${viewingResult.totalQuestions} correct`}
+          questions={viewingResult.breakdown}
+          onClose={() => setViewingResult(null)}
+          renderQuestion={(item, index) => (
+            <article key={item.questionId} className="assignment-row question-card">
               <div className="assignment-copy">
                 <div className="assignment-topline">
-                  <div className="child-name">Result {result.resultId}</div>
-                  <span className={`assignment-status-pill ${scoreVariant(result.score)}`}>Score {result.score}%</span>
+                  <div className="child-name">Question {index + 1}</div>
+                  <span className={`assignment-status-pill ${item.correct ? 'status-success' : 'status-danger'}`}>
+                    {item.correct ? '✅ Correct' : '❌ Incorrect'}
+                  </span>
                 </div>
 
-                <div className="child-meta">Assignment {result.assignmentId}</div>
-                <div className="assignment-timeline">
-                  <span className="assignment-meta-chip">Completed {formatDate(result.completedAt)}</span>
-                  <span className="assignment-meta-chip">Correct {result.correctAnswers}/{result.totalQuestions}</span>
+                <div>{item.questionText}</div>
+
+                <div className="question-options">
+                  {item.answers.map((answer) => {
+                    const wasSelected = answer.answerId === item.selectedAnswerOptionId
+                    const isCorrect = answer.isCorrect
+                    let cls = 'question-option'
+                    if (isCorrect) cls += ' correct-answer'
+                    if (wasSelected && !isCorrect) cls += ' wrong-selected'
+                    return (
+                      <div key={answer.answerId} className={cls}>
+                        <span>{answer.answerText}</span>
+                        {isCorrect ? <span className="answer-correct-badge">✓ Correct</span> : null}
+                        {wasSelected && !isCorrect ? <span className="answer-wrong-badge">✗ Your answer</span> : null}
+                        {wasSelected && isCorrect ? <span className="answer-correct-badge">✓ Your answer</span> : null}
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             </article>
-
-            {breakdown.length > 0 ? (
-              <article className="assignment-row">
-                <div className="assignment-copy">
-                  <div className="child-name">Question breakdown</div>
-                  <div className="children-list">
-                    {breakdown.map((item, index) => (
-                      <div key={`${item.questionId}-${index}`} className="assignment-timeline">
-                        <span className="assignment-meta-chip">Q{index + 1}</span>
-                        <span className={`assignment-status-pill ${item.correct ? 'status-success' : 'status-danger'}`}>
-                          {item.correct ? 'Correct' : 'Incorrect'}
-                        </span>
-                        <span className="assignment-meta-chip">{item.questionId}</span>
-                      </div>
-                    ))}
-                  </div>
+          )}
+          footer={(
+            <div className="result-summary-footer">
+              <div className={`mission-complete ${viewingResult.score >= 90 ? 'grade-perfect' : viewingResult.score >= 70 ? 'grade-great' : viewingResult.score >= 50 ? 'grade-good' : 'grade-ok'}`}
+                style={{ paddingTop: '1rem', paddingBottom: '0.5rem' }}>
+                <div className="mission-complete-emoji" aria-hidden="true">
+                  {viewingResult.score >= 90 ? '🌟' : viewingResult.score >= 70 ? '🎊' : viewingResult.score >= 50 ? '👍' : '😊'}
                 </div>
-              </article>
-            ) : null}
-          </div>
-        )}
-      </article>
+                <div className="mission-complete-title">
+                  {viewingResult.score >= 90 ? 'Perfect!' : viewingResult.score >= 70 ? 'Great job!' : viewingResult.score >= 50 ? 'Good job!' : 'Keep trying!'}
+                </div>
+                <div className="mission-complete-score">
+                  {viewingResult.score}% &nbsp;·&nbsp; {viewingResult.correctAnswers}/{viewingResult.totalQuestions} correct
+                  &nbsp;·&nbsp; {formatDate(viewingResult.completedAt)}
+                </div>
+              </div>
+              <div className="button-row modal-actions">
+                <button type="button" className="button-secondary" onClick={() => setViewingResult(null)}>Close</button>
+              </div>
+            </div>
+          )}
+        />
+      ) : null}
     </section>
   )
 }

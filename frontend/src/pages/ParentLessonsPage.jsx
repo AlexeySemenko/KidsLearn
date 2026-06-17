@@ -1,43 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { createLesson, deleteLesson, duplicateLesson, getLessons, updateLesson } from '../lib/api'
+import { deleteLesson, duplicateLesson, getLesson, getLessons, updateLesson } from '../lib/api'
 import { useAuth } from '../auth/AuthProvider'
 import AiLessonGenerationModal from '../components/AiLessonGenerationModal'
+import LessonViewModal from '../components/LessonViewModal'
 
 const LESSONS_FILTERS_STORAGE_KEY = 'kidslearn.parent.lessons.filters.v1'
-
-const emptyCreateForm = {
-  title: '',
-  subject: '',
-  grade: '1',
-  topic: '',
-  difficulty: 'Medium',
-  questionText: '',
-  explanation: '',
-  answerA: '',
-  answerB: '',
-  correctAnswer: 'A',
-}
-
-function validateCreateLesson(form) {
-  if (!form.title.trim() || !form.subject.trim() || !form.topic.trim()) {
-    return 'Title, subject and topic are required.'
-  }
-
-  const grade = Number(form.grade)
-  if (!Number.isInteger(grade) || grade < 1 || grade > 12) {
-    return 'Grade must be a whole number between 1 and 12.'
-  }
-
-  if (!form.questionText.trim()) {
-    return 'At least one question is required.'
-  }
-
-  if (!form.answerA.trim() || !form.answerB.trim()) {
-    return 'Provide at least two answers.'
-  }
-
-  return null
-}
 
 function validateEditLesson(form) {
   if (!form.title.trim() || !form.subject.trim() || !form.topic.trim()) {
@@ -83,10 +50,8 @@ export default function ParentLessonsPage() {
   const { session } = useAuth()
   const [lessons, setLessons] = useState([])
   const [isLoading, setIsLoading] = useState(true)
-  const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
-  const [createForm, setCreateForm] = useState(emptyCreateForm)
   const [editingLessonId, setEditingLessonId] = useState(null)
   const [editForm, setEditForm] = useState({ title: '', subject: '', grade: '1', topic: '', difficulty: 'Medium' })
   const [pendingActionId, setPendingActionId] = useState(null)
@@ -96,6 +61,9 @@ export default function ParentLessonsPage() {
   const [difficultyFilter, setDifficultyFilter] = useState(storedFilters.difficultyFilter)
   const [sortBy, setSortBy] = useState(storedFilters.sortBy)
   const [isAiModalOpen, setIsAiModalOpen] = useState(false)
+  const [viewingLesson, setViewingLesson] = useState(null)
+  const [isLoadingView, setIsLoadingView] = useState(false)
+  const [viewError, setViewError] = useState('')
 
   const availableGrades = useMemo(() => {
     return [...new Set(lessons.map((lesson) => String(lesson.grade)))].sort((a, b) => Number(a) - Number(b))
@@ -207,9 +175,6 @@ export default function ParentLessonsPage() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [editingLessonId])
 
-  function updateCreateField(name, value) {
-    setCreateForm((current) => ({ ...current, [name]: value }))
-  }
 
   function updateEditField(name, value) {
     setEditForm((current) => ({ ...current, [name]: value }))
@@ -231,53 +196,6 @@ export default function ParentLessonsPage() {
   function cancelEditing() {
     setEditingLessonId(null)
     setEditForm({ title: '', subject: '', grade: '1', topic: '', difficulty: 'Medium' })
-  }
-
-  async function handleCreateLesson(event) {
-    event.preventDefault()
-    if (!session?.accessToken) {
-      return
-    }
-
-    const validationError = validateCreateLesson(createForm)
-    if (validationError) {
-      setError(validationError)
-      setStatusMessage('')
-      return
-    }
-
-    setError('')
-    setStatusMessage('')
-    setIsCreating(true)
-
-    try {
-      const response = await createLesson(session.accessToken, {
-        title: createForm.title.trim(),
-        subject: createForm.subject.trim(),
-        grade: Number(createForm.grade),
-        topic: createForm.topic.trim(),
-        difficulty: createForm.difficulty.trim(),
-        questions: [
-          {
-            questionText: createForm.questionText.trim(),
-            explanation: createForm.explanation.trim() || null,
-            order: 1,
-            answers: [
-              { answerText: createForm.answerA.trim(), isCorrect: createForm.correctAnswer === 'A', order: 1 },
-              { answerText: createForm.answerB.trim(), isCorrect: createForm.correctAnswer === 'B', order: 2 },
-            ],
-          },
-        ],
-      })
-
-      setLessons((current) => [response, ...current])
-      setCreateForm(emptyCreateForm)
-      setStatusMessage(`${response.title} was created successfully.`)
-    } catch (requestError) {
-      setError(requestError.message)
-    } finally {
-      setIsCreating(false)
-    }
   }
 
   async function handleSaveLesson(lessonId) {
@@ -364,12 +282,29 @@ export default function ParentLessonsPage() {
     }
   }
 
-  function openAiModal() {
-    setIsAiModalOpen(true)
+  function closeViewModal() {
+    setViewingLesson(null)
+    setViewError('')
   }
 
-  function closeAiModal() {
-    setIsAiModalOpen(false)
+  async function handleViewLesson(lessonId) {
+    if (!session?.accessToken) {
+      return
+    }
+
+    setViewError('')
+    setIsLoadingView(true)
+    setViewingLesson({ _loading: true })
+
+    try {
+      const lesson = await getLesson(session.accessToken, lessonId)
+      setViewingLesson(lesson)
+    } catch (requestError) {
+      setViewingLesson(null)
+      setViewError(requestError.message)
+    } finally {
+      setIsLoadingView(false)
+    }
   }
 
   function handleAiGenerated(response) {
@@ -386,216 +321,141 @@ export default function ParentLessonsPage() {
     }
 
     setLessons((current) => [summary, ...current])
-    setStatusMessage(`AI lesson \"${draft.title}\" was generated.`)
+    setStatusMessage(`AI lesson "${draft.title}" was generated.`)
+    setIsAiModalOpen(false)
+    setViewingLesson(draft)
   }
 
   return (
-    <section className="panel-grid">
-      <article className="hero-card lessons-hero">
-        <div className="brand-kicker">Epic 3.3</div>
-        <h2>Lessons management is now live.</h2>
-        <p>
-          This slice adds real lesson list loading, lesson creation, modal summary editing,
-          duplication, and deletion on top of the authenticated parent workspace.
-        </p>
-        <div className="badge-row">
-          <span className="badge">GET /lessons</span>
-          <span className="badge">POST /lessons</span>
-          <span className="badge">PATCH /lessons/{'{id}'}</span>
-          <span className="badge">POST /lessons/{'{id}'}/duplicate</span>
-          <span className="badge">DELETE /lessons/{'{id}'}</span>
+    <article className="lessons-list-card">
+      <div className="children-list-header">
+        <div>
+          <h3>Lessons</h3>
+          <p>{visibleLessons.length} of {lessons.length} lessons</p>
         </div>
-      </article>
+        <button type="button" className="button ai-launch-button" onClick={() => setIsAiModalOpen(true)}>
+          <span className="ai-button-icon" aria-hidden="true">AI</span>
+          <span>Generate</span>
+        </button>
+      </div>
 
-      <article className="panel-card lessons-form-card">
-        <h3>Create lesson</h3>
-        <p>Start with one question and two answers. Detailed editing can layer on top later.</p>
+      {statusMessage ? (
+        <div className="info-block success-block lessons-status-block" role="status" aria-live="polite">
+          <strong>Update</strong>
+          <span>{statusMessage}</span>
+        </div>
+      ) : null}
 
-        <form className="auth-form compact-form" onSubmit={handleCreateLesson}>
+      {error ? <div className="alert lessons-alert" role="alert" aria-live="assertive">{error}</div> : null}
+      {viewError ? <div className="alert lessons-alert" role="alert" aria-live="assertive">{viewError}</div> : null}
+
+      <div className="lessons-toolbar">
+        <div className="lessons-filter-grid">
           <div className="field">
-            <label htmlFor="lesson-title">Title</label>
-            <input id="lesson-title" className="input" value={createForm.title} onChange={(event) => updateCreateField('title', event.target.value)} placeholder="Fractions basics" required />
-          </div>
-
-          <div className="lessons-form-grid">
-            <div className="field">
-              <label htmlFor="lesson-subject">Subject</label>
-              <input id="lesson-subject" className="input" value={createForm.subject} onChange={(event) => updateCreateField('subject', event.target.value)} placeholder="Math" required />
-            </div>
-            <div className="field">
-              <label htmlFor="lesson-grade">Grade</label>
-              <input id="lesson-grade" className="input" type="number" min="1" max="12" value={createForm.grade} onChange={(event) => updateCreateField('grade', event.target.value)} required />
-            </div>
-          </div>
-
-          <div className="lessons-form-grid">
-            <div className="field">
-              <label htmlFor="lesson-topic">Topic</label>
-              <input id="lesson-topic" className="input" value={createForm.topic} onChange={(event) => updateCreateField('topic', event.target.value)} placeholder="Equivalent fractions" required />
-            </div>
-            <div className="field">
-              <label htmlFor="lesson-difficulty">Difficulty</label>
-              <input id="lesson-difficulty" className="input" value={createForm.difficulty} onChange={(event) => updateCreateField('difficulty', event.target.value)} placeholder="Medium" />
-            </div>
+            <label htmlFor="lessons-search">Search lessons</label>
+            <input
+              id="lessons-search"
+              className="input"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search by title, subject, or topic"
+            />
           </div>
 
           <div className="field">
-            <label htmlFor="lesson-question">Question</label>
-            <input id="lesson-question" className="input" value={createForm.questionText} onChange={(event) => updateCreateField('questionText', event.target.value)} placeholder="Which fraction is equal to 1/2?" required />
-          </div>
-
-          <div className="field">
-            <label htmlFor="lesson-explanation">Explanation</label>
-            <input id="lesson-explanation" className="input" value={createForm.explanation} onChange={(event) => updateCreateField('explanation', event.target.value)} placeholder="Two fourths simplify to one half." />
-          </div>
-
-          <div className="lessons-form-grid">
-            <div className="field">
-              <label htmlFor="answer-a">Answer A</label>
-              <input id="answer-a" className="input" value={createForm.answerA} onChange={(event) => updateCreateField('answerA', event.target.value)} placeholder="2/4" required />
-            </div>
-            <div className="field">
-              <label htmlFor="answer-b">Answer B</label>
-              <input id="answer-b" className="input" value={createForm.answerB} onChange={(event) => updateCreateField('answerB', event.target.value)} placeholder="3/4" required />
-            </div>
-          </div>
-
-          <div className="field">
-            <label htmlFor="correct-answer">Correct answer</label>
-            <select id="correct-answer" className="input" value={createForm.correctAnswer} onChange={(event) => updateCreateField('correctAnswer', event.target.value)}>
-              <option value="A">Answer A</option>
-              <option value="B">Answer B</option>
+            <label htmlFor="lessons-grade-filter">Grade</label>
+            <select id="lessons-grade-filter" className="input" value={gradeFilter} onChange={(event) => setGradeFilter(event.target.value)}>
+              <option value="all">All grades</option>
+              {availableGrades.map((grade) => (
+                <option key={grade} value={grade}>Grade {grade}</option>
+              ))}
             </select>
           </div>
 
-          <div className="button-row">
-            <button type="submit" className="button" disabled={isCreating}>
-              {isCreating ? 'Creating...' : 'Create lesson'}
-            </button>
-            <button type="button" className="button ai-launch-button" onClick={openAiModal}>
-              <span className="ai-button-icon" aria-hidden="true">AI</span>
-              <span>Generate lesson</span>
-            </button>
-          </div>
-        </form>
-
-        {statusMessage ? (
-          <div className="info-block success-block lessons-status-block" role="status" aria-live="polite">
-            <strong>Update</strong>
-            <span>{statusMessage}</span>
-          </div>
-        ) : null}
-
-        {error ? <div className="alert lessons-alert" role="alert" aria-live="assertive">{error}</div> : null}
-      </article>
-
-      <article className="lessons-list-card">
-        <div className="children-list-header">
-          <div>
-            <h3>Lessons</h3>
-            <p>Summary-level management for the parent lesson library.</p>
-          </div>
-          <span className="badge">{visibleLessons.length} / {lessons.length} records</span>
-        </div>
-
-        <div className="lessons-toolbar">
-          <div className="lessons-filter-grid">
-            <div className="field">
-              <label htmlFor="lessons-search">Search lessons</label>
-              <input
-                id="lessons-search"
-                className="input"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search by title, subject, or topic"
-              />
-            </div>
-
-            <div className="field">
-              <label htmlFor="lessons-grade-filter">Grade</label>
-              <select id="lessons-grade-filter" className="input" value={gradeFilter} onChange={(event) => setGradeFilter(event.target.value)}>
-                <option value="all">All grades</option>
-                {availableGrades.map((grade) => (
-                  <option key={grade} value={grade}>Grade {grade}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="field">
-              <label htmlFor="lessons-difficulty-filter">Difficulty</label>
-              <select id="lessons-difficulty-filter" className="input" value={difficultyFilter} onChange={(event) => setDifficultyFilter(event.target.value)}>
-                <option value="all">All levels</option>
-                {availableDifficulties.map((difficulty) => (
-                  <option key={difficulty} value={difficulty}>{difficulty}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="field">
-              <label htmlFor="lessons-sort">Sort by</label>
-              <select id="lessons-sort" className="input" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-                <option value="newest">Newest</option>
-                <option value="title-asc">Title (A-Z)</option>
-                <option value="grade-asc">Grade (low-high)</option>
-                <option value="difficulty-asc">Difficulty (A-Z)</option>
-                <option value="questions-desc">Questions (most first)</option>
-              </select>
-            </div>
+          <div className="field">
+            <label htmlFor="lessons-difficulty-filter">Difficulty</label>
+            <select id="lessons-difficulty-filter" className="input" value={difficultyFilter} onChange={(event) => setDifficultyFilter(event.target.value)}>
+              <option value="all">All levels</option>
+              {availableDifficulties.map((difficulty) => (
+                <option key={difficulty} value={difficulty}>{difficulty}</option>
+              ))}
+            </select>
           </div>
 
-          <div className="button-row">
-            <button
-              type="button"
-              className="button-secondary"
-              onClick={() => {
-                setSearchTerm('')
-                setGradeFilter('all')
-                setDifficultyFilter('all')
-                setSortBy('newest')
-              }}
-              disabled={!searchTerm && gradeFilter === 'all' && difficultyFilter === 'all' && sortBy === 'newest'}
-            >
-              Reset filters
-            </button>
+          <div className="field">
+            <label htmlFor="lessons-sort">Sort by</label>
+            <select id="lessons-sort" className="input" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+              <option value="newest">Newest</option>
+              <option value="title-asc">Title (A-Z)</option>
+              <option value="grade-asc">Grade (low-high)</option>
+              <option value="difficulty-asc">Difficulty (A-Z)</option>
+              <option value="questions-desc">Questions (most first)</option>
+            </select>
           </div>
         </div>
 
-        {isLoading ? <p className="children-empty">Loading lessons...</p> : null}
-        {!isLoading && lessons.length === 0 ? <p className="children-empty">No lessons yet. Create the first lesson from the panel on the right.</p> : null}
-        {!isLoading && lessons.length > 0 && visibleLessons.length === 0 ? <p className="children-empty">No lessons match current filters.</p> : null}
+        <div className="button-row">
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={() => {
+              setSearchTerm('')
+              setGradeFilter('all')
+              setDifficultyFilter('all')
+              setSortBy('newest')
+            }}
+            disabled={!searchTerm && gradeFilter === 'all' && difficultyFilter === 'all' && sortBy === 'newest'}
+          >
+            Reset filters
+          </button>
+        </div>
+      </div>
 
-        {!isLoading && visibleLessons.length > 0 ? (
-          <div className="children-list">
-            {visibleLessons.map((lesson) => (
-              <article key={lesson.id} className="lesson-row">
-                <div>
-                  <div className="child-name">{lesson.title}</div>
-                  <div className="child-meta">
-                    {lesson.subject} · Grade {lesson.grade} · {lesson.topic} · {lesson.difficulty} · {lesson.questionCount} questions
-                  </div>
+      {isLoading ? <p className="children-empty">Loading lessons...</p> : null}
+      {!isLoading && lessons.length === 0 ? <p className="children-empty">No lessons yet. Use Generate to create your first AI lesson.</p> : null}
+      {!isLoading && lessons.length > 0 && visibleLessons.length === 0 ? <p className="children-empty">No lessons match current filters.</p> : null}
+
+      {!isLoading && visibleLessons.length > 0 ? (
+        <div className="children-list">
+          {visibleLessons.map((lesson) => (
+            <article key={lesson.id} className="lesson-row">
+              <div>
+                <div className="child-name">{lesson.title}</div>
+                <div className="child-meta">
+                  {lesson.subject} · Grade {lesson.grade} · {lesson.topic} · {lesson.difficulty} · {lesson.questionCount} questions
                 </div>
-                <div className="button-row child-actions">
-                  <button type="button" className="button-secondary" disabled={pendingActionId === lesson.id} onClick={() => startEditing(lesson)}>Edit</button>
-                  <button type="button" className="button-secondary" disabled={pendingActionId === lesson.id} onClick={() => handleDuplicateLesson(lesson.id)}>
-                    {pendingActionId === lesson.id ? 'Working...' : 'Duplicate'}
-                  </button>
-                  <button type="button" className="button-secondary danger-button" disabled={pendingActionId === lesson.id} onClick={() => handleDeleteLesson(lesson.id)}>
-                    {pendingActionId === lesson.id ? 'Deleting...' : 'Delete'}
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : null}
-      </article>
+              </div>
+              <div className="button-row child-actions">
+                <button type="button" className="button-secondary" disabled={pendingActionId === lesson.id || isLoadingView} onClick={() => handleViewLesson(lesson.id)}>View</button>
+                <button type="button" className="button-secondary" disabled={pendingActionId === lesson.id} onClick={() => startEditing(lesson)}>Edit</button>
+                <button type="button" className="button-secondary" disabled={pendingActionId === lesson.id} onClick={() => handleDuplicateLesson(lesson.id)}>
+                  {pendingActionId === lesson.id ? 'Working...' : 'Duplicate'}
+                </button>
+                <button type="button" className="button-secondary danger-button" disabled={pendingActionId === lesson.id} onClick={() => handleDeleteLesson(lesson.id)}>
+                  {pendingActionId === lesson.id ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : null}
+
+      {viewingLesson && !viewingLesson._loading ? (
+        <LessonViewModal
+          title={viewingLesson.title}
+          subtitle={`${viewingLesson.subject} · Grade ${viewingLesson.grade} · ${viewingLesson.topic} · ${viewingLesson.difficulty} · ${viewingLesson.questions.length} questions`}
+          questions={viewingLesson.questions}
+          onClose={closeViewModal}
+        />
+      ) : null}
 
       {editingLessonId ? (
-        <div className="modal-overlay" role="presentation" onClick={cancelEditing}>
-          <section className="modal-card lesson-modal" role="dialog" aria-modal="true" aria-labelledby="lesson-edit-title" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-overlay" role="presentation">
+          <section className="modal-card lesson-modal" role="dialog" aria-modal="true" aria-labelledby="lesson-edit-title">
             <div className="children-list-header modal-header">
               <div>
                 <h3 id="lesson-edit-title">Edit lesson</h3>
-                <p>Update summary fields for the selected lesson in a separate popup.</p>
+                <p>Update summary fields for the selected lesson.</p>
               </div>
               <button type="button" className="button-secondary" onClick={cancelEditing}>Close</button>
             </div>
@@ -635,12 +495,12 @@ export default function ParentLessonsPage() {
 
       <AiLessonGenerationModal
         isOpen={isAiModalOpen}
-        onClose={closeAiModal}
+        onClose={() => setIsAiModalOpen(false)}
         onGenerated={handleAiGenerated}
         idPrefix="lessons-ai"
         title="Generate AI lesson"
         description="Create a lesson draft from prompt settings without leaving lessons."
       />
-    </section>
+    </article>
   )
 }

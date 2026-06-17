@@ -7,6 +7,7 @@ import {
   getChildAssignments,
   submitChildAssignmentAnswers,
 } from '../lib/api'
+import LessonViewModal from '../components/LessonViewModal'
 
 function formatDate(value) {
   if (!value) {
@@ -35,6 +36,7 @@ export default function ChildHomePage() {
   const [instantCheckMap, setInstantCheckMap] = useState({})
   const [partialScore, setPartialScore] = useState(null)
   const [completion, setCompletion] = useState(null)
+  const [checksRemaining, setChecksRemaining] = useState(3)
   const [isOpening, setIsOpening] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isCompleting, setIsCompleting] = useState(false)
@@ -74,21 +76,6 @@ export default function ChildHomePage() {
     }
   }, [session?.accessToken])
 
-  useEffect(() => {
-    if (!solvingAssignment) {
-      return undefined
-    }
-
-    function handleKeyDown(event) {
-      if (event.key === 'Escape') {
-        closeSolvingModal()
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [solvingAssignment])
-
   async function handleOpenAssignment(assignmentId) {
     if (!session?.accessToken) {
       return
@@ -104,6 +91,7 @@ export default function ChildHomePage() {
       setInstantCheckMap({})
       setPartialScore(null)
       setCompletion(null)
+      setChecksRemaining(3)
     } catch (requestError) {
       setError(requestError.message)
     } finally {
@@ -121,6 +109,21 @@ export default function ChildHomePage() {
     setInstantCheckMap({})
     setPartialScore(null)
     setCompletion(null)
+    setChecksRemaining(3)
+  }
+
+  function scoreEmoji(score) {
+    if (score >= 90) return '🌟'
+    if (score >= 70) return '😊'
+    if (score >= 50) return '👍'
+    return '😅'
+  }
+
+  function completionGrade(score) {
+    if (score >= 90) return { label: 'Perfect!', emoji: '🌟', css: 'grade-perfect' }
+    if (score >= 70) return { label: 'Great job!', emoji: '🎊', css: 'grade-great' }
+    if (score >= 50) return { label: 'Good job!', emoji: '👍', css: 'grade-good' }
+    return { label: 'Keep trying!', emoji: '😊', css: 'grade-ok' }
   }
 
   async function handleCheckAnswers() {
@@ -154,6 +157,7 @@ export default function ChildHomePage() {
 
       setInstantCheckMap(checkMap)
       setPartialScore(response.partialScore)
+      setChecksRemaining((n) => Math.max(0, n - 1))
       setAssignments((current) => current.map((item) => (
         item.id === solvingAssignment.assignmentId ? { ...item, status: 'InProgress' } : item
       )))
@@ -287,86 +291,113 @@ export default function ChildHomePage() {
       </article>
 
       {solvingAssignment ? (
-        <div className="modal-overlay" role="presentation" onClick={closeSolvingModal}>
-          <section className="modal-card lesson-modal" role="dialog" aria-modal="true" aria-labelledby="solve-assignment-title" onClick={(event) => event.stopPropagation()}>
-            <div className="children-list-header modal-header">
-              <div>
-                <h3 id="solve-assignment-title">Mission time!</h3>
-                <p>{solvingAssignment.lessonTitle} · {solvingAssignment.questions.length} questions</p>
-              </div>
-              <button type="button" className="button-secondary" onClick={closeSolvingModal}>Back</button>
-            </div>
-
-            <div className="children-list">
-              {solvingAssignment.questions.map((question, index) => (
-                <article key={question.questionId} className="assignment-row question-card">
-                  <div className="assignment-copy">
-                    <div className="assignment-topline">
-                      <div className="child-name">Question {index + 1}</div>
-                      {instantCheckMap[question.questionId] ? (
-                        <span className={`assignment-status-pill ${instantCheckMap[question.questionId].correct ? 'status-success' : 'status-danger'}`}>
-                          {instantCheckMap[question.questionId].correct ? '✅ Nice Job!' : '❌ Try once more'}
-                        </span>
-                      ) : null}
-                    </div>
-
-                    <div>{question.questionText}</div>
-
-                    <div className="question-options">
-                      {question.answers.map((answer) => (
-                        <label key={answer.answerId} className="question-option">
-                          <input
-                            type="radio"
-                            name={`question-${question.questionId}`}
-                            checked={selectedAnswers[question.questionId] === answer.answerId}
-                            onChange={() => handleSelectAnswer(question.questionId, answer.answerId)}
-                          />
-                          <span>{answer.answerText}</span>
-                        </label>
-                      ))}
-                    </div>
-
-                    {instantCheckMap[question.questionId] ? (
-                      <div className="child-meta">Explanation: {instantCheckMap[question.questionId].explanation}</div>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
-            </div>
-
-            {partialScore !== null ? (
-              <div className="info-block success-block assignments-status-block">
-                <strong>Your score right now</strong>
-                <span>{partialScore}%</span>
-              </div>
-            ) : null}
-
-            {completion ? (
-              <div className="info-block success-block assignments-status-block">
-                <strong>Mission completed</strong>
-                <span>Score: {completion.score}% · Correct: {completion.correctAnswers}/{completion.totalQuestions}</span>
-                <div className="button-row">
-                  <button
-                    type="button"
-                    className="button-secondary"
-                    onClick={() => navigate(`/child/results?resultId=${completion.resultId}`)}
-                  >
-                    View my results
-                  </button>
+        <LessonViewModal
+          title="Mission time!"
+          subtitle={`${solvingAssignment.lessonTitle} · ${solvingAssignment.questions.length} questions`}
+          questions={solvingAssignment.questions}
+          onClose={closeSolvingModal}
+          renderQuestion={(question, index) => (
+            <article key={question.questionId} className="assignment-row question-card">
+              <div className="assignment-copy">
+                <div className="assignment-topline">
+                  <div className="child-name">Question {index + 1}</div>
+                  {instantCheckMap[question.questionId] ? (
+                    <span className={`assignment-status-pill ${instantCheckMap[question.questionId].correct ? 'status-success' : 'status-danger'}`}>
+                      {instantCheckMap[question.questionId].correct ? '✅ Nice Job!' : '❌ Try once more'}
+                    </span>
+                  ) : null}
                 </div>
-              </div>
-            ) : null}
 
-            <div className="button-row modal-actions">
-              <button type="button" className="button-secondary" disabled={isSubmitting || isCompleting} onClick={handleCheckAnswers}>
-                {isSubmitting ? 'Checking...' : 'Check my answers'}
-              </button>
-              <button type="button" className="button" disabled={isSubmitting || isCompleting || solvingAssignment.status === 'Completed'} onClick={handleCompleteAssignment}>
-                {isCompleting ? 'Finishing...' : (solvingAssignment.status === 'Completed' ? 'Completed' : 'Finish mission')}
-              </button>
-            </div>
-          </section>
-        </div>
+                <div>{question.questionText}</div>
+
+                <div className="question-options">
+                  {question.answers.map((answer) => (
+                    <label key={answer.answerId} className="question-option">
+                      <input
+                        type="radio"
+                        name={`question-${question.questionId}`}
+                        checked={selectedAnswers[question.questionId] === answer.answerId}
+                        onChange={() => handleSelectAnswer(question.questionId, answer.answerId)}
+                      />
+                      <span>{answer.answerText}</span>
+                    </label>
+                  ))}
+                </div>
+
+                {instantCheckMap[question.questionId] ? (
+                  <div className="child-meta">Explanation: {instantCheckMap[question.questionId].explanation}</div>
+                ) : null}
+              </div>
+            </article>
+          )}
+          footer={(
+            <>
+              {completion ? (() => {
+                const grade = completionGrade(completion.score)
+                return (
+                  <div className={`mission-complete ${grade.css}`}>
+                    <div className="mission-complete-emoji" aria-hidden="true">{grade.emoji}</div>
+                    <div className="mission-complete-title">{grade.label}</div>
+                    <div className="mission-complete-score">
+                      {completion.score}% &nbsp;·&nbsp; {completion.correctAnswers}/{completion.totalQuestions} correct
+                    </div>
+                    {grade.css === 'grade-perfect' ? (
+                      <div className="mission-confetti" aria-hidden="true">
+                        {['⭐','🌟','✨','💫','⭐','🌟','✨','💫','⭐','🌟'].map((s, i) => (
+                          <span key={i} className={`confetti-star s${i + 1}`}>{s}</span>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="button-row modal-actions">
+                      <button
+                        type="button"
+                        className="button"
+                        onClick={() => navigate(`/child/results?resultId=${completion.resultId}`)}
+                      >
+                        View my results
+                      </button>
+                      <button type="button" className="button-secondary" onClick={closeSolvingModal}>Close</button>
+                    </div>
+                  </div>
+                )
+              })() : (
+                <>
+                  {partialScore !== null ? (
+                    <div className="mission-score-bar">
+                      <span className="mission-score-emoji">{scoreEmoji(partialScore)}</span>
+                      <span className="mission-score-value">{partialScore}%</span>
+                      <span className="mission-score-label">current score</span>
+                      <span className="mission-checks-left">
+                        {checksRemaining > 0
+                          ? `${checksRemaining} check${checksRemaining === 1 ? '' : 's'} left`
+                          : 'No checks left'}
+                      </span>
+                    </div>
+                  ) : null}
+
+                  <div className="button-row modal-actions">
+                    <button
+                      type="button"
+                      className="button-secondary"
+                      disabled={isSubmitting || isCompleting || checksRemaining === 0}
+                      onClick={handleCheckAnswers}
+                    >
+                      {isSubmitting ? 'Checking...' : checksRemaining === 0 ? 'No checks left' : `Check my answers (${checksRemaining} left)`}
+                    </button>
+                    <button
+                      type="button"
+                      className="button"
+                      disabled={isSubmitting || isCompleting || solvingAssignment.status === 'Completed'}
+                      onClick={handleCompleteAssignment}
+                    >
+                      {isCompleting ? 'Finishing...' : (solvingAssignment.status === 'Completed' ? 'Completed' : 'Finish mission')}
+                    </button>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        />
       ) : null}
     </section>
   )

@@ -78,6 +78,18 @@ public static class ChildController
             };
         });
 
+        childApi.MapGet("/results", async (AppDbContext db, ISender sender, ClaimsPrincipal user) =>
+        {
+            var childId = await ApiEndpointHelpers.ResolveChildIdAsync(db, user);
+            if (!childId.HasValue)
+            {
+                return Results.Unauthorized();
+            }
+
+            var results = await sender.Send(new GetChildResultsQuery(childId.Value));
+            return Results.Ok(results);
+        });
+
         childApi.MapGet("/results/{resultId:guid}", async (AppDbContext db, ISender sender, ClaimsPrincipal user, Guid resultId) =>
         {
             var childId = await ApiEndpointHelpers.ResolveChildIdAsync(db, user);

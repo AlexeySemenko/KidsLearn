@@ -65,6 +65,32 @@ export interface LessonSummary {
   questionCount: number
 }
 
+export interface LessonAnswerOption {
+  id: string
+  answerText: string
+  isCorrect: boolean
+  order: number
+}
+
+export interface LessonQuestion {
+  id: string
+  questionText: string
+  explanation: string
+  order: number
+  answers: LessonAnswerOption[]
+}
+
+export interface LessonDetail {
+  id: string
+  title: string
+  subject: string
+  grade: number
+  topic: string
+  difficulty: string
+  createdAt: string
+  questions: LessonQuestion[]
+}
+
 export interface AssignmentResponse {
   id: string
   childId: string
@@ -306,6 +332,10 @@ export async function getLessons(accessToken: string): Promise<LessonsListRespon
   return request<LessonsListResponse>('/api/v1/lessons', withAuth(accessToken))
 }
 
+export async function getLesson(accessToken: string, lessonId: string): Promise<LessonDetail> {
+  return request<LessonDetail>(`/api/v1/lessons/${lessonId}`, withAuth(accessToken))
+}
+
 export async function createLesson(accessToken: string, payload: RequestPayload) {
   return request('/api/v1/lessons', withAuth(accessToken, {
     method: 'POST',
@@ -390,8 +420,47 @@ export async function completeChildAssignment(accessToken: string, assignmentId:
   }))
 }
 
-export async function getChildResultDetail(accessToken: string, resultId: string) {
-  return request(`/api/v1/child/results/${resultId}`, withAuth(accessToken))
+export interface ResultBreakdownAnswer {
+  answerId: string
+  answerText: string
+  isCorrect: boolean
+}
+
+export interface ResultBreakdownItem {
+  questionId: string
+  questionText: string
+  correct: boolean
+  selectedAnswerOptionId: string | null
+  answers: ResultBreakdownAnswer[]
+}
+
+export interface ResultDetail {
+  resultId: string
+  assignmentId: string
+  lessonTitle: string
+  score: number
+  completedAt: string
+  correctAnswers: number
+  totalQuestions: number
+  breakdown: ResultBreakdownItem[]
+}
+
+export interface ResultListItem {
+  resultId: string
+  assignmentId: string
+  lessonTitle: string
+  score: number
+  completedAt: string
+  correctAnswers: number
+  totalQuestions: number
+}
+
+export async function getChildResults(accessToken: string): Promise<ResultListItem[]> {
+  return request<ResultListItem[]>('/api/v1/child/results', withAuth(accessToken))
+}
+
+export async function getChildResultDetail(accessToken: string, resultId: string): Promise<ResultDetail> {
+  return request<ResultDetail>(`/api/v1/child/results/${resultId}`, withAuth(accessToken))
 }
 
 export async function getParentChildReportSummary(accessToken: string, childId: string, { from, to }: ReportQueryRange = {}): Promise<ChildReportSummary> {
