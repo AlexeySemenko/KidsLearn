@@ -4009,3 +4009,20 @@ select.input:invalid {
 :root[data-theme='light'] .friend-note-bubble--view:hover {
   background: rgba(99, 102, 241, 0.14);
 }
+
+.friend-note-bubble--theirs {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.35);
+  margin-bottom: 0.5rem;
+}
+
+.friend-note-bubble-tail--mine {
+  border-top-color: rgba(99, 102, 241, 0.35);
+}
+
+.friend-note-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}

@@ -6,8 +6,9 @@ import { getFriendNote, getFriendResults, getChildFriends, sendChildFriendInvite
 const FRIEND_EMOJIS = ['🐼', '🦊', '🐸', '🦁', '🐨', '🐯', '🦄', '🐻', '🐙', '🦋']
 const FRIEND_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#84cc16']
 
-function FriendNoteBubble({ friendChildId, accessToken }) {
+function FriendNoteBubble({ friendChildId, friendName, accessToken }) {
   const [myNote, setMyNote] = useState(null)
+  const [theirNote, setTheirNote] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [isSaving, setIsSaving] = useState(false)
@@ -18,9 +19,12 @@ function FriendNoteBubble({ friendChildId, accessToken }) {
     async function load() {
       try {
         const data = await getFriendNote(accessToken, friendChildId)
-        if (mounted) setMyNote(data.myNote ?? '')
+        if (mounted) {
+          setMyNote(data.myNote ?? '')
+          setTheirNote(data.theirNote ?? '')
+        }
       } catch {
-        if (mounted) setMyNote('')
+        if (mounted) { setMyNote(''); setTheirNote('') }
       }
     }
     load()
@@ -56,9 +60,19 @@ function FriendNoteBubble({ friendChildId, accessToken }) {
 
   return (
     <div className="friend-note-bubble-wrap">
+      {/* Friend's message to me */}
+      {theirNote ? (
+        <div className="friend-note-bubble friend-note-bubble--theirs">
+          <div className="friend-note-bubble-tail" aria-hidden="true" />
+          <span className="friend-note-label">💌 {friendName} says:</span>
+          <span className="friend-note-text">{theirNote}</span>
+        </div>
+      ) : null}
+
+      {/* My message to friend */}
       {isEditing ? (
         <div className="friend-note-bubble friend-note-bubble--editing">
-          <div className="friend-note-bubble-tail" aria-hidden="true" />
+          <div className="friend-note-bubble-tail friend-note-bubble-tail--mine" aria-hidden="true" />
           <textarea
             ref={textareaRef}
             className="friend-note-textarea"
@@ -66,7 +80,7 @@ function FriendNoteBubble({ friendChildId, accessToken }) {
             onChange={(e) => setDraft(e.target.value)}
             maxLength={500}
             rows={3}
-            placeholder="Write a message for your friend… 💌"
+            placeholder={`Write a message for ${friendName}… 💌`}
           />
           <div className="friend-note-actions">
             <button type="button" className="button" style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }} disabled={isSaving} onClick={saveNote}>
@@ -78,11 +92,11 @@ function FriendNoteBubble({ friendChildId, accessToken }) {
           </div>
         </div>
       ) : (
-        <button type="button" className="friend-note-bubble friend-note-bubble--view" onClick={startEdit} title="Click to edit your message">
-          <div className="friend-note-bubble-tail" aria-hidden="true" />
+        <button type="button" className="friend-note-bubble friend-note-bubble--view" onClick={startEdit} title="Click to write a message">
+          <div className="friend-note-bubble-tail friend-note-bubble-tail--mine" aria-hidden="true" />
           {myNote
-            ? <span className="friend-note-text">{myNote}</span>
-            : <span className="friend-note-placeholder">Leave a message… 💌</span>
+            ? <><span className="friend-note-label">You:</span><span className="friend-note-text">{myNote}</span></>
+            : <span className="friend-note-placeholder">Write a message to {friendName}… ✏️</span>
           }
           <span className="friend-note-edit-hint">✏️</span>
         </button>
@@ -236,6 +250,7 @@ export default function ChildFriendsPage() {
             </div>
             <FriendNoteBubble
               friendChildId={selectedFriend.childId}
+              friendName={selectedFriend.name}
               accessToken={session.accessToken}
             />
           </div>
