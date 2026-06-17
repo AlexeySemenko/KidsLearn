@@ -78,7 +78,7 @@ public sealed class CreateParentChildCommandHandler : IRequestHandler<CreatePare
         await _db.SaveChangesAsync(cancellationToken);
 
         var response = new CreatedChildResponse(
-            new ChildResponse(child.Id, child.ParentId, child.Name, child.Grade),
+            new ChildResponse(child.Id, child.ParentId, child.Name, child.Grade, null),
             accessCode);
 
         return CreateParentChildResult.Created(response);

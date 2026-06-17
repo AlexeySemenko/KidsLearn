@@ -30,9 +30,11 @@ public sealed class UpdateParentChildCommandHandler : IRequestHandler<UpdatePare
     {
         var scopedParentIds = await ApiEndpointHelpers.ResolveParentScopeIdsAsync(_db, command.ParentId);
 
-        var child = await _db.Children.FirstOrDefaultAsync(
-            x => x.Id == command.ChildId && scopedParentIds.Contains(x.ParentId),
-            cancellationToken);
+        var child = await _db.Children
+            .Include(x => x.User)
+            .FirstOrDefaultAsync(
+                x => x.Id == command.ChildId && scopedParentIds.Contains(x.ParentId),
+                cancellationToken);
 
         if (child is null)
         {
@@ -83,6 +85,6 @@ public sealed class UpdateParentChildCommandHandler : IRequestHandler<UpdatePare
 
         await _db.SaveChangesAsync(cancellationToken);
 
-        return UpdateParentChildResult.Success(new ChildResponse(child.Id, child.ParentId, child.Name, child.Grade));
+        return UpdateParentChildResult.Success(new ChildResponse(child.Id, child.ParentId, child.Name, child.Grade, child.User?.Email));
     }
 }

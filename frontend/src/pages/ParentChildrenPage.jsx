@@ -1,549 +1,375 @@
-import { useEffect, useState } from 'react'
-import { createChild, createChildWithGmail, deleteChild, getChildren, resetChildAccessCode, updateChild } from '../lib/api'
+import { createPortal } from 'react-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { createChildWithGmail, deleteChild, getChildren, updateChild } from '../lib/api'
 import { useAuth } from '../auth/AuthProvider'
 
-function validateChildPayload({ name, grade, accessCode }, { requireAccessCode = false } = {}) {
-  const trimmedName = name.trim()
-  const normalizedCode = accessCode.trim()
-  const parsedGrade = Number(grade)
+const SORT_OPTIONS = [
+  { value: 'name-asc',   label: 'Name A → Z' },
+  { value: 'name-desc',  label: 'Name Z → A' },
+  { value: 'grade-asc',  label: 'Grade low → high' },
+  { value: 'grade-desc', label: 'Grade high → low' },
+]
 
-  if (!trimmedName) {
-    return 'Name is required.'
+function sortChildren(list, sort) {
+  return [...list].sort((a, b) => {
+    if (sort === 'name-asc')   return a.name.localeCompare(b.name)
+    if (sort === 'name-desc')  return b.name.localeCompare(a.name)
+    if (sort === 'grade-asc')  return a.grade - b.grade
+    if (sort === 'grade-desc') return b.grade - a.grade
+    return 0
+  })
+}
+
+function CreateChildModal({ onSave, onClose, isSaving, error }) {
+  const [form, setForm] = useState({ gmailEmail: '', name: '', grade: '1' })
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    const email = form.gmailEmail.trim().toLowerCase()
+    const name  = form.name.trim()
+    const grade = Number(form.grade)
+    if (!email || !name || grade < 1 || grade > 12) return
+    onSave({ gmailEmail: email, name, grade })
   }
 
-  if (!Number.isInteger(parsedGrade) || parsedGrade < 1 || parsedGrade > 12) {
-    return 'Grade must be a whole number between 1 and 12.'
+  return createPortal(
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-card" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+          <h3 style={{ margin: 0 }}>Add child</h3>
+          <button type="button" className="modal-close-btn" onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="field">
+            <label htmlFor="create-gmail">Gmail address</label>
+            <input
+              id="create-gmail"
+              className="input"
+              type="email"
+              placeholder="child@gmail.com"
+              value={form.gmailEmail}
+              onChange={(e) => setForm((f) => ({ ...f, gmailEmail: e.target.value }))}
+              required
+            />
+            <span className="field-hint">Child will sign in with Google using this account.</span>
+          </div>
+          <div className="field" style={{ marginTop: '0.75rem' }}>
+            <label htmlFor="create-name">Name</label>
+            <input
+              id="create-name"
+              className="input"
+              placeholder="Mia"
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              required
+            />
+          </div>
+          <div className="field" style={{ marginTop: '0.75rem' }}>
+            <label htmlFor="create-grade">Grade</label>
+            <input
+              id="create-grade"
+              className="input"
+              type="number"
+              min="1"
+              max="12"
+              value={form.grade}
+              onChange={(e) => setForm((f) => ({ ...f, grade: e.target.value }))}
+              required
+            />
+          </div>
+          {error ? <div className="alert" style={{ marginTop: '0.75rem' }}>{error}</div> : null}
+          <div className="button-row modal-actions" style={{ marginTop: '1.25rem' }}>
+            <button type="submit" className="button" disabled={isSaving}>
+              {isSaving ? 'Adding...' : 'Add child'}
+            </button>
+            <button type="button" className="button-secondary" onClick={onClose}>Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+function EditChildModal({ child, onSave, onClose, isSaving, error }) {
+  const [form, setForm] = useState({ name: child.name, grade: String(child.grade) })
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    const name  = form.name.trim()
+    const grade = Number(form.grade)
+    if (!name || grade < 1 || grade > 12) return
+    onSave({ name, grade })
   }
 
-  if ((requireAccessCode || normalizedCode) && normalizedCode.length < 4) {
-    return 'Access code must contain at least 4 characters.'
-  }
-
-  return null
+  return createPortal(
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-card" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+          <h3 style={{ margin: 0 }}>Edit {child.name}</h3>
+          <button type="button" className="modal-close-btn" onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="field">
+            <label htmlFor="edit-name">Name</label>
+            <input
+              id="edit-name"
+              className="input"
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              required
+            />
+          </div>
+          <div className="field" style={{ marginTop: '0.75rem' }}>
+            <label htmlFor="edit-grade">Grade</label>
+            <input
+              id="edit-grade"
+              className="input"
+              type="number"
+              min="1"
+              max="12"
+              value={form.grade}
+              onChange={(e) => setForm((f) => ({ ...f, grade: e.target.value }))}
+              required
+            />
+          </div>
+          {error ? <div className="alert" style={{ marginTop: '0.75rem' }}>{error}</div> : null}
+          <div className="button-row modal-actions" style={{ marginTop: '1.25rem' }}>
+            <button type="submit" className="button" disabled={isSaving}>
+              {isSaving ? 'Saving...' : 'Save'}
+            </button>
+            <button type="button" className="button-secondary" onClick={onClose}>Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>,
+    document.body,
+  )
 }
 
 export default function ParentChildrenPage() {
   const { session } = useAuth()
   const [children, setChildren] = useState([])
   const [isLoading, setIsLoading] = useState(true)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [freshAccessCode, setFreshAccessCode] = useState('')
-  const [form, setForm] = useState({ name: '', grade: '1', accessCode: '' })
-  const [editingChildId, setEditingChildId] = useState(null)
-  const [editForm, setEditForm] = useState({ name: '', grade: '1', accessCode: '' })
+
+  const [sortKey, setSortKey]       = useState('name-asc')
+  const [filterName, setFilterName] = useState('')
+
+  const [showCreate, setShowCreate]   = useState(false)
+  const [isCreating, setIsCreating]   = useState(false)
+  const [createError, setCreateError] = useState('')
+
+  const [editTarget, setEditTarget]   = useState(null)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
-  const [isDeletingChildId, setIsDeletingChildId] = useState(null)
-  const [isResettingChildId, setIsResettingChildId] = useState(null)
-  const [statusMessage, setStatusMessage] = useState('')
-  const [gmailForm, setGmailForm] = useState({ gmailEmail: '', name: '', grade: '1' })
-  const [isSubmittingGmail, setIsSubmittingGmail] = useState(false)
-  const [gmailTab, setGmailTab] = useState(false)
+  const [editError, setEditError]     = useState('')
+
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [isDeleting, setIsDeleting]     = useState(false)
 
   useEffect(() => {
-    let isMounted = true
-
-    async function loadChildren() {
-      if (!session?.accessToken) {
-        if (isMounted) {
-          setIsLoading(false)
-        }
-        return
-      }
-
+    let mounted = true
+    async function load() {
+      if (!session?.accessToken) { setIsLoading(false); return }
       try {
-        setError('')
-        setStatusMessage('')
-        const response = await getChildren(session.accessToken)
-        if (isMounted) {
-          setChildren(response)
-        }
-      } catch (requestError) {
-        if (isMounted) {
-          setError(requestError.message)
-        }
+        const data = await getChildren(session.accessToken)
+        if (mounted) setChildren(data)
+      } catch (err) {
+        if (mounted) setError(err.message)
       } finally {
-        if (isMounted) {
-          setIsLoading(false)
-        }
+        if (mounted) setIsLoading(false)
       }
     }
-
-    loadChildren()
-
-    return () => {
-      isMounted = false
-    }
+    load()
+    return () => { mounted = false }
   }, [session?.accessToken])
 
-  function updateField(name, value) {
-    setForm((current) => ({ ...current, [name]: value }))
-  }
-
-  function startEditing(child) {
-    setError('')
-    setFreshAccessCode('')
-    setStatusMessage('')
-    setEditingChildId(child.id)
-    setEditForm({
-      name: child.name,
-      grade: String(child.grade),
-      accessCode: '',
-    })
-  }
-
-  function cancelEditing() {
-    setEditingChildId(null)
-    setEditForm({ name: '', grade: '1', accessCode: '' })
-  }
-
-  function updateEditField(name, value) {
-    setEditForm((current) => ({ ...current, [name]: value }))
-  }
-
-  async function handleCreateChild(event) {
-    event.preventDefault()
-    if (!session?.accessToken) {
-      return
-    }
-
-    const validationError = validateChildPayload(form)
-    if (validationError) {
-      setError(validationError)
-      setStatusMessage('')
-      setFreshAccessCode('')
-      return
-    }
-
-    setIsSubmitting(true)
-    setError('')
-    setFreshAccessCode('')
-    setStatusMessage('')
-
+  async function handleCreate(payload) {
+    setIsCreating(true)
+    setCreateError('')
     try {
-      const payload = {
-        name: form.name.trim(),
-        grade: Number(form.grade),
-        accessCode: form.accessCode.trim() || null,
-      }
-      const response = await createChild(session.accessToken, payload)
-      setChildren((current) => [...current, response.child])
-      setFreshAccessCode(response.accessCode)
-      setStatusMessage(`${response.child.name} was created successfully.`)
-      setForm({ name: '', grade: '1', accessCode: '' })
-    } catch (requestError) {
-      setError(requestError.message)
+      const result = await createChildWithGmail(session.accessToken, payload)
+      setChildren((cur) => [...cur, result.child])
+      setShowCreate(false)
+    } catch (err) {
+      setCreateError(err.message)
     } finally {
-      setIsSubmitting(false)
+      setIsCreating(false)
     }
   }
 
-  function updateGmailField(name, value) {
-    setGmailForm((current) => ({ ...current, [name]: value }))
-  }
-
-  async function handleCreateChildWithGmail(event) {
-    event.preventDefault()
-    if (!session?.accessToken) {
-      return
-    }
-
-    const trimmedEmail = gmailForm.gmailEmail.trim().toLowerCase()
-    const trimmedName = gmailForm.name.trim()
-    const parsedGrade = Number(gmailForm.grade)
-
-    if (!trimmedEmail.endsWith('@gmail.com')) {
-      setError('Please enter a valid Gmail address (must end with @gmail.com).')
-      setStatusMessage('')
-      return
-    }
-
-    if (!trimmedName) {
-      setError('Name is required.')
-      setStatusMessage('')
-      return
-    }
-
-    if (!Number.isInteger(parsedGrade) || parsedGrade < 1 || parsedGrade > 12) {
-      setError('Grade must be a whole number between 1 and 12.')
-      setStatusMessage('')
-      return
-    }
-
-    setIsSubmittingGmail(true)
-    setError('')
-    setStatusMessage('')
-
-    try {
-      const payload = {
-        gmailEmail: trimmedEmail,
-        name: trimmedName,
-        grade: parsedGrade,
-      }
-      const response = await createChildWithGmail(session.accessToken, payload)
-      setChildren((current) => [...current, response.child])
-      setStatusMessage(`${response.child.name} was created with Gmail SSO. They can now sign in using Google.`)
-      setGmailForm({ gmailEmail: '', name: '', grade: '1' })
-    } catch (requestError) {
-      setError(requestError.message)
-    } finally {
-      setIsSubmittingGmail(false)
-    }
-  }
-
-  async function handleResetAccessCode(childId) {
-    if (!session?.accessToken) {
-      return
-    }
-
-    setError('')
-    setFreshAccessCode('')
-    setStatusMessage('')
-    setIsResettingChildId(childId)
-
-    try {
-      const response = await resetChildAccessCode(session.accessToken, childId)
-      setFreshAccessCode(`Child ${response.childId}: ${response.accessCode}`)
-      setStatusMessage('Access code was reset successfully.')
-    } catch (requestError) {
-      setError(requestError.message)
-    } finally {
-      setIsResettingChildId(null)
-    }
-  }
-
-  async function handleSaveChild(childId) {
-    if (!session?.accessToken) {
-      return
-    }
-
-    const validationError = validateChildPayload(editForm)
-    if (validationError) {
-      setError(validationError)
-      setStatusMessage('')
-      setFreshAccessCode('')
-      return
-    }
-
-    setError('')
-    setFreshAccessCode('')
-    setStatusMessage('')
+  async function handleSaveEdit(payload) {
+    if (!editTarget) return
     setIsSavingEdit(true)
-
+    setEditError('')
     try {
-      const response = await updateChild(session.accessToken, childId, {
-        name: editForm.name.trim(),
-        grade: Number(editForm.grade),
-        accessCode: editForm.accessCode.trim() || null,
-      })
-
-      setChildren((current) => current.map((child) => (
-        child.id === childId ? response : child
-      )))
-      setStatusMessage(`${response.name} was updated successfully.`)
-      cancelEditing()
-    } catch (requestError) {
-      setError(requestError.message)
+      const updated = await updateChild(session.accessToken, editTarget.id, payload)
+      setChildren((cur) => cur.map((c) => c.id === updated.id ? updated : c))
+      setEditTarget(null)
+    } catch (err) {
+      setEditError(err.message)
     } finally {
       setIsSavingEdit(false)
     }
   }
 
-  async function handleDeleteChild(childId) {
-    if (!session?.accessToken) {
-      return
-    }
-
-    const child = children.find((item) => item.id === childId)
-    if (!child) {
-      return
-    }
-
-    const isConfirmed = window.confirm(`Delete ${child.name}? This action cannot be undone.`)
-    if (!isConfirmed) {
-      return
-    }
-
-    setError('')
-    setFreshAccessCode('')
-    setStatusMessage('')
-    setIsDeletingChildId(childId)
-
+  async function handleDelete(child) {
+    setIsDeleting(true)
     try {
-      await deleteChild(session.accessToken, childId)
-      setChildren((current) => current.filter((child) => child.id !== childId))
-      setStatusMessage(`${child.name} was deleted.`)
-    } catch (requestError) {
-      setError(requestError.message)
+      await deleteChild(session.accessToken, child.id)
+      setChildren((cur) => cur.filter((c) => c.id !== child.id))
+      setDeleteTarget(null)
+    } catch (err) {
+      setError(err.message)
+      setDeleteTarget(null)
     } finally {
-      setIsDeletingChildId(null)
+      setIsDeleting(false)
     }
   }
 
+  const displayed = useMemo(() => {
+    const filtered = filterName
+      ? children.filter((c) => c.name.toLowerCase().includes(filterName.toLowerCase()))
+      : children
+    return sortChildren(filtered, sortKey)
+  }, [children, filterName, sortKey])
+
   return (
-    <section className="panel-grid">
-      <article className="hero-card children-hero">
-        <div className="brand-kicker">Epic 3.2</div>
-        <h2>Children management is now connected to the API.</h2>
-        <p>
-          This first parent data screen loads real children, creates new child accounts,
-          reveals issued access codes, and supports reset/delete actions.
+    <section className="assignments-page">
+      <div className="children-list-header">
+        <div>
+          <h2>Children</h2>
+          <p>Manage children linked to your account.</p>
+        </div>
+        <button
+          type="button"
+          className="button"
+          onClick={() => { setShowCreate(true); setCreateError('') }}
+        >
+          + Add child
+        </button>
+      </div>
+
+      {error ? <div className="alert">{error}</div> : null}
+
+      <div className="admin-filter-bar">
+        <input
+          className="admin-filter-input"
+          type="text"
+          placeholder="Search by name…"
+          value={filterName}
+          onChange={(e) => setFilterName(e.target.value)}
+          aria-label="Filter by name"
+        />
+        <select
+          className="admin-filter-input"
+          value={sortKey}
+          onChange={(e) => setSortKey(e.target.value)}
+          aria-label="Sort children"
+          style={{ flex: '0 1 200px' }}
+        >
+          {SORT_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <span className="badge" style={{ alignSelf: 'center', marginLeft: 'auto' }}>
+          {displayed.length} child{displayed.length !== 1 ? 'ren' : ''}
+        </span>
+      </div>
+
+      {isLoading ? <p className="children-empty">Loading children...</p> : null}
+
+      {!isLoading && displayed.length === 0 ? (
+        <p className="children-empty">
+          {children.length === 0
+            ? 'No children yet. Add the first child!'
+            : 'No children match the search.'}
         </p>
-        <div className="badge-row">
-          <span className="badge">GET /children</span>
-          <span className="badge">POST /children</span>
-          <span className="badge">PATCH /children/{'{id}'}</span>
-          <span className="badge">POST /access-code/reset</span>
-          <span className="badge">DELETE /children/{'{id}'}</span>
+      ) : null}
+
+      {!isLoading && displayed.length > 0 ? (
+        <div className="children-list">
+          {displayed.map((child) => (
+            <article key={child.id} className="child-row">
+              <div>
+                <div className="child-name">{child.name}</div>
+                <div className="child-meta">
+                  Grade {child.grade}
+                  {child.gmailEmail ? (
+                    <span style={{ marginLeft: '0.5em' }}>· {child.gmailEmail}</span>
+                  ) : null}
+                </div>
+              </div>
+              <div className="button-row child-actions">
+                <button
+                  type="button"
+                  className="button-secondary"
+                  style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
+                  onClick={() => { setEditTarget(child); setEditError('') }}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="button-secondary"
+                  style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', borderColor: 'rgba(255,80,80,0.4)', color: 'var(--danger)' }}
+                  onClick={() => setDeleteTarget(child)}
+                >
+                  Delete
+                </button>
+              </div>
+            </article>
+          ))}
         </div>
-      </article>
+      ) : null}
 
-      <article className="panel-card children-form-card">
-        <div style={{ marginBottom: '1rem' }}>
-          <div className="button-row" style={{ gap: '0.5rem' }}>
-            <button
-              type="button"
-              className={gmailTab ? 'button-secondary' : 'button-secondary' + (gmailTab ? '' : ' active')}
-              onClick={() => setGmailTab(false)}
-              style={{ backgroundColor: gmailTab ? 'transparent' : 'var(--accent)', color: gmailTab ? 'var(--text)' : 'var(--bg)' }}
-            >
-              Access Code
-            </button>
-            <button
-              type="button"
-              className={gmailTab ? 'button-secondary' + ' active' : 'button-secondary'}
-              onClick={() => setGmailTab(true)}
-              style={{ backgroundColor: gmailTab ? 'var(--accent)' : 'transparent', color: gmailTab ? 'var(--bg)' : 'var(--text)' }}
-            >
-              Gmail SSO
-            </button>
-          </div>
-        </div>
+      {showCreate ? (
+        <CreateChildModal
+          onSave={handleCreate}
+          onClose={() => setShowCreate(false)}
+          isSaving={isCreating}
+          error={createError}
+        />
+      ) : null}
 
-        {!gmailTab ? (
-          <>
-            <h3>Create child with access code</h3>
-            <p>Add a child profile and optionally set a custom access code.</p>
+      {editTarget ? (
+        <EditChildModal
+          child={editTarget}
+          onSave={handleSaveEdit}
+          onClose={() => setEditTarget(null)}
+          isSaving={isSavingEdit}
+          error={editError}
+        />
+      ) : null}
 
-            <form className="auth-form compact-form" onSubmit={handleCreateChild}>
-              <div className="field">
-                <label htmlFor="child-name">Name</label>
-                <input
-                  id="child-name"
-                  className="input"
-                  value={form.name}
-                  onChange={(event) => updateField('name', event.target.value)}
-                  placeholder="Mia"
-                  required
-                />
-              </div>
-
-              <div className="field">
-                <label htmlFor="child-grade">Grade</label>
-                <input
-                  id="child-grade"
-                  className="input"
-                  type="number"
-                  min="1"
-                  max="12"
-                  value={form.grade}
-                  onChange={(event) => updateField('grade', event.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="field">
-                <label htmlFor="child-access-code">Custom access code</label>
-                <input
-                  id="child-access-code"
-                  className="input"
-                  value={form.accessCode}
-                  onChange={(event) => updateField('accessCode', event.target.value)}
-                  placeholder="Optional, min 4 chars"
-                />
-              </div>
-
-              <button type="submit" className="button" disabled={isSubmitting}>
-                {isSubmitting ? 'Creating...' : 'Create child'}
+      {deleteTarget ? (
+        <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
+          <div className="modal-card" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0 }}>Delete child</h3>
+              <button type="button" className="modal-close-btn" onClick={() => setDeleteTarget(null)}>✕</button>
+            </div>
+            <p style={{ margin: '0 0 1.5rem' }}>
+              Are you sure you want to delete <strong>{deleteTarget.name}</strong>?
+              All their assignments and results will also be removed. This cannot be undone.
+            </p>
+            <div className="button-row modal-actions">
+              <button
+                type="button"
+                className="button"
+                style={{ background: 'linear-gradient(135deg, #ff5757, #c0392b)' }}
+                disabled={isDeleting}
+                onClick={() => handleDelete(deleteTarget)}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
               </button>
-            </form>
-
-            {freshAccessCode ? (
-              <div className="info-block success-block">
-                <strong>Issued access code</strong>
-                <span>{freshAccessCode}</span>
-              </div>
-            ) : null}
-          </>
-        ) : (
-          <>
-            <h3>Create child with Gmail SSO</h3>
-            <p>Add a child with Gmail address. They can sign in using Google.</p>
-
-            <form className="auth-form compact-form" onSubmit={handleCreateChildWithGmail}>
-              <div className="field">
-                <label htmlFor="child-gmail">Gmail address</label>
-                <input
-                  id="child-gmail"
-                  className="input"
-                  type="email"
-                  value={gmailForm.gmailEmail}
-                  onChange={(event) => updateGmailField('gmailEmail', event.target.value)}
-                  placeholder="child@gmail.com"
-                  required
-                />
-              </div>
-
-              <div className="field">
-                <label htmlFor="child-gmail-name">Name</label>
-                <input
-                  id="child-gmail-name"
-                  className="input"
-                  value={gmailForm.name}
-                  onChange={(event) => updateGmailField('name', event.target.value)}
-                  placeholder="Mia"
-                  required
-                />
-              </div>
-
-              <div className="field">
-                <label htmlFor="child-gmail-grade">Grade</label>
-                <input
-                  id="child-gmail-grade"
-                  className="input"
-                  type="number"
-                  min="1"
-                  max="12"
-                  value={gmailForm.grade}
-                  onChange={(event) => updateGmailField('grade', event.target.value)}
-                  required
-                />
-              </div>
-
-              <button type="submit" className="button" disabled={isSubmittingGmail}>
-                {isSubmittingGmail ? 'Creating...' : 'Create child with Gmail'}
+              <button type="button" className="button-secondary" onClick={() => setDeleteTarget(null)}>
+                Cancel
               </button>
-            </form>
-          </>
-        )}
-
-        {statusMessage ? (
-          <div className="info-block success-block children-status-block">
-            <strong>Update</strong>
-            <span>{statusMessage}</span>
+            </div>
           </div>
-        ) : null}
-
-        {error ? <div className="alert children-alert">{error}</div> : null}
-      </article>
-
-      <article className="children-list-card">
-        <div className="children-list-header">
-          <div>
-            <h3>Children</h3>
-            <p>Real data from the authenticated parent session.</p>
-          </div>
-          <span className="badge">{children.length} records</span>
         </div>
-
-        {isLoading ? <p className="children-empty">Loading children...</p> : null}
-
-        {!isLoading && children.length === 0 ? (
-          <p className="children-empty">No children yet. Create the first child from the panel on the right.</p>
-        ) : null}
-
-        {!isLoading && children.length > 0 ? (
-          <div className="children-list">
-            {children.map((child) => (
-              <article key={child.id} className="child-row">
-                {editingChildId === child.id ? (
-                  <>
-                    <div className="child-edit-grid">
-                      <div className="field">
-                        <label htmlFor={`edit-name-${child.id}`}>Name</label>
-                        <input
-                          id={`edit-name-${child.id}`}
-                          className="input"
-                          value={editForm.name}
-                          onChange={(event) => updateEditField('name', event.target.value)}
-                        />
-                      </div>
-                      <div className="field">
-                        <label htmlFor={`edit-grade-${child.id}`}>Grade</label>
-                        <input
-                          id={`edit-grade-${child.id}`}
-                          className="input"
-                          type="number"
-                          min="1"
-                          max="12"
-                          value={editForm.grade}
-                          onChange={(event) => updateEditField('grade', event.target.value)}
-                        />
-                      </div>
-                      <div className="field child-access-field">
-                        <label htmlFor={`edit-code-${child.id}`}>New access code</label>
-                        <input
-                          id={`edit-code-${child.id}`}
-                          className="input"
-                          value={editForm.accessCode}
-                          onChange={(event) => updateEditField('accessCode', event.target.value)}
-                          placeholder="Optional, min 4 chars"
-                        />
-                      </div>
-                    </div>
-                    <div className="button-row child-actions">
-                      <button
-                        type="button"
-                        className="button"
-                        disabled={isSavingEdit}
-                        onClick={() => handleSaveChild(child.id)}
-                      >
-                        {isSavingEdit ? 'Saving...' : 'Save'}
-                      </button>
-                      <button type="button" className="button-secondary" onClick={cancelEditing}>
-                        Cancel
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <div className="child-name">{child.name}</div>
-                      <div className="child-meta">Grade {child.grade} · {child.id}</div>
-                    </div>
-                    <div className="button-row child-actions">
-                      <button
-                        type="button"
-                        className="button-secondary"
-                        disabled={isResettingChildId === child.id || isDeletingChildId === child.id}
-                        onClick={() => startEditing(child)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="button-secondary"
-                        disabled={isResettingChildId === child.id || isDeletingChildId === child.id}
-                        onClick={() => handleResetAccessCode(child.id)}
-                      >
-                        {isResettingChildId === child.id ? 'Resetting...' : 'Reset code'}
-                      </button>
-                      <button
-                        type="button"
-                        className="button-secondary danger-button"
-                        disabled={isDeletingChildId === child.id || isResettingChildId === child.id}
-                        onClick={() => handleDeleteChild(child.id)}
-                      >
-                        {isDeletingChildId === child.id ? 'Deleting...' : 'Delete'}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </article>
-            ))}
-          </div>
-        ) : null}
-      </article>
+      ) : null}
     </section>
   )
 }

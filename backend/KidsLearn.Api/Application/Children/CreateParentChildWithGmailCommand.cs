@@ -88,7 +88,7 @@ public sealed class CreateParentChildWithGmailCommandHandler : IRequestHandler<C
             if (existingChild is not null && scopedParentIds.Contains(existingChild.ParentId))
             {
                 return CreateParentChildWithGmailResult.Created(new CreatedChildWithGmailResponse(
-                    new ChildResponse(existingChild.Id, existingChild.ParentId, existingChild.Name, existingChild.Grade)));
+                    new ChildResponse(existingChild.Id, existingChild.ParentId, existingChild.Name, existingChild.Grade, gmailEmail)));
             }
 
             existingUser.ExternalProvider = GoogleProviderName;
@@ -122,7 +122,7 @@ public sealed class CreateParentChildWithGmailCommandHandler : IRequestHandler<C
         await _db.SaveChangesAsync(cancellationToken);
 
         var response = new CreatedChildWithGmailResponse(
-            new ChildResponse(child.Id, child.ParentId, child.Name, child.Grade));
+            new ChildResponse(child.Id, child.ParentId, child.Name, child.Grade, gmailEmail));
 
         return CreateParentChildWithGmailResult.Created(response);
     }
