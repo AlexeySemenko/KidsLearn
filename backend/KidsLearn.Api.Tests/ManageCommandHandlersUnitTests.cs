@@ -244,5 +244,8 @@ public class ManageCommandHandlersUnitTests
             ParentLinkedEmailSent = true;
             return Task.FromResult(true);
         }
+
+        public Task<bool> SendFriendInviteAsync(string toEmail, string inviterName, string inviteUrl)
+            => Task.FromResult(true);
     }
 }

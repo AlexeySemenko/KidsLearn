@@ -13,6 +13,8 @@ import ParentAssignmentsPage from './pages/ParentAssignmentsPage'
 import ParentHomePage from './pages/ParentHomePage'
 import ParentLessonsPage from './pages/ParentLessonsPage'
 import ChildResultsPage from './pages/ChildResultsPage'
+import ChildFriendsPage from './pages/ChildFriendsPage'
+import ChildFriendInvitePage from './pages/ChildFriendInvitePage'
 import ParentReportsPage from './pages/ParentReportsPage'
 import ParentManagePage from './pages/ParentManagePage'
 
@@ -75,6 +77,8 @@ export default function App() {
             <Route path="/child" element={<AppShell />}>
               <Route index element={<ChildHomePage />} />
               <Route path="results" element={<ChildResultsPage />} />
+              <Route path="friends" element={<ChildFriendsPage />} />
+              <Route path="friends/invite/:token" element={<ChildFriendInvitePage />} />
             </Route>
           </Route>
 

@@ -282,5 +282,8 @@ public class AdminCommandHandlersUnitTests
 
         public Task<bool> SendParentLinkedAsync(string toEmail, string? displayName, string linkedByEmail)
             => Task.FromResult(true);
+
+        public Task<bool> SendFriendInviteAsync(string toEmail, string inviterName, string inviteUrl)
+            => Task.FromResult(true);
     }
 }

@@ -600,3 +600,39 @@ export async function unlinkParentAccount(accessToken: string, linkedParentId: s
     method: 'DELETE',
   }))
 }
+
+export interface FriendResponse {
+  friendshipId: string
+  childId: string
+  name: string
+  grade: number
+  friendsSince: string
+}
+
+export interface FriendInviteInfoResponse {
+  friendshipId: string
+  requesterName: string
+  requesterGrade: number
+  status: string
+}
+
+export async function getChildFriends(accessToken: string): Promise<FriendResponse[]> {
+  return request<FriendResponse[]>('/api/v1/child/friends/', withAuth(accessToken))
+}
+
+export async function sendChildFriendInvite(accessToken: string, email: string): Promise<{ message: string }> {
+  return request<{ message: string }>('/api/v1/child/friends/invite', withAuth(accessToken, {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  }))
+}
+
+export async function getChildFriendInvite(token: string): Promise<FriendInviteInfoResponse> {
+  return request<FriendInviteInfoResponse>(`/api/v1/child/friends/invite/${token}`)
+}
+
+export async function acceptChildFriendInvite(accessToken: string, token: string): Promise<FriendResponse> {
+  return request<FriendResponse>(`/api/v1/child/friends/invite/${token}/accept`, withAuth(accessToken, {
+    method: 'POST',
+  }))
+}

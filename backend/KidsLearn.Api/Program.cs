@@ -283,7 +283,7 @@ apiV1.MapGet("/health/ready", async (AppDbContext db) =>
 
 apiV1.MapAuthController();
 apiV1.MapParentController();
-apiV1.MapChildController();
+apiV1.MapChildController(app);
 apiV1.MapAdminController();
 
 app.MapFallbackToFile("index.html");

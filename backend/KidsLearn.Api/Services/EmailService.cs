@@ -5,6 +5,7 @@ public interface IEmailService
 {
     Task<bool> SendInvitationAsync(string toEmail, string? displayName, string inviterName);
     Task<bool> SendParentLinkedAsync(string toEmail, string? displayName, string linkedByEmail);
+    Task<bool> SendFriendInviteAsync(string toEmail, string inviterName, string inviteUrl);
 }
 
 public class EmailService(IConfiguration config, ILogger<EmailService> logger) : IEmailService
@@ -128,6 +129,65 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to send parent link notification to {Email}", toEmail);
+            return false;
+        }
+    }
+
+    public async Task<bool> SendFriendInviteAsync(string toEmail, string inviterName, string inviteUrl)
+    {
+        var host = config["Email:SmtpHost"];
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            logger.LogInformation(
+                "Email not configured — friend invite would be sent to {Email} from {Inviter}, url: {Url}",
+                toEmail, inviterName, inviteUrl);
+            return false;
+        }
+
+        var port = int.TryParse(config["Email:SmtpPort"], out var p) ? p : 587;
+        var username = config["Email:SmtpUsername"] ?? string.Empty;
+        var password = config["Email:SmtpPassword"] ?? string.Empty;
+        var fromAddress = config["Email:FromAddress"] ?? username;
+        var fromName = config["Email:FromName"] ?? "KidsLearnAI";
+
+        var body = $"""
+            <html><body style="font-family:sans-serif;color:#0f2745;max-width:520px;margin:0 auto;">
+              <h2 style="color:#0f2745;">Friend request on KidsLearnAI 🤝</h2>
+              <p>Hi!</p>
+              <p><strong>{inviterName}</strong> wants to be friends with you on <strong>KidsLearnAI</strong>!</p>
+              <p style="margin-top:1.5rem;">
+                <a href="{inviteUrl}" style="background:#f4d35e;color:#0f2745;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;">
+                  Accept friend request
+                </a>
+              </p>
+              <p style="color:#888;font-size:0.85rem;margin-top:2rem;">If you weren't expecting this, you can safely ignore this email.</p>
+            </body></html>
+            """;
+
+        try
+        {
+            using var client = new SmtpClient(host, port)
+            {
+                Credentials = new NetworkCredential(username, password),
+                EnableSsl = true,
+            };
+
+            var message = new MailMessage
+            {
+                From = new MailAddress(fromAddress, fromName),
+                Subject = $"{inviterName} wants to be your friend on KidsLearnAI",
+                Body = body,
+                IsBodyHtml = true,
+            };
+            message.To.Add(new MailAddress(toEmail));
+
+            await client.SendMailAsync(message);
+            logger.LogInformation("Friend invite sent to {Email}", toEmail);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to send friend invite to {Email}", toEmail);
             return false;
         }
     }

@@ -13,6 +13,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AssignmentResult> Results => Set<AssignmentResult>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<ParentAccountLink> ParentAccountLinks => Set<ParentAccountLink>();
+    public DbSet<ChildFriendship> ChildFriendships => Set<ChildFriendship>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -155,6 +156,25 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithOne(x => x.Result)
                 .HasForeignKey<AssignmentResult>(x => x.AssignmentId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ChildFriendship>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.InviteToken).IsUnique();
+            entity.Property(x => x.InviteeEmail).HasMaxLength(320);
+            entity.Property(x => x.InviteToken).HasMaxLength(128);
+            entity.Property(x => x.Status).HasMaxLength(20);
+
+            entity.HasOne(x => x.Requester)
+                .WithMany()
+                .HasForeignKey(x => x.RequesterId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.Acceptor)
+                .WithMany()
+                .HasForeignKey(x => x.AcceptorId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         var defaultParentId = Guid.Parse("00000000-0000-0000-0000-000000000001");

@@ -3,10 +3,12 @@ using MediatR;
 
 public static class ChildController
 {
-    public static RouteGroupBuilder MapChildController(this RouteGroupBuilder apiV1)
+    public static RouteGroupBuilder MapChildController(this RouteGroupBuilder apiV1, IEndpointRouteBuilder app)
     {
         var childApi = apiV1.MapGroup("/child")
             .RequireAuthorization("ChildOnly");
+
+        childApi.MapChildFriendsEndpoints(app);
 
         childApi.MapGet("/assignments", async (AppDbContext db, ISender sender, ClaimsPrincipal user) =>
         {
