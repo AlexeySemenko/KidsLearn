@@ -92,6 +92,9 @@ export default function ParentHomePage() {
   }
 
   const selectedChild = children.find((c) => c.id === selectedChildId)
+  const selectedChildPendingCount = selectedChildId
+    ? assignments.filter((a) => a.childId === selectedChildId && a.status !== 'Completed').length
+    : 0
   const completedAssignments = assignments.filter((a) => a.status === 'Completed').length
   const overdueAssignments = assignments.filter(
     (a) => a.dueDate && a.status !== 'Completed' && new Date(a.dueDate).getTime() < Date.now()
@@ -157,7 +160,7 @@ export default function ParentHomePage() {
             </h3>
             <span className="badge">Grade {selectedChild?.grade}</span>
           </div>
-          <ChildStatsPanel results={childResults} isLoading={childResultsLoading} />
+          <ChildStatsPanel results={childResults} isLoading={childResultsLoading} pendingCount={selectedChildPendingCount} />
         </div>
       ) : (
         <>

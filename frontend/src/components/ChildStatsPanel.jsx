@@ -86,9 +86,26 @@ export default function ChildStatsPanel({ results, isLoading, pendingCount = 0 }
 
   if (!stats) {
     return (
-      <div className="child-empty-stats">
-        <span className="child-empty-stats-icon">🎯</span>
-        <p>No completed missions yet.</p>
+      <div className="child-stats-panel">
+        <div className="child-stats-grid">
+          <div className="child-stat-card child-stat-card--split" data-color="blue">
+            <div className="child-stat-split-half">
+              <span className="child-stat-icon">⏳</span>
+              <span className="child-stat-value">{pendingCount}</span>
+              <span className="child-stat-label">Lessons waiting</span>
+            </div>
+            <div className="child-stat-split-divider" />
+            <div className="child-stat-split-half">
+              <span className="child-stat-icon">🚀</span>
+              <span className="child-stat-value">0</span>
+              <span className="child-stat-label">Lessons done</span>
+            </div>
+          </div>
+        </div>
+        <div className="child-empty-stats" style={{ marginTop: '0.5rem' }}>
+          <span className="child-empty-stats-icon">🎯</span>
+          <p>No completed missions yet.</p>
+        </div>
       </div>
     )
   }
