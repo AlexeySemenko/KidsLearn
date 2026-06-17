@@ -1,5 +1,6 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using Microsoft.EntityFrameworkCore;
+using MediatR;
 
 public static class AdminController
 {
@@ -7,134 +8,50 @@ public static class AdminController
     {
         var admin = apiV1.MapGroup("/admin").RequireAuthorization("AdminOnly");
 
-        admin.MapGet("/users", async (AppDbContext db) =>
+        admin.MapGet("/users", async (ISender sender) =>
         {
-            var users = await db.Users
-                .AsNoTracking()
-                .OrderBy(u => u.CreatedAt)
-                .Select(u => new AdminUserResponse(
-                    u.Id,
-                    u.Email,
-                    u.DisplayName,
-                    u.Role.ToString(),
-                    u.EmailVerified,
-                    u.ExternalProvider,
-                    u.CreatedAt,
-                    u.LastAccessAt))
-                .ToListAsync();
-
+            var users = await sender.Send(new GetAdminUsersQuery());
             return Results.Ok(users);
         });
 
-        admin.MapPost("/users", async (
-            AppDbContext db,
-            IEmailService emailService,
-            ClaimsPrincipal caller,
-            AdminCreateUserRequest request) =>
+        admin.MapPost("/users", async (ISender sender, ClaimsPrincipal caller, AdminCreateUserRequest request) =>
         {
-            if (string.IsNullOrWhiteSpace(request.Email))
-            {
-                return Results.BadRequest(new { error = "Email is required." });
-            }
+            var callerEmail = caller.FindFirstValue(JwtRegisteredClaimNames.Email) ?? "KidsLearnAI Admin";
+            var result = await sender.Send(new CreateAdminUserCommand(request, callerEmail));
 
-            var normalizedEmail = request.Email.Trim().ToLowerInvariant();
-
-            if (!Enum.TryParse<UserRole>(request.Role, ignoreCase: true, out var role))
+            return result.StatusCode switch
             {
-                return Results.BadRequest(new { error = $"Invalid role '{request.Role}'. Valid values: Parent, Child, Admin." });
-            }
-
-            var existing = await db.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail);
-            if (existing is not null)
-            {
-                return Results.Conflict(new { error = "A user with this email already exists." });
-            }
-
-            var user = new AppUser
-            {
-                Email = normalizedEmail,
-                DisplayName = string.IsNullOrWhiteSpace(request.DisplayName) ? null : request.DisplayName.Trim(),
-                PasswordHash = string.Empty,
-                Role = role,
-                EmailVerified = false,
-                CreatedAt = DateTime.UtcNow,
+                StatusCodes.Status201Created => Results.Created(
+                    $"/api/v1/admin/users/{result.User!.Id}",
+                    new AdminCreateUserResponse(result.User, result.EmailSent)),
+                StatusCodes.Status409Conflict => Results.Conflict(new { error = result.Error }),
+                _ => Results.BadRequest(new { error = result.Error }),
             };
-
-            db.Users.Add(user);
-            await db.SaveChangesAsync();
-
-            var callerEmail = caller.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Email) ?? "KidsLearnAI Admin";
-            var emailSent = await emailService.SendInvitationAsync(user.Email, user.DisplayName, callerEmail);
-
-            var userResponse = new AdminUserResponse(
-                user.Id,
-                user.Email,
-                user.DisplayName,
-                user.Role.ToString(),
-                user.EmailVerified,
-                user.ExternalProvider,
-                user.CreatedAt,
-                user.LastAccessAt);
-
-            return Results.Created($"/api/v1/admin/users/{user.Id}", new AdminCreateUserResponse(userResponse, emailSent));
         });
 
-        admin.MapPatch("/users/{userId:guid}", async (
-            AppDbContext db,
-            Guid userId,
-            AdminUpdateUserRequest request) =>
+        admin.MapPatch("/users/{userId:guid}", async (ISender sender, Guid userId, AdminUpdateUserRequest request) =>
         {
-            var user = await db.Users.FindAsync(userId);
-            if (user is null)
+            var result = await sender.Send(new UpdateAdminUserCommand(userId, request));
+
+            return result.StatusCode switch
             {
-                return Results.NotFound(new { error = "User not found." });
-            }
-
-            if (request.DisplayName is not null)
-            {
-                user.DisplayName = string.IsNullOrWhiteSpace(request.DisplayName) ? null : request.DisplayName.Trim();
-            }
-
-            if (!string.IsNullOrWhiteSpace(request.Role))
-            {
-                if (!Enum.TryParse<UserRole>(request.Role, ignoreCase: true, out var newRole))
-                {
-                    return Results.BadRequest(new { error = $"Invalid role '{request.Role}'." });
-                }
-                user.Role = newRole;
-            }
-
-            await db.SaveChangesAsync();
-
-            return Results.Ok(new AdminUserResponse(
-                user.Id,
-                user.Email,
-                user.DisplayName,
-                user.Role.ToString(),
-                user.EmailVerified,
-                user.ExternalProvider,
-                user.CreatedAt,
-                user.LastAccessAt));
+                StatusCodes.Status200OK => Results.Ok(result.User),
+                StatusCodes.Status404NotFound => Results.NotFound(new { error = result.Error }),
+                _ => Results.BadRequest(new { error = result.Error }),
+            };
         });
 
-        admin.MapDelete("/users/{userId:guid}", async (AppDbContext db, Guid userId, ClaimsPrincipal caller) =>
+        admin.MapDelete("/users/{userId:guid}", async (ISender sender, Guid userId, ClaimsPrincipal caller) =>
         {
-            var callerId = ApiEndpointHelpers.ResolveUserId(caller);
-            if (callerId == userId)
+            var callerId = ApiEndpointHelpers.ResolveUserId(caller) ?? Guid.Empty;
+            var result = await sender.Send(new DeleteAdminUserCommand(userId, callerId));
+
+            return result.StatusCode switch
             {
-                return Results.BadRequest(new { error = "You cannot delete your own account." });
-            }
-
-            var user = await db.Users.FindAsync(userId);
-            if (user is null)
-            {
-                return Results.NotFound(new { error = "User not found." });
-            }
-
-            db.Users.Remove(user);
-            await db.SaveChangesAsync();
-
-            return Results.NoContent();
+                StatusCodes.Status204NoContent => Results.NoContent(),
+                StatusCodes.Status404NotFound => Results.NotFound(new { error = result.Error }),
+                _ => Results.BadRequest(new { error = result.Error }),
+            };
         });
 
         return apiV1;

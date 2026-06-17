@@ -34,9 +34,9 @@ jobs:
       - name: Build
         run: dotnet build --no-restore -c Release
 
-      # Add "dotnet test" here once you have a test project
-      # - name: Test
-      #   run: dotnet test --no-build -c Release
+      - name: Test
+        working-directory: backend/KidsLearn.Api.Tests
+        run: dotnet test --configuration Release --verbosity normal
 
   # ─────────────────────────────────────────────────────────────
   # 2. Build & test frontend

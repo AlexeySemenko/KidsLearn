@@ -13,7 +13,7 @@ const navByRole = {
     { to: '/parent/assignments', label: 'Assignments' },
     { to: '/parent/ai', label: 'AI Lessons' },
     { to: '/parent/reports', label: 'Reports' },
-    { to: '/parent/manage', label: 'Manage' },
+    { to: '/parent/manage', label: 'Link parent' },
   ],
   Child: [
     { to: '/child', label: 'Home' },
@@ -26,7 +26,7 @@ const navByRole = {
     { to: '/parent/assignments', label: 'Assignments' },
     { to: '/parent/ai', label: 'AI Lessons' },
     { to: '/parent/reports', label: 'Reports' },
-    { to: '/parent/manage', label: 'Manage' },
+    { to: '/parent/manage', label: 'Link parent' },
     { to: '/admin/users', label: 'Users', adminBadge: true },
   ],
 }
