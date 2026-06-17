@@ -3571,6 +3571,7 @@ select.input:invalid {
 }
 
 .parent-child-pillar {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3898,4 +3899,113 @@ select.input:invalid {
   background: rgba(0, 0, 0, 0.06);
   border-color: rgba(0, 0, 0, 0.1);
   color: var(--muted);
+}
+
+/* ── Friend note bubble ─────────────────────────────────────────────────── */
+
+.friend-note-bubble-wrap {
+  flex: 1 1 auto;
+  min-width: 180px;
+  max-width: 340px;
+}
+
+.friend-note-bubble {
+  position: relative;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1.5px solid rgba(99, 102, 241, 0.35);
+  border-radius: 1rem 1rem 1rem 0;
+  padding: 0.6rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.friend-note-bubble--view {
+  cursor: pointer;
+}
+
+.friend-note-bubble--view:hover {
+  background: rgba(99, 102, 241, 0.2);
+}
+
+.friend-note-bubble-tail {
+  position: absolute;
+  bottom: -10px;
+  left: 18px;
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 0 solid transparent;
+  border-top: 10px solid rgba(99, 102, 241, 0.35);
+}
+
+.friend-note-text {
+  font-size: 0.88rem;
+  color: var(--fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.friend-note-placeholder {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.friend-note-edit-hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+  align-self: flex-end;
+}
+
+.friend-note-bubble--editing {
+  cursor: default;
+}
+
+.friend-note-textarea {
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  width: 100%;
+  font-size: 0.88rem;
+  color: var(--fg);
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.friend-note-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+}
+
+/* ── Friend unread envelope icon ──────────────────────────────────────────── */
+
+.friend-unread-envelope {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 1rem;
+  line-height: 1;
+  animation: envelope-blink 1.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes envelope-blink {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.3; transform: scale(0.85); }
+}
+
+:root[data-theme='light'] .friend-note-bubble {
+  background: rgba(99, 102, 241, 0.07);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+:root[data-theme='light'] .friend-note-bubble--view:hover {
+  background: rgba(99, 102, 241, 0.14);
 }

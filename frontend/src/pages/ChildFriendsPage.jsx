@@ -1,10 +1,95 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import ChildStatsPanel from '../components/ChildStatsPanel'
-import { getFriendResults, getChildFriends, sendChildFriendInvite } from '../lib/api'
+import { getFriendNote, getFriendResults, getChildFriends, sendChildFriendInvite, updateFriendNote } from '../lib/api'
 
 const FRIEND_EMOJIS = ['🐼', '🦊', '🐸', '🦁', '🐨', '🐯', '🦄', '🐻', '🐙', '🦋']
 const FRIEND_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#84cc16']
+
+function FriendNoteBubble({ friendChildId, accessToken }) {
+  const [myNote, setMyNote] = useState(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const textareaRef = useRef(null)
+
+  useEffect(() => {
+    let mounted = true
+    async function load() {
+      try {
+        const data = await getFriendNote(accessToken, friendChildId)
+        if (mounted) setMyNote(data.myNote ?? '')
+      } catch {
+        if (mounted) setMyNote('')
+      }
+    }
+    load()
+    return () => { mounted = false }
+  }, [accessToken, friendChildId])
+
+  function startEdit() {
+    setDraft(myNote ?? '')
+    setIsEditing(true)
+    setTimeout(() => textareaRef.current?.focus(), 50)
+  }
+
+  async function saveNote() {
+    setIsSaving(true)
+    try {
+      const trimmed = draft.trim() || null
+      await updateFriendNote(accessToken, friendChildId, trimmed)
+      setMyNote(trimmed ?? '')
+      setIsEditing(false)
+    } catch {
+      // keep editing
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  function cancelEdit() {
+    setIsEditing(false)
+    setDraft('')
+  }
+
+  if (myNote === null) return null // still loading
+
+  return (
+    <div className="friend-note-bubble-wrap">
+      {isEditing ? (
+        <div className="friend-note-bubble friend-note-bubble--editing">
+          <div className="friend-note-bubble-tail" aria-hidden="true" />
+          <textarea
+            ref={textareaRef}
+            className="friend-note-textarea"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            maxLength={500}
+            rows={3}
+            placeholder="Write a message for your friend… 💌"
+          />
+          <div className="friend-note-actions">
+            <button type="button" className="button" style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }} disabled={isSaving} onClick={saveNote}>
+              {isSaving ? 'Saving…' : 'Save'}
+            </button>
+            <button type="button" className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }} onClick={cancelEdit}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" className="friend-note-bubble friend-note-bubble--view" onClick={startEdit} title="Click to edit your message">
+          <div className="friend-note-bubble-tail" aria-hidden="true" />
+          {myNote
+            ? <span className="friend-note-text">{myNote}</span>
+            : <span className="friend-note-placeholder">Leave a message… 💌</span>
+          }
+          <span className="friend-note-edit-hint">✏️</span>
+        </button>
+      )}
+    </div>
+  )
+}
 
 export default function ChildFriendsPage() {
   const { session } = useAuth()
@@ -49,6 +134,12 @@ export default function ChildFriendsPage() {
     setSelectedFriend(friend)
     setFriendResults([])
     setFriendResultsLoading(true)
+
+    // Clear envelope badge optimistically
+    setFriends((prev) => prev.map((f) =>
+      f.friendshipId === friend.friendshipId ? { ...f, hasUnreadMessage: false } : f
+    ))
+
     try {
       const results = await getFriendResults(session.accessToken, friend.childId)
       setFriendResults(results)
@@ -122,6 +213,9 @@ export default function ChildFriendsPage() {
               <span className="pillar-avatar">{FRIEND_EMOJIS[i % FRIEND_EMOJIS.length]}</span>
               <span className="pillar-name">{friend.name}</span>
               <span className="pillar-grade">Grade {friend.grade}</span>
+              {friend.hasUnreadMessage ? (
+                <span className="friend-unread-envelope" aria-label="New message">✉️</span>
+              ) : null}
               {selectedFriend?.friendshipId === friend.friendshipId ? (
                 <span className="pillar-active-hint">tap to close</span>
               ) : null}
@@ -132,12 +226,18 @@ export default function ChildFriendsPage() {
 
       {selectedFriend ? (
         <div className="parent-child-stats-view">
-          <div className="parent-child-stats-header">
-            <h3>
-              {FRIEND_EMOJIS[friends.findIndex((f) => f.friendshipId === selectedFriend.friendshipId) % FRIEND_EMOJIS.length]}{' '}
-              {selectedFriend.name}'s progress
-            </h3>
-            <span className="badge">Grade {selectedFriend.grade}</span>
+          <div className="parent-child-stats-header" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <h3>
+                {FRIEND_EMOJIS[friends.findIndex((f) => f.friendshipId === selectedFriend.friendshipId) % FRIEND_EMOJIS.length]}{' '}
+                {selectedFriend.name}'s progress
+              </h3>
+              <span className="badge">Grade {selectedFriend.grade}</span>
+            </div>
+            <FriendNoteBubble
+              friendChildId={selectedFriend.childId}
+              accessToken={session.accessToken}
+            />
           </div>
           <ChildStatsPanel results={friendResults} isLoading={friendResultsLoading} pendingCount={0} />
         </div>

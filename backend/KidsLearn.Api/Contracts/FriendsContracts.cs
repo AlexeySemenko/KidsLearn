@@ -3,7 +3,8 @@ public sealed record FriendResponse(
     Guid ChildId,
     string Name,
     int Grade,
-    DateTime FriendsSince);
+    DateTime FriendsSince,
+    bool HasUnreadMessage);
 
 public sealed record FriendInviteInfoResponse(
     Guid FriendshipId,
@@ -11,4 +12,7 @@ public sealed record FriendInviteInfoResponse(
     int RequesterGrade,
     string Status);
 
+public sealed record FriendNoteResponse(string? MyNote);
+
 public sealed record SendFriendInviteRequest(string Email);
+public sealed record UpdateFriendNoteRequest(string? Note);

@@ -165,6 +165,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(x => x.InviteeEmail).HasMaxLength(320);
             entity.Property(x => x.InviteToken).HasMaxLength(128);
             entity.Property(x => x.Status).HasMaxLength(20);
+            entity.Property(x => x.NoteFromRequester).HasMaxLength(500);
+            entity.Property(x => x.NoteFromAcceptor).HasMaxLength(500);
 
             entity.HasOne(x => x.Requester)
                 .WithMany()

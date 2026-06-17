@@ -607,6 +607,7 @@ export interface FriendResponse {
   name: string
   grade: number
   friendsSince: string
+  hasUnreadMessage: boolean
 }
 
 export interface FriendInviteInfoResponse {
@@ -639,4 +640,15 @@ export async function acceptChildFriendInvite(accessToken: string, token: string
 
 export async function getFriendResults(accessToken: string, friendChildId: string): Promise<ResultListItem[]> {
   return request<ResultListItem[]>(`/api/v1/child/friends/${friendChildId}/results`, withAuth(accessToken))
+}
+
+export async function getFriendNote(accessToken: string, friendChildId: string): Promise<{ myNote: string | null }> {
+  return request<{ myNote: string | null }>(`/api/v1/child/friends/${friendChildId}/note`, withAuth(accessToken))
+}
+
+export async function updateFriendNote(accessToken: string, friendChildId: string, note: string | null): Promise<void> {
+  return request<void>(`/api/v1/child/friends/${friendChildId}/note`, withAuth(accessToken, {
+    method: 'PUT',
+    body: JSON.stringify({ note }),
+  }))
 }

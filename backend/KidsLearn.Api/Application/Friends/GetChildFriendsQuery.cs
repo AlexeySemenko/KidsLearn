@@ -16,6 +16,7 @@ public sealed class GetChildFriendsQueryHandler : IRequestHandler<GetChildFriend
     {
         var childId = query.ChildId;
 
+        // Child is the requester — friend is the acceptor; unread = acceptor's note not yet read by requester
         var asRequester = await _db.ChildFriendships
             .AsNoTracking()
             .Where(x => x.RequesterId == childId && x.Status == "Accepted" && x.AcceptorId != null)
@@ -24,9 +25,11 @@ public sealed class GetChildFriendsQueryHandler : IRequestHandler<GetChildFriend
                 x.Acceptor!.Id,
                 x.Acceptor.Name,
                 x.Acceptor.Grade,
-                x.AcceptedAt!.Value))
+                x.AcceptedAt!.Value,
+                x.NoteFromAcceptor != null && (x.NoteFromAcceptorReadAt == null || x.NoteFromAcceptorAt > x.NoteFromAcceptorReadAt)))
             .ToListAsync(cancellationToken);
 
+        // Child is the acceptor — friend is the requester; unread = requester's note not yet read by acceptor
         var asAcceptor = await _db.ChildFriendships
             .AsNoTracking()
             .Where(x => x.AcceptorId == childId && x.Status == "Accepted")
@@ -35,7 +38,8 @@ public sealed class GetChildFriendsQueryHandler : IRequestHandler<GetChildFriend
                 x.Requester.Id,
                 x.Requester.Name,
                 x.Requester.Grade,
-                x.AcceptedAt!.Value))
+                x.AcceptedAt!.Value,
+                x.NoteFromRequester != null && (x.NoteFromRequesterReadAt == null || x.NoteFromRequesterAt > x.NoteFromRequesterReadAt)))
             .ToListAsync(cancellationToken);
 
         return asRequester.Concat(asAcceptor)

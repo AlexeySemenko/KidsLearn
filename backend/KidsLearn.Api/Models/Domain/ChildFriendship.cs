@@ -9,6 +9,15 @@ public class ChildFriendship
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? AcceptedAt { get; set; }
 
+    // Notes: each side can leave one message for the other
+    public string? NoteFromRequester { get; set; }
+    public DateTime? NoteFromRequesterAt { get; set; }
+    public DateTime? NoteFromRequesterReadAt { get; set; }  // last read by Acceptor
+
+    public string? NoteFromAcceptor { get; set; }
+    public DateTime? NoteFromAcceptorAt { get; set; }
+    public DateTime? NoteFromAcceptorReadAt { get; set; }   // last read by Requester
+
     public Child Requester { get; set; } = null!;
     public Child? Acceptor { get; set; }
 }

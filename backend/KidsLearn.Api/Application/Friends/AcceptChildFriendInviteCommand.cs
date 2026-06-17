@@ -56,6 +56,7 @@ public sealed class AcceptChildFriendInviteCommandHandler : IRequestHandler<Acce
             friendship.Requester.Id,
             friendship.Requester.Name,
             friendship.Requester.Grade,
-            friendship.AcceptedAt!.Value));
+            friendship.AcceptedAt!.Value,
+            HasUnreadMessage: false));
     }
 }

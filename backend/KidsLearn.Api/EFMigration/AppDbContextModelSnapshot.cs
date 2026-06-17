@@ -262,6 +262,26 @@ namespace KidsLearn.Api.EFMigration
                         .HasMaxLength(320)
                         .HasColumnType("character varying(320)");
 
+                    b.Property<string>("NoteFromAcceptor")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("NoteFromAcceptorAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("NoteFromAcceptorReadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("NoteFromRequester")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("NoteFromRequesterAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("NoteFromRequesterReadAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("RequesterId")
                         .HasColumnType("uuid");
 

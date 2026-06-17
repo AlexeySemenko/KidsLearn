@@ -81,6 +81,36 @@ public static class ChildFriendsController
             };
         });
 
+        friendsApi.MapGet("/{friendChildId:guid}/note", async (AppDbContext db, ISender sender, ClaimsPrincipal user, Guid friendChildId) =>
+        {
+            var childId = await ApiEndpointHelpers.ResolveChildIdAsync(db, user);
+            if (!childId.HasValue) return Results.Unauthorized();
+
+            var result = await sender.Send(new GetFriendNoteQuery(childId.Value, friendChildId));
+
+            return result.StatusCode switch
+            {
+                StatusCodes.Status200OK => Results.Ok(new FriendNoteResponse(result.MyNote)),
+                StatusCodes.Status403Forbidden => Results.Forbid(),
+                _ => Results.Problem(result.Error ?? "Unexpected error.")
+            };
+        });
+
+        friendsApi.MapPut("/{friendChildId:guid}/note", async (AppDbContext db, ISender sender, ClaimsPrincipal user, Guid friendChildId, UpdateFriendNoteRequest request) =>
+        {
+            var childId = await ApiEndpointHelpers.ResolveChildIdAsync(db, user);
+            if (!childId.HasValue) return Results.Unauthorized();
+
+            var status = await sender.Send(new UpdateFriendNoteCommand(childId.Value, friendChildId, request.Note));
+
+            return status switch
+            {
+                StatusCodes.Status204NoContent => Results.NoContent(),
+                StatusCodes.Status403Forbidden => Results.Forbid(),
+                _ => Results.Problem("Unexpected error.")
+            };
+        });
+
         return childApi;
     }
 }
