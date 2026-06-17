@@ -76,7 +76,7 @@ export function computeStats(results) {
   return { avgScore, subjectList, bestSubject, weekDays, streak, total: results.length }
 }
 
-export default function ChildStatsPanel({ results, isLoading }) {
+export default function ChildStatsPanel({ results, isLoading, pendingCount = 0 }) {
   const stats = useMemo(() => computeStats(results), [results])
   const maxWeekCount = stats ? Math.max(...stats.weekDays.map((d) => d.count), 1) : 1
 
@@ -96,10 +96,18 @@ export default function ChildStatsPanel({ results, isLoading }) {
   return (
     <div className="child-stats-panel">
       <div className="child-stats-grid">
-        <div className="child-stat-card" data-color="blue">
-          <span className="child-stat-icon">🚀</span>
-          <span className="child-stat-value">{stats.total}</span>
-          <span className="child-stat-label">Missions done</span>
+        <div className="child-stat-card child-stat-card--split" data-color="blue">
+          <div className="child-stat-split-half">
+            <span className="child-stat-icon">⏳</span>
+            <span className="child-stat-value">{pendingCount}</span>
+            <span className="child-stat-label">Lessons waiting</span>
+          </div>
+          <div className="child-stat-split-divider" />
+          <div className="child-stat-split-half">
+            <span className="child-stat-icon">🚀</span>
+            <span className="child-stat-value">{stats.total}</span>
+            <span className="child-stat-label">Lessons done</span>
+          </div>
         </div>
         <div className="child-stat-card" data-color="yellow">
           <span className="child-stat-icon">{scoreEmoji(stats.avgScore)}</span>

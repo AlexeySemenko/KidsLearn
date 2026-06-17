@@ -92,7 +92,9 @@ export default function ChildHomePage() {
     || 'Explorer'
   const displayName = firstName.charAt(0).toUpperCase() + firstName.slice(1)
 
-  const pendingCount = assignments.filter((a) => a.status !== 'Completed').length
+  const pendingAssignments   = assignments.filter((a) => a.status !== 'Completed')
+  const completedAssignments = assignments.filter((a) => a.status === 'Completed')
+  const pendingCount = pendingAssignments.length
 
   async function handleOpenAssignment(assignmentId) {
     if (!session?.accessToken) return
@@ -227,37 +229,29 @@ export default function ChildHomePage() {
         </div>
       </div>
 
-      <ChildStatsPanel results={results} isLoading={isLoading} />
+      <ChildStatsPanel results={results} isLoading={isLoading} pendingCount={pendingCount} />
 
+      {/* ── Missions done ── */}
       <div className="child-missions-card">
         <div className="children-list-header">
           <div>
-            <h3>My missions</h3>
-            <p>This week — last 7 days.</p>
+            <h3>✅ Missions done</h3>
+            <p>Completed this week.</p>
           </div>
-          <span className="badge">{assignments.length} this week</span>
+          <span className="badge">{isLoading ? '…' : completedAssignments.length}</span>
         </div>
 
-        {isLoading ? <p className="children-empty child-empty">Loading your missions...</p> : null}
-        {!isLoading && assignments.length === 0 ? (
-          <p className="children-empty child-empty">No missions this week. Check back soon!</p>
+        {isLoading ? <p className="children-empty child-empty">Loading...</p> : null}
+        {!isLoading && completedAssignments.length === 0 ? (
+          <p className="children-empty child-empty">No completed missions yet. Go get some! 💪</p>
         ) : null}
         {error ? <div className="alert assignments-alert">{error}</div> : null}
 
-        {!isLoading && assignments.length > 0 ? (
+        {!isLoading && completedAssignments.length > 0 ? (
           <div className="children-list">
-            {assignments.map((assignment) => {
-              const isCompleted = assignment.status === 'Completed'
-              const isInProgress = assignment.status === 'InProgress'
-
-              let pillClass = 'status-new'
-              let pillLabel = '✨ New'
-              if (isInProgress) { pillClass = ''; pillLabel = '⚡ In progress' }
-              if (isCompleted)  { pillClass = 'status-success'; pillLabel = '✅ Done' }
-
-              const resultForAssignment = isCompleted ? results.find((r) => r.assignmentId === assignment.id) : null
+            {completedAssignments.map((assignment) => {
+              const resultForAssignment = results.find((r) => r.assignmentId === assignment.id)
               const subjectIcon = SUBJECT_EMOJI[assignment.lessonSubject] || '📚'
-
               return (
                 <article key={assignment.id} className="assignment-row">
                   <div className="assignment-copy">
@@ -271,7 +265,7 @@ export default function ChildHomePage() {
                           {scoreEmoji(resultForAssignment.score)} {resultForAssignment.score}%
                         </span>
                       ) : (
-                        <span className={`assignment-status-pill ${pillClass}`}>{pillLabel}</span>
+                        <span className="assignment-status-pill status-success">✅ Done</span>
                       )}
                     </div>
                     <div className="assignment-timeline">
@@ -282,25 +276,70 @@ export default function ChildHomePage() {
                     </div>
                   </div>
                   <div className="button-row child-actions">
-                    {isCompleted ? (
-                      <button
-                        type="button"
-                        className="button-secondary child-start-button child-view-button"
-                        disabled={isLoadingResult}
-                        onClick={() => handleViewResult(assignment.id)}
-                      >
-                        {isLoadingResult ? '⏳' : '👁 View'}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="button-secondary child-start-button"
-                        disabled={isOpening}
-                        onClick={() => handleOpenAssignment(assignment.id)}
-                      >
-                        {isOpening ? '⏳ Opening...' : '🚀 Start mission'}
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="button-secondary child-start-button child-view-button"
+                      disabled={isLoadingResult}
+                      onClick={() => handleViewResult(assignment.id)}
+                    >
+                      {isLoadingResult ? '⏳' : '👁 View'}
+                    </button>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        ) : null}
+      </div>
+
+      {/* ── Missions waiting ── */}
+      <div className="child-missions-card">
+        <div className="children-list-header">
+          <div>
+            <h3>⏳ Missions waiting</h3>
+            <p>Assigned — ready to start.</p>
+          </div>
+          <span className="badge">{isLoading ? '…' : pendingAssignments.length}</span>
+        </div>
+
+        {isLoading ? <p className="children-empty child-empty">Loading...</p> : null}
+        {!isLoading && pendingAssignments.length === 0 ? (
+          <p className="children-empty child-empty">All caught up! No missions waiting. 🎉</p>
+        ) : null}
+
+        {!isLoading && pendingAssignments.length > 0 ? (
+          <div className="children-list">
+            {pendingAssignments.map((assignment) => {
+              const isInProgress = assignment.status === 'InProgress'
+              const pillClass = isInProgress ? '' : 'status-new'
+              const pillLabel = isInProgress ? '⚡ In progress' : '✨ New'
+              const subjectIcon = SUBJECT_EMOJI[assignment.lessonSubject] || '📚'
+              return (
+                <article key={assignment.id} className="assignment-row">
+                  <div className="assignment-copy">
+                    <div className="assignment-topline">
+                      <div className="child-name">
+                        <span style={{ marginRight: '0.35em' }}>{subjectIcon}</span>
+                        {assignment.lessonTitle || `Lesson ${shortId(assignment.lessonId)}`}
+                      </div>
+                      <span className={`assignment-status-pill ${pillClass}`}>{pillLabel}</span>
+                    </div>
+                    <div className="assignment-timeline">
+                      <span className="assignment-meta-chip">Assigned {formatDate(assignment.assignedAt)}</span>
+                      {assignment.dueDate ? (
+                        <span className="assignment-meta-chip">Due {formatDate(assignment.dueDate)}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="button-row child-actions">
+                    <button
+                      type="button"
+                      className="button-secondary child-start-button"
+                      disabled={isOpening}
+                      onClick={() => handleOpenAssignment(assignment.id)}
+                    >
+                      {isOpening ? '⏳ Opening...' : '🚀 Start mission'}
+                    </button>
                   </div>
                 </article>
               )
