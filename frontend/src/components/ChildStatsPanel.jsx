@@ -10,6 +10,12 @@ export function scoreEmoji(score) {
   return '😅'
 }
 
+export function scoreVariant(score) {
+  if (score >= 85) return 'status-success'
+  if (score >= 60) return ''
+  return 'status-danger'
+}
+
 function localDate(isoString) {
   const d = new Date(isoString)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`

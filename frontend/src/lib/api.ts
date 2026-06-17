@@ -118,6 +118,7 @@ export interface AssignmentResponse {
   childId: string
   lessonId: string
   lessonTitle?: string | null
+  lessonSubject?: string | null
   assignedAt: string
   dueDate?: string | null
   status: string

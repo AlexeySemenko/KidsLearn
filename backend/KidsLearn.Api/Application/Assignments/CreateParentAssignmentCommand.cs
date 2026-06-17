@@ -63,6 +63,7 @@ public sealed class CreateParentAssignmentCommandHandler : IRequestHandler<Creat
             assignment.ChildId,
             assignment.LessonId,
             lesson.Title,
+            lesson.Subject,
             assignment.AssignedAt,
             assignment.DueDate,
             assignment.Status);

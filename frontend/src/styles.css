@@ -138,6 +138,12 @@
   color: #7a5200;
 }
 
+:root[data-theme='light'] .assignment-status-pill.status-new {
+  border-color: rgba(109, 40, 217, 0.4);
+  background: rgba(109, 40, 217, 0.08);
+  color: #6d28d9;
+}
+
 :root[data-theme='light'] .assignment-status-pill.status-success {
   border-color: rgba(21, 128, 61, 0.45);
   background: rgba(21, 128, 61, 0.1);
@@ -2312,6 +2318,12 @@ select.input:invalid {
   text-transform: uppercase;
 }
 
+.assignment-status-pill.status-new {
+  border-color: rgba(139, 92, 246, 0.7);
+  background: rgba(109, 40, 217, 0.22);
+  color: #c4b5fd;
+}
+
 .assignment-status-pill.status-success {
   border-color: rgba(68, 201, 116, 0.7);
   background: rgba(39, 151, 86, 0.28);
@@ -3356,6 +3368,25 @@ select.input:invalid {
 .child-start-button {
   font-family: var(--font-display);
   font-weight: 700;
+}
+
+.child-view-button {
+  border-color: rgba(99, 179, 237, 0.45);
+  color: #90cdf4;
+}
+
+.child-view-button:hover {
+  background: rgba(99, 179, 237, 0.1);
+  border-color: rgba(99, 179, 237, 0.7);
+}
+
+:root[data-theme='light'] .child-view-button {
+  border-color: rgba(49, 130, 206, 0.4);
+  color: #2b6cb0;
+}
+
+:root[data-theme='light'] .child-view-button:hover {
+  background: rgba(49, 130, 206, 0.08);
 }
 
 .child-panel-grid .assignment-meta-chip {

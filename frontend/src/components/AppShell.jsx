@@ -17,7 +17,7 @@ const navByRole = {
   ],
   Child: [
     { to: '/child', label: 'Home' },
-    { to: '/child/results', label: 'Results' },
+    { to: '/child/results', label: 'My lessons' },
   ],
   Admin: [
     { to: '/parent', label: 'Home' },

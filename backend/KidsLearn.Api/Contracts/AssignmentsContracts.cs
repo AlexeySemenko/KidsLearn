@@ -5,6 +5,7 @@ public sealed record AssignmentResponse(
     Guid ChildId,
     Guid LessonId,
     string LessonTitle,
+    string LessonSubject,
     DateTime AssignedAt,
     DateTime? DueDate,
     string Status);

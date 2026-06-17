@@ -2,23 +2,11 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { getChildResultDetail, getChildResults } from '../lib/api'
 import LessonViewModal from '../components/LessonViewModal'
+import { scoreEmoji, scoreVariant } from '../components/ChildStatsPanel'
 
 function formatDate(value) {
   if (!value) return 'Unknown date'
   return new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-}
-
-function scoreEmoji(score) {
-  if (score >= 90) return '🌟'
-  if (score >= 70) return '😊'
-  if (score >= 50) return '👍'
-  return '😅'
-}
-
-function scoreVariant(score) {
-  if (score >= 85) return 'status-success'
-  if (score >= 60) return ''
-  return 'status-danger'
 }
 
 export default function ChildResultsPage() {
@@ -71,10 +59,10 @@ export default function ChildResultsPage() {
       <article className="assignments-list-card">
         <div className="children-list-header">
           <div>
-            <h3>My results</h3>
+            <h3>My lessons</h3>
             <p>All completed missions and your scores.</p>
           </div>
-          <span className="badge">{results.length} results</span>
+          <span className="badge">{results.length} completed</span>
         </div>
 
         {isLoading ? <p className="children-empty child-empty">Loading results...</p> : null}

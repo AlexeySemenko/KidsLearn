@@ -28,6 +28,7 @@ public sealed class AssignmentReadService(AppDbContext db) : IAssignmentReadServ
                 x.ChildId,
                 x.LessonId,
                 x.Lesson.Title,
+                x.Lesson.Subject,
                 x.AssignedAt,
                 x.DueDate,
                 x.Status))
@@ -36,15 +37,18 @@ public sealed class AssignmentReadService(AppDbContext db) : IAssignmentReadServ
 
     public async Task<IReadOnlyList<AssignmentResponse>> ListForChildAsync(Guid childId)
     {
+        var weekAgo = DateTime.UtcNow.AddDays(-7);
+
         return await db.Assignments
             .AsNoTracking()
-            .Where(x => x.ChildId == childId)
+            .Where(x => x.ChildId == childId && x.AssignedAt >= weekAgo)
             .OrderByDescending(x => x.AssignedAt)
             .Select(x => new AssignmentResponse(
                 x.Id,
                 x.ChildId,
                 x.LessonId,
                 x.Lesson.Title,
+                x.Lesson.Subject,
                 x.AssignedAt,
                 x.DueDate,
                 x.Status))
