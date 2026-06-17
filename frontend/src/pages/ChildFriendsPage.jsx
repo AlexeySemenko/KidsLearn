@@ -1,3 +1,4 @@
+import { HubConnectionBuilder, LogLevel } from '@microsoft/signalr'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import ChildStatsPanel from '../components/ChildStatsPanel'
@@ -6,9 +7,10 @@ import { getFriendNote, getFriendResults, getChildFriends, sendChildFriendInvite
 const FRIEND_EMOJIS = ['🐼', '🦊', '🐸', '🦁', '🐨', '🐯', '🦄', '🐻', '🐙', '🦋']
 const FRIEND_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#84cc16']
 
-function FriendNoteBubble({ friendChildId, friendName, accessToken }) {
-  const [myNote, setMyNote] = useState(null)
-  const [theirNote, setTheirNote] = useState(null)
+function FriendNoteBubble({ friendshipId, friendChildId, friendName, accessToken, hubConnection }) {
+  const [lastNoteText, setLastNoteText] = useState(undefined) // undefined = loading
+  const [lastNoteIsFromMe, setLastNoteIsFromMe] = useState(false)
+  const [myNote, setMyNote] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [isSaving, setIsSaving] = useState(false)
@@ -16,23 +18,32 @@ function FriendNoteBubble({ friendChildId, friendName, accessToken }) {
 
   useEffect(() => {
     let mounted = true
-    async function load() {
-      try {
-        const data = await getFriendNote(accessToken, friendChildId)
-        if (mounted) {
-          setMyNote(data.myNote ?? '')
-          setTheirNote(data.theirNote ?? '')
-        }
-      } catch {
-        if (mounted) { setMyNote(''); setTheirNote('') }
-      }
-    }
-    load()
+    getFriendNote(accessToken, friendChildId)
+      .then((data) => {
+        if (!mounted) return
+        setLastNoteText(data.lastNoteText ?? null)
+        setLastNoteIsFromMe(data.lastNoteIsFromMe)
+        setMyNote(data.myNote ?? '')
+      })
+      .catch(() => { if (mounted) setLastNoteText(null) })
     return () => { mounted = false }
   }, [accessToken, friendChildId])
 
+  // Live updates via SignalR
+  useEffect(() => {
+    if (!hubConnection) return
+    function onNoteUpdated(msg) {
+      if (msg.friendshipId !== friendshipId) return
+      // msg.lastNoteIsFromMe is false (from server's perspective = friend sent it)
+      setLastNoteText(msg.lastNoteText)
+      setLastNoteIsFromMe(false)
+    }
+    hubConnection.on('FriendNoteUpdated', onNoteUpdated)
+    return () => hubConnection.off('FriendNoteUpdated', onNoteUpdated)
+  }, [hubConnection, friendshipId])
+
   function startEdit() {
-    setDraft(myNote ?? '')
+    setDraft(myNote)
     setIsEditing(true)
     setTimeout(() => textareaRef.current?.focus(), 50)
   }
@@ -42,7 +53,10 @@ function FriendNoteBubble({ friendChildId, friendName, accessToken }) {
     try {
       const trimmed = draft.trim() || null
       await updateFriendNote(accessToken, friendChildId, trimmed)
-      setMyNote(trimmed ?? '')
+      const saved = trimmed ?? ''
+      setMyNote(saved)
+      setLastNoteText(saved || null)
+      setLastNoteIsFromMe(true)
       setIsEditing(false)
     } catch {
       // keep editing
@@ -51,28 +65,15 @@ function FriendNoteBubble({ friendChildId, friendName, accessToken }) {
     }
   }
 
-  function cancelEdit() {
-    setIsEditing(false)
-    setDraft('')
-  }
+  if (lastNoteText === undefined) return null // loading
 
-  if (myNote === null) return null // still loading
+  const label = lastNoteIsFromMe ? 'You' : friendName
 
   return (
     <div className="friend-note-bubble-wrap">
-      {/* Friend's message to me */}
-      {theirNote ? (
-        <div className="friend-note-bubble friend-note-bubble--theirs">
-          <div className="friend-note-bubble-tail" aria-hidden="true" />
-          <span className="friend-note-label">💌 {friendName} says:</span>
-          <span className="friend-note-text">{theirNote}</span>
-        </div>
-      ) : null}
-
-      {/* My message to friend */}
       {isEditing ? (
         <div className="friend-note-bubble friend-note-bubble--editing">
-          <div className="friend-note-bubble-tail friend-note-bubble-tail--mine" aria-hidden="true" />
+          <div className="friend-note-bubble-tail" aria-hidden="true" />
           <textarea
             ref={textareaRef}
             className="friend-note-textarea"
@@ -86,17 +87,17 @@ function FriendNoteBubble({ friendChildId, friendName, accessToken }) {
             <button type="button" className="button" style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }} disabled={isSaving} onClick={saveNote}>
               {isSaving ? 'Saving…' : 'Save'}
             </button>
-            <button type="button" className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }} onClick={cancelEdit}>
+            <button type="button" className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }} onClick={() => setIsEditing(false)}>
               Cancel
             </button>
           </div>
         </div>
       ) : (
         <button type="button" className="friend-note-bubble friend-note-bubble--view" onClick={startEdit} title="Click to write a message">
-          <div className="friend-note-bubble-tail friend-note-bubble-tail--mine" aria-hidden="true" />
-          {myNote
-            ? <><span className="friend-note-label">You:</span><span className="friend-note-text">{myNote}</span></>
-            : <span className="friend-note-placeholder">Write a message to {friendName}… ✏️</span>
+          <div className="friend-note-bubble-tail" aria-hidden="true" />
+          {lastNoteText
+            ? <><span className="friend-note-label">{label}:</span><span className="friend-note-text">{lastNoteText}</span></>
+            : <span className="friend-note-placeholder">Write a message… 💌</span>
           }
           <span className="friend-note-edit-hint">✏️</span>
         </button>
@@ -121,6 +122,9 @@ export default function ChildFriendsPage() {
   const [friendResults, setFriendResults] = useState([])
   const [friendResultsLoading, setFriendResultsLoading] = useState(false)
 
+  const [hubConnection, setHubConnection] = useState(null)
+
+  // Load friends
   useEffect(() => {
     let mounted = true
     async function load() {
@@ -136,6 +140,29 @@ export default function ChildFriendsPage() {
     }
     load()
     return () => { mounted = false }
+  }, [session?.accessToken])
+
+  // SignalR connection
+  useEffect(() => {
+    if (!session?.accessToken) return
+
+    const connection = new HubConnectionBuilder()
+      .withUrl('/hubs/friends', { accessTokenFactory: () => session.accessToken })
+      .withAutomaticReconnect()
+      .configureLogging(LogLevel.Warning)
+      .build()
+
+    connection.start().catch(() => {}) // ignore connection errors silently
+
+    // Show envelope on friend card when they send a new message
+    connection.on('FriendNoteUpdated', (msg) => {
+      setFriends((prev) => prev.map((f) =>
+        f.friendshipId === msg.friendshipId ? { ...f, hasUnreadMessage: true } : f
+      ))
+    })
+
+    setHubConnection(connection)
+    return () => { connection.stop() }
   }, [session?.accessToken])
 
   async function handleFriendClick(friend) {
@@ -167,11 +194,9 @@ export default function ChildFriendsPage() {
   async function handleSendInvite(event) {
     event.preventDefault()
     if (!inviteEmail.trim()) return
-
     setIsSending(true)
     setInviteError('')
     setInviteSuccess('')
-
     try {
       await sendChildFriendInvite(session.accessToken, inviteEmail.trim())
       setInviteSuccess(`Invitation sent to ${inviteEmail.trim()}!`)
@@ -197,19 +222,13 @@ export default function ChildFriendsPage() {
           <h2>Friends 🤝</h2>
           <p>{isLoading ? '…' : `${friends.length} friend${friends.length !== 1 ? 's' : ''}`}</p>
         </div>
-        <button
-          type="button"
-          className="button"
-          onClick={() => setShowInviteModal(true)}
-        >
+        <button type="button" className="button" onClick={() => setShowInviteModal(true)}>
           + Add friend
         </button>
       </div>
 
       {error ? <div className="alert">{error}</div> : null}
-
       {isLoading ? <p className="children-empty">Loading friends...</p> : null}
-
       {!isLoading && friends.length === 0 ? (
         <p className="children-empty">No friends yet. Invite someone! 🙌</p>
       ) : null}
@@ -249,9 +268,11 @@ export default function ChildFriendsPage() {
               <span className="badge">Grade {selectedFriend.grade}</span>
             </div>
             <FriendNoteBubble
+              friendshipId={selectedFriend.friendshipId}
               friendChildId={selectedFriend.childId}
               friendName={selectedFriend.name}
               accessToken={session.accessToken}
+              hubConnection={hubConnection}
             />
           </div>
           <ChildStatsPanel results={friendResults} isLoading={friendResultsLoading} pendingCount={0} />
@@ -269,7 +290,6 @@ export default function ChildFriendsPage() {
               </div>
               <button type="button" className="button-secondary" onClick={closeInviteModal}>Close</button>
             </div>
-
             {inviteSuccess ? (
               <div className="info-block success-block" role="status">
                 <strong>Sent!</strong>

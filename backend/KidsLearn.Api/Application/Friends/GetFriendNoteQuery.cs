@@ -2,7 +2,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 public sealed record GetFriendNoteQuery(Guid RequestingChildId, Guid FriendChildId) : IRequest<GetFriendNoteResult>;
-public sealed record GetFriendNoteResult(int StatusCode, string? MyNote, string? TheirNote, string? Error = null);
+public sealed record GetFriendNoteResult(int StatusCode, string? LastNoteText, bool LastNoteIsFromMe, string? MyNote, string? Error = null);
 
 public sealed class GetFriendNoteQueryHandler(AppDbContext db)
     : IRequestHandler<GetFriendNoteQuery, GetFriendNoteResult>
@@ -16,28 +16,42 @@ public sealed class GetFriendNoteQueryHandler(AppDbContext db)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (friendship == null)
-            return new GetFriendNoteResult(StatusCodes.Status403Forbidden, null, null, "Not friends.");
+            return new GetFriendNoteResult(StatusCodes.Status403Forbidden, null, false, null, "Not friends.");
 
-        var now = DateTime.UtcNow;
+        bool iAmRequester = friendship.RequesterId == query.RequestingChildId;
+        var myNote   = iAmRequester ? friendship.NoteFromRequester : friendship.NoteFromAcceptor;
+        var theirNote = iAmRequester ? friendship.NoteFromAcceptor  : friendship.NoteFromRequester;
+        var myNoteAt  = iAmRequester ? friendship.NoteFromRequesterAt : friendship.NoteFromAcceptorAt;
+        var theirNoteAt = iAmRequester ? friendship.NoteFromAcceptorAt : friendship.NoteFromRequesterAt;
 
-        string? myNote, theirNote;
+        // Determine which message is the most recent
+        bool lastIsFromMe;
+        string? lastNoteText;
 
-        if (friendship.RequesterId == query.RequestingChildId)
+        if (myNoteAt == null && theirNoteAt == null)
         {
-            myNote = friendship.NoteFromRequester;
-            theirNote = friendship.NoteFromAcceptor;
-            if (friendship.NoteFromAcceptor != null)
-                friendship.NoteFromAcceptorReadAt = now;
+            lastNoteText = null;
+            lastIsFromMe = false;
+        }
+        else if (myNoteAt >= theirNoteAt)
+        {
+            lastNoteText = myNote;
+            lastIsFromMe = true;
         }
         else
         {
-            myNote = friendship.NoteFromAcceptor;
-            theirNote = friendship.NoteFromRequester;
-            if (friendship.NoteFromRequester != null)
-                friendship.NoteFromRequesterReadAt = now;
+            lastNoteText = theirNote;
+            lastIsFromMe = false;
         }
 
+        // Mark their note as read
+        var now = DateTime.UtcNow;
+        if (iAmRequester && friendship.NoteFromAcceptor != null)
+            friendship.NoteFromAcceptorReadAt = now;
+        else if (!iAmRequester && friendship.NoteFromRequester != null)
+            friendship.NoteFromRequesterReadAt = now;
+
         await db.SaveChangesAsync(cancellationToken);
-        return new GetFriendNoteResult(StatusCodes.Status200OK, myNote, theirNote);
+        return new GetFriendNoteResult(StatusCodes.Status200OK, lastNoteText, lastIsFromMe, myNote);
     }
 }

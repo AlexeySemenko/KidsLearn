@@ -1,9 +1,10 @@
 using MediatR;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 public sealed record UpdateFriendNoteCommand(Guid RequestingChildId, Guid FriendChildId, string? Note) : IRequest<int>;
 
-public sealed class UpdateFriendNoteCommandHandler(AppDbContext db)
+public sealed class UpdateFriendNoteCommandHandler(AppDbContext db, IHubContext<FriendNotificationsHub> hub)
     : IRequestHandler<UpdateFriendNoteCommand, int>
 {
     public async Task<int> Handle(UpdateFriendNoteCommand command, CancellationToken cancellationToken)
@@ -19,13 +20,13 @@ public sealed class UpdateFriendNoteCommandHandler(AppDbContext db)
 
         var now = DateTime.UtcNow;
         var note = string.IsNullOrWhiteSpace(command.Note) ? null : command.Note.Trim();
+        bool iAmRequester = friendship.RequesterId == command.RequestingChildId;
 
-        if (friendship.RequesterId == command.RequestingChildId)
+        if (iAmRequester)
         {
             friendship.NoteFromRequester = note;
             friendship.NoteFromRequesterAt = now;
-            // Reset the read timestamp so the friend sees the envelope
-            friendship.NoteFromRequesterReadAt = null;
+            friendship.NoteFromRequesterReadAt = null; // recipient hasn't read yet
         }
         else
         {
@@ -35,6 +36,18 @@ public sealed class UpdateFriendNoteCommandHandler(AppDbContext db)
         }
 
         await db.SaveChangesAsync(cancellationToken);
+
+        // Push live update to the friend
+        var friendGroupId = (iAmRequester ? friendship.AcceptorId : (Guid?)friendship.RequesterId)
+            ?.ToString("N");
+        if (friendGroupId != null)
+        {
+            await hub.Clients.Group(friendGroupId).SendAsync(
+                "FriendNoteUpdated",
+                new { friendshipId = friendship.Id, lastNoteText = note, lastNoteIsFromMe = false },
+                cancellationToken);
+        }
+
         return StatusCodes.Status204NoContent;
     }
 }

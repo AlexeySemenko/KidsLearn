@@ -118,6 +118,8 @@ if (string.IsNullOrWhiteSpace(jwtKey))
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "KidsLearn.Api";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "KidsLearn.Client";
 
+builder.Services.AddSignalR();
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -131,6 +133,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = jwtIssuer,
             ValidAudience = jwtAudience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+        };
+        // Allow JWT from query string for SignalR WebSocket connections
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
         };
     });
 
@@ -285,6 +301,8 @@ apiV1.MapAuthController();
 apiV1.MapParentController();
 apiV1.MapChildController(app);
 apiV1.MapAdminController();
+
+app.MapHub<FriendNotificationsHub>("/hubs/friends");
 
 app.MapFallbackToFile("index.html");
 

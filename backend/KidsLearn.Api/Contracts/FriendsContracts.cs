@@ -12,7 +12,7 @@ public sealed record FriendInviteInfoResponse(
     int RequesterGrade,
     string Status);
 
-public sealed record FriendNoteResponse(string? MyNote, string? TheirNote);
+public sealed record FriendNoteResponse(string? LastNoteText, bool LastNoteIsFromMe, string? MyNote);
 
 public sealed record SendFriendInviteRequest(string Email);
 public sealed record UpdateFriendNoteRequest(string? Note);

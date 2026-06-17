@@ -90,7 +90,7 @@ public static class ChildFriendsController
 
             return result.StatusCode switch
             {
-                StatusCodes.Status200OK => Results.Ok(new FriendNoteResponse(result.MyNote, result.TheirNote)),
+                StatusCodes.Status200OK => Results.Ok(new FriendNoteResponse(result.LastNoteText, result.LastNoteIsFromMe, result.MyNote)),
                 StatusCodes.Status403Forbidden => Results.Forbid(),
                 _ => Results.Problem(result.Error ?? "Unexpected error.")
             };
