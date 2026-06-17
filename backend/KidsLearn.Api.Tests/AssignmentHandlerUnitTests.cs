@@ -9,7 +9,7 @@ public class AssignmentHandlerUnitTests
     {
         var expected = new List<AssignmentResponse>
         {
-            new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Lesson A", DateTime.UtcNow, null, "Assigned")
+            new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Lesson A", "Math", DateTime.UtcNow, null, "Assigned")
         };
 
         var handler = new GetParentAssignmentsQueryHandler(new FakeAssignmentReadService(expected));
@@ -25,7 +25,7 @@ public class AssignmentHandlerUnitTests
     {
         var expected = new List<AssignmentResponse>
         {
-            new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Lesson B", DateTime.UtcNow, null, "Completed")
+            new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Lesson B", "English", DateTime.UtcNow, null, "Completed")
         };
 
         var handler = new GetChildAssignmentsQueryHandler(new FakeAssignmentReadService(expected));
