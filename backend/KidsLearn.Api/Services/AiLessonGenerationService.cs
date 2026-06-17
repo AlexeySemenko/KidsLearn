@@ -97,15 +97,30 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
     private static string BuildPrompt(GenerateAiLessonRequest request)
     {
         var types = request.QuestionTypes is { Count: > 0 }
-            ? string.Join(", ", request.QuestionTypes)
+            ? string.Join(", ", request.QuestionTypes).ToLowerInvariant()
             : "multiple-choice";
+
+        string answerInstruction;
+        if (types.Contains("true-false"))
+        {
+            answerInstruction = "Every question must have exactly 2 answer options (True and False), with exactly 1 marked isCorrect=true.";
+        }
+        else if (types.Contains("mixed"))
+        {
+            answerInstruction = "Mix question formats: roughly half the questions should be multiple-choice with exactly 4 answer options (exactly 1 marked isCorrect=true), and the other half true/false with exactly 2 answer options (True and False, exactly 1 marked isCorrect=true).";
+        }
+        else
+        {
+            answerInstruction = "Every question must have exactly 4 answer options, with exactly 1 marked isCorrect=true and the remaining 3 marked isCorrect=false.";
+        }
 
         return $"Generate a strict JSON object with fields: title, subject, grade, topic, difficulty, questions. " +
                "Each question must include questionText, explanation, order, answers. " +
-               "Each answers array must include at least 2 items with answerText, isCorrect, order and at least one correct answer. " +
-               "No markdown, no comments. " +
+               "Each answer must include answerText, isCorrect (boolean), order. " +
+               $"{answerInstruction} " +
+               "Output valid JSON only — no markdown, no code fences, no comments. " +
                $"Subject: {request.Subject}; Grade: {request.Grade}; Topic: {request.Topic}; Difficulty: {request.Difficulty ?? "Medium"}; " +
-               $"QuestionCount: {request.QuestionCount}; Language: {request.Language ?? "en"}; QuestionTypes: {types}.";
+               $"QuestionCount: {request.QuestionCount}; Language: {request.Language ?? "en"}.";
     }
 
     private static bool TryParseDraftFromResponse(string body, GenerateAiLessonRequest request, string model, out GeneratedLessonDraft draft, out string? error)

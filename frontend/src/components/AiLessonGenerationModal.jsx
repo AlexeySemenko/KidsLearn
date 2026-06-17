@@ -14,6 +14,7 @@ const QUESTION_TYPE_OPTIONS = [
 
 const emptyForm = {
   subject: 'Math',
+  subjectCustom: '',
   grade: '2',
   topic: '',
   questionCount: '10',
@@ -22,7 +23,15 @@ const emptyForm = {
   questionTypes: 'mixed',
 }
 
+function resolveSubject(form) {
+  return form.subject === '__other__' ? form.subjectCustom.trim() : form.subject
+}
+
 function validateAiForm(form) {
+  if (!resolveSubject(form)) {
+    return 'Subject is required.'
+  }
+
   if (!form.topic.trim()) {
     return 'Topic is required.'
   }
@@ -43,7 +52,7 @@ function validateAiForm(form) {
 function resolveQuestionTypes(value) {
   if (value === 'multiple-4') return ['multiple-choice']
   if (value === 'multiple-2') return ['true-false']
-  return null
+  return ['mixed']
 }
 
 export default function AiLessonGenerationModal({
@@ -110,7 +119,7 @@ export default function AiLessonGenerationModal({
 
     try {
       const response = await generateParentAiLesson(session.accessToken, {
-        subject: form.subject,
+        subject: resolveSubject(form),
         grade: Number(form.grade),
         topic: form.topic.trim(),
         questionCount: Number(form.questionCount),
@@ -181,7 +190,18 @@ export default function AiLessonGenerationModal({
                   onChange={(event) => updateField('subject', event.target.value)}
                 >
                   {SUBJECTS.map((s) => <option key={s} value={s}>{s}</option>)}
+                  <option value="__other__">Other…</option>
                 </select>
+                {form.subject === '__other__' ? (
+                  <input
+                    className="input"
+                    style={{ marginTop: '0.4rem' }}
+                    value={form.subjectCustom}
+                    onChange={(event) => updateField('subjectCustom', event.target.value)}
+                    placeholder="Enter subject"
+                    autoFocus
+                  />
+                ) : null}
               </div>
 
               <div className="field">
