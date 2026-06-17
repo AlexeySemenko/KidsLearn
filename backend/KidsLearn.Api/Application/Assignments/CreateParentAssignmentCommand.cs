@@ -73,6 +73,7 @@ public sealed class CreateParentAssignmentCommandHandler : IRequestHandler<Creat
             assignment.DueDate,
             assignment.Status,
             null,
+            null,
             null);
 
         return CreateParentAssignmentResult.Created(response);

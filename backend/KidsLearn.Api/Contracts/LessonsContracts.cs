@@ -29,7 +29,8 @@ public sealed record LessonSummaryResponse(
     string Topic,
     string Difficulty,
     DateTime CreatedAt,
-    int QuestionCount);
+    int QuestionCount,
+    string? CreatedByName);
 
 public sealed record LessonDetailResponse(
     Guid Id,

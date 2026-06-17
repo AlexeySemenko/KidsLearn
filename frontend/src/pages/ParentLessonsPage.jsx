@@ -26,24 +26,23 @@ function validateEditLesson(form) {
 
 function readStoredLessonsFilters() {
   if (typeof window === 'undefined') {
-    return { searchTerm: '', gradeFilter: 'all', difficultyFilter: 'all', sortBy: 'newest' }
+    return { searchTerm: '', subjectFilter: 'all', sortBy: 'newest' }
   }
 
   try {
     const rawValue = window.localStorage.getItem(LESSONS_FILTERS_STORAGE_KEY)
     if (!rawValue) {
-      return { searchTerm: '', gradeFilter: 'all', difficultyFilter: 'all', sortBy: 'newest' }
+      return { searchTerm: '', subjectFilter: 'all', sortBy: 'newest' }
     }
 
     const parsed = JSON.parse(rawValue)
     return {
       searchTerm: typeof parsed.searchTerm === 'string' ? parsed.searchTerm : '',
-      gradeFilter: typeof parsed.gradeFilter === 'string' ? parsed.gradeFilter : 'all',
-      difficultyFilter: typeof parsed.difficultyFilter === 'string' ? parsed.difficultyFilter : 'all',
+      subjectFilter: typeof parsed.subjectFilter === 'string' ? parsed.subjectFilter : 'all',
       sortBy: typeof parsed.sortBy === 'string' ? parsed.sortBy : 'newest',
     }
   } catch {
-    return { searchTerm: '', gradeFilter: 'all', difficultyFilter: 'all', sortBy: 'newest' }
+    return { searchTerm: '', subjectFilter: 'all', sortBy: 'newest' }
   }
 }
 
@@ -58,8 +57,7 @@ export default function ParentLessonsPage() {
   const [pendingActionId, setPendingActionId] = useState(null)
   const [storedFilters] = useState(() => readStoredLessonsFilters())
   const [searchTerm, setSearchTerm] = useState(storedFilters.searchTerm)
-  const [gradeFilter, setGradeFilter] = useState(storedFilters.gradeFilter)
-  const [difficultyFilter, setDifficultyFilter] = useState(storedFilters.difficultyFilter)
+  const [subjectFilter, setSubjectFilter] = useState(storedFilters.subjectFilter)
   const [sortBy, setSortBy] = useState(storedFilters.sortBy)
   const [isAiModalOpen, setIsAiModalOpen] = useState(false)
   const [viewingLesson, setViewingLesson] = useState(null)
@@ -72,12 +70,8 @@ export default function ParentLessonsPage() {
   const [isCreatingAssignment, setIsCreatingAssignment] = useState(false)
   const [assignError, setAssignError] = useState('')
 
-  const availableGrades = useMemo(() => {
-    return [...new Set(lessons.map((lesson) => String(lesson.grade)))].sort((a, b) => Number(a) - Number(b))
-  }, [lessons])
-
-  const availableDifficulties = useMemo(() => {
-    return [...new Set(lessons.map((lesson) => lesson.difficulty).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  const availableSubjects = useMemo(() => {
+    return [...new Set(lessons.map((lesson) => lesson.subject).filter(Boolean))].sort((a, b) => a.localeCompare(b))
   }, [lessons])
 
   const filteredLessons = useMemo(() => {
@@ -89,12 +83,11 @@ export default function ParentLessonsPage() {
         || lesson.subject.toLowerCase().includes(normalizedSearch)
         || lesson.topic.toLowerCase().includes(normalizedSearch)
 
-      const matchesGrade = gradeFilter === 'all' || String(lesson.grade) === gradeFilter
-      const matchesDifficulty = difficultyFilter === 'all' || lesson.difficulty === difficultyFilter
+      const matchesSubject = subjectFilter === 'all' || lesson.subject === subjectFilter
 
-      return matchesSearch && matchesGrade && matchesDifficulty
+      return matchesSearch && matchesSubject
     })
-  }, [difficultyFilter, gradeFilter, lessons, searchTerm])
+  }, [subjectFilter, lessons, searchTerm])
 
   const visibleLessons = useMemo(() => {
     const items = [...filteredLessons]
@@ -127,9 +120,9 @@ export default function ParentLessonsPage() {
 
     window.localStorage.setItem(
       LESSONS_FILTERS_STORAGE_KEY,
-      JSON.stringify({ searchTerm, gradeFilter, difficultyFilter, sortBy }),
+      JSON.stringify({ searchTerm, subjectFilter, sortBy }),
     )
-  }, [difficultyFilter, gradeFilter, searchTerm, sortBy])
+  }, [subjectFilter, searchTerm, sortBy])
 
   useEffect(() => {
     let isMounted = true
@@ -391,21 +384,11 @@ export default function ParentLessonsPage() {
           </div>
 
           <div className="field">
-            <label htmlFor="lessons-grade-filter">Grade</label>
-            <select id="lessons-grade-filter" className="input" value={gradeFilter} onChange={(event) => setGradeFilter(event.target.value)}>
-              <option value="all">All grades</option>
-              {availableGrades.map((grade) => (
-                <option key={grade} value={grade}>Grade {grade}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="field">
-            <label htmlFor="lessons-difficulty-filter">Difficulty</label>
-            <select id="lessons-difficulty-filter" className="input" value={difficultyFilter} onChange={(event) => setDifficultyFilter(event.target.value)}>
-              <option value="all">All levels</option>
-              {availableDifficulties.map((difficulty) => (
-                <option key={difficulty} value={difficulty}>{difficulty}</option>
+            <label htmlFor="lessons-subject-filter">Subject</label>
+            <select id="lessons-subject-filter" className="input" value={subjectFilter} onChange={(event) => setSubjectFilter(event.target.value)}>
+              <option value="all">All subjects</option>
+              {availableSubjects.map((subject) => (
+                <option key={subject} value={subject}>{subject}</option>
               ))}
             </select>
           </div>
@@ -428,11 +411,10 @@ export default function ParentLessonsPage() {
             className="button-secondary"
             onClick={() => {
               setSearchTerm('')
-              setGradeFilter('all')
-              setDifficultyFilter('all')
+              setSubjectFilter('all')
               setSortBy('newest')
             }}
-            disabled={!searchTerm && gradeFilter === 'all' && difficultyFilter === 'all' && sortBy === 'newest'}
+            disabled={!searchTerm && subjectFilter === 'all' && sortBy === 'newest'}
           >
             Reset filters
           </button>
@@ -451,6 +433,7 @@ export default function ParentLessonsPage() {
                 <div className="child-name">{lesson.title}</div>
                 <div className="child-meta">
                   {lesson.subject} · Grade {lesson.grade} · {lesson.topic} · {lesson.difficulty} · {lesson.questionCount} questions
+                  {lesson.createdByName ? <span> · by {lesson.createdByName}</span> : null}
                 </div>
               </div>
               <div className="button-row child-actions">

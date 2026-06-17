@@ -85,6 +85,7 @@ export interface LessonSummary {
   difficulty: string
   createdAt: string
   questionCount: number
+  createdByName?: string | null
 }
 
 export interface LessonAnswerOption {
@@ -125,6 +126,7 @@ export interface AssignmentResponse {
   status: string
   resultId?: string | null
   score?: number | null
+  assignedByName?: string | null
 }
 
 export interface AiAnswerOption {

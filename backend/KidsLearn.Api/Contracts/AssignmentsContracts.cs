@@ -11,4 +11,5 @@ public sealed record AssignmentResponse(
     DateTime? DueDate,
     string Status,
     Guid? ResultId,
-    decimal? Score);
+    decimal? Score,
+    string? AssignedByName);

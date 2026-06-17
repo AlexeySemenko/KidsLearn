@@ -62,7 +62,11 @@ public sealed class GetParentLessonsQueryHandler : IRequestHandler<GetParentLess
                 x.Topic,
                 x.Difficulty,
                 x.CreatedAt,
-                x.Questions.Count))
+                x.Questions.Count,
+                _db.Users
+                    .Where(u => u.Id == x.CreatedBy)
+                    .Select(u => u.DisplayName != null ? u.DisplayName : u.Email)
+                    .FirstOrDefault()))
             .ToListAsync(cancellationToken);
 
         return new GetParentLessonsResult(items, total, page, pageSize);

@@ -207,6 +207,7 @@ export default function ParentAssignmentsPage() {
                   <div className="assignment-timeline">
                     {assigned ? <span className="assignment-meta-chip">Assigned {assigned}</span> : null}
                     {due ? <span className="assignment-meta-chip">Due {due}</span> : null}
+                    {assignment.assignedByName ? <span className="assignment-meta-chip">By {assignment.assignedByName}</span> : null}
                   </div>
                 </div>
                 <div className="button-row child-actions">

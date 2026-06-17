@@ -329,6 +329,9 @@ export default function ChildHomePage() {
                       {assignment.dueDate ? (
                         <span className="assignment-meta-chip">Due {formatDate(assignment.dueDate)}</span>
                       ) : null}
+                      {assignment.assignedByName ? (
+                        <span className="assignment-meta-chip">By {assignment.assignedByName}</span>
+                      ) : null}
                     </div>
                   </div>
                   <div className="button-row child-actions">

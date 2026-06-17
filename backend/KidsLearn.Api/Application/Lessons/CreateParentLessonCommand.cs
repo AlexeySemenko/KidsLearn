@@ -76,7 +76,8 @@ public sealed class CreateParentLessonCommandHandler : IRequestHandler<CreatePar
             lesson.Topic,
             lesson.Difficulty,
             lesson.CreatedAt,
-            lesson.Questions.Count);
+            lesson.Questions.Count,
+            null);
 
         return CreateParentLessonResult.Created(response);
     }

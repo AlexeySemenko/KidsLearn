@@ -36,7 +36,11 @@ public sealed class AssignmentReadService(AppDbContext db) : IAssignmentReadServ
                 x.DueDate,
                 x.Status,
                 x.Result != null ? x.Result.Id : (Guid?)null,
-                x.Result != null ? x.Result.Score : (decimal?)null))
+                x.Result != null ? x.Result.Score : (decimal?)null,
+                db.Users
+                    .Where(u => u.Id == x.Lesson.CreatedBy)
+                    .Select(u => u.DisplayName != null ? u.DisplayName : u.Email)
+                    .FirstOrDefault()))
             .ToListAsync();
     }
 
@@ -59,7 +63,11 @@ public sealed class AssignmentReadService(AppDbContext db) : IAssignmentReadServ
                 x.DueDate,
                 x.Status,
                 x.Result != null ? x.Result.Id : (Guid?)null,
-                x.Result != null ? x.Result.Score : (decimal?)null))
+                x.Result != null ? x.Result.Score : (decimal?)null,
+                db.Users
+                    .Where(u => u.Id == x.Lesson.CreatedBy)
+                    .Select(u => u.DisplayName != null ? u.DisplayName : u.Email)
+                    .FirstOrDefault()))
             .ToListAsync();
     }
 }

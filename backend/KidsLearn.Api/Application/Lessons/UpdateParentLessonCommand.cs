@@ -78,7 +78,8 @@ public sealed class UpdateParentLessonCommandHandler : IRequestHandler<UpdatePar
             lesson.Topic,
             lesson.Difficulty,
             lesson.CreatedAt,
-            await _db.Questions.CountAsync(x => x.LessonId == lesson.Id, cancellationToken));
+            await _db.Questions.CountAsync(x => x.LessonId == lesson.Id, cancellationToken),
+            null);
 
         return UpdateParentLessonResult.Ok(response);
     }
