@@ -799,8 +799,9 @@ button:disabled {
   color: #a16207;
 }
 
-/* ── Admin users page ── */
-.admin-users-page {
+/* ── Admin users page / Assignments page ── */
+.admin-users-page,
+.assignments-page {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -898,9 +899,15 @@ button:disabled {
   opacity: 0.35;
 }
 
-.admin-filter-row th {
-  padding: 0.35rem 0.75rem 0.6rem;
-  background: rgba(255, 255, 255, 0.02);
+.admin-filter-bar {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.admin-filter-bar .admin-filter-input {
+  flex: 1 1 180px;
 }
 
 .admin-filter-input {
@@ -923,10 +930,6 @@ button:disabled {
   background: rgba(0, 0, 0, 0.04);
 }
 
-:root[data-theme='light'] .admin-filter-row th {
-  background: rgba(0, 0, 0, 0.02);
-}
-
 :root[data-theme='light'] .admin-filter-input {
   background: #fff;
   border-color: rgba(0, 0, 0, 0.15);
@@ -945,6 +948,75 @@ select.admin-filter-input option {
 :root[data-theme='light'] select.admin-filter-input option {
   background: #f4f9ff;
   color: #132744;
+}
+
+@media (max-width: 700px) {
+  .admin-users-table thead {
+    display: none;
+  }
+
+  .admin-users-table,
+  .admin-users-table tbody,
+  .admin-users-table tr,
+  .admin-users-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .admin-users-table tr {
+    padding: 0.9rem 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  :root[data-theme='light'] .admin-users-table tr {
+    border-bottom-color: rgba(0, 0, 0, 0.07);
+  }
+
+  .admin-users-table tr:hover td {
+    background: none;
+  }
+
+  .admin-users-table td {
+    padding: 0.22rem 0;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.88rem;
+  }
+
+  .admin-users-table td::before {
+    content: attr(data-label);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.45;
+    min-width: 78px;
+    flex-shrink: 0;
+  }
+
+  .admin-users-table td:first-child {
+    flex-direction: column;
+    align-items: flex-start;
+    padding-bottom: 0.4rem;
+  }
+
+  .admin-users-table td:first-child::before {
+    display: none;
+  }
+
+  .admin-users-table td[data-label=""] {
+    justify-content: flex-end;
+    padding-top: 0.6rem;
+  }
+
+  .admin-users-table td[data-label=""]::before {
+    display: none;
+  }
+
+  .admin-date-cell {
+    white-space: normal;
+  }
 }
 
 /* ── User form modal ── */

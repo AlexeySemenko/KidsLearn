@@ -3,9 +3,12 @@ public sealed record CreateAssignmentRequest(Guid ChildId, Guid LessonId, DateTi
 public sealed record AssignmentResponse(
     Guid Id,
     Guid ChildId,
+    string ChildName,
     Guid LessonId,
     string LessonTitle,
     string LessonSubject,
     DateTime AssignedAt,
     DateTime? DueDate,
-    string Status);
+    string Status,
+    Guid? ResultId,
+    decimal? Score);

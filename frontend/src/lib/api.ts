@@ -116,12 +116,15 @@ export interface LessonDetail {
 export interface AssignmentResponse {
   id: string
   childId: string
+  childName?: string | null
   lessonId: string
   lessonTitle?: string | null
   lessonSubject?: string | null
   assignedAt: string
   dueDate?: string | null
   status: string
+  resultId?: string | null
+  score?: number | null
 }
 
 export interface AiAnswerOption {

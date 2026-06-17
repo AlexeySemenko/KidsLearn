@@ -168,6 +168,27 @@ export default function AdminUsersPage() {
 
       {error ? <div className="alert">{error}</div> : null}
 
+      <div className="admin-filter-bar">
+        <input
+          className="admin-filter-input"
+          type="text"
+          placeholder="Filter by email…"
+          value={filterEmail}
+          onChange={(e) => setFilterEmail(e.target.value)}
+          aria-label="Filter by email"
+        />
+        <select
+          className="admin-filter-input"
+          value={filterRole}
+          onChange={(e) => setFilterRole(e.target.value)}
+          aria-label="Filter by role"
+        >
+          {ROLES.map((r) => (
+            <option key={r} value={r}>{r || 'All roles'}</option>
+          ))}
+        </select>
+      </div>
+
       {isLoading ? (
         <p className="children-empty">Loading users...</p>
       ) : (
@@ -176,40 +197,11 @@ export default function AdminUsersPage() {
             <thead>
               <tr>
                 <SortTh col="email">Name / Email</SortTh>
-                <th>
-                  <span className="admin-th-inner">
-                    Role
-                  </span>
-                </th>
+                <SortTh col="role">Role</SortTh>
                 <SortTh col="externalProvider">Auth</SortTh>
                 <SortTh col="createdAt">Created</SortTh>
                 <SortTh col="lastAccessAt">Last access</SortTh>
                 <th></th>
-              </tr>
-              <tr className="admin-filter-row">
-                <th>
-                  <input
-                    className="admin-filter-input"
-                    type="text"
-                    placeholder="Filter by email…"
-                    value={filterEmail}
-                    onChange={(e) => setFilterEmail(e.target.value)}
-                    aria-label="Filter by email"
-                  />
-                </th>
-                <th>
-                  <select
-                    className="admin-filter-input"
-                    value={filterRole}
-                    onChange={(e) => setFilterRole(e.target.value)}
-                    aria-label="Filter by role"
-                  >
-                    {ROLES.map((r) => (
-                      <option key={r} value={r}>{r || 'All roles'}</option>
-                    ))}
-                  </select>
-                </th>
-                <th /><th /><th /><th />
               </tr>
             </thead>
             <tbody>
@@ -221,23 +213,23 @@ export default function AdminUsersPage() {
                 </tr>
               ) : sorted.map((user) => (
                 <tr key={user.id}>
-                  <td>
+                  <td data-label="Name / Email">
                     <div className="admin-user-name">{user.displayName || <em className="muted">—</em>}</div>
                     <div className="admin-user-email">{user.email}</div>
                   </td>
-                  <td>
+                  <td data-label="Role">
                     <span className={`assignment-status-pill ${ROLE_COLOR[user.role] ?? ''}`}>
                       {user.role}
                     </span>
                   </td>
-                  <td>
+                  <td data-label="Auth">
                     <span className="assignment-meta-chip">
                       {user.externalProvider ?? 'password'}
                     </span>
                   </td>
-                  <td className="admin-date-cell">{formatDate(user.createdAt)}</td>
-                  <td className="admin-date-cell">{formatDate(user.lastAccessAt)}</td>
-                  <td>
+                  <td data-label="Created" className="admin-date-cell">{formatDate(user.createdAt)}</td>
+                  <td data-label="Last access" className="admin-date-cell">{formatDate(user.lastAccessAt)}</td>
+                  <td data-label="">
                     <div className="button-row" style={{ gap: '0.5rem' }}>
                       <button
                         type="button"

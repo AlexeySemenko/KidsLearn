@@ -31,8 +31,12 @@ public sealed class CreateParentAssignmentCommandHandler : IRequestHandler<Creat
         var request = command.Request;
         var scopedParentIds = await ApiEndpointHelpers.ResolveParentScopeIdsAsync(_db, command.ParentId);
 
-        var childBelongsToParent = await ApiEndpointHelpers.EnsureParentOwnsChildAsync(_db, command.ParentId, request.ChildId);
-        if (!childBelongsToParent)
+        var childName = await _db.Children
+            .Where(x => x.Id == request.ChildId && scopedParentIds.Contains(x.ParentId))
+            .Select(x => x.Name)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (childName is null)
         {
             return CreateParentAssignmentResult.BadRequest("Child does not belong to current parent.");
         }
@@ -61,12 +65,15 @@ public sealed class CreateParentAssignmentCommandHandler : IRequestHandler<Creat
         var response = new AssignmentResponse(
             assignment.Id,
             assignment.ChildId,
+            childName,
             assignment.LessonId,
             lesson.Title,
             lesson.Subject,
             assignment.AssignedAt,
             assignment.DueDate,
-            assignment.Status);
+            assignment.Status,
+            null,
+            null);
 
         return CreateParentAssignmentResult.Created(response);
     }

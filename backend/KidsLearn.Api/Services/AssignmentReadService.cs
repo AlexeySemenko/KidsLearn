@@ -11,10 +11,12 @@ public sealed class AssignmentReadService(AppDbContext db) : IAssignmentReadServ
     public async Task<IReadOnlyList<AssignmentResponse>> ListForParentAsync(Guid parentId, Guid? childId)
     {
         var scopedParentIds = await ApiEndpointHelpers.ResolveParentScopeIdsAsync(db, parentId);
+        var weekAgo = DateTime.UtcNow.AddDays(-7);
 
         var query = db.Assignments
             .AsNoTracking()
-            .Where(x => scopedParentIds.Contains(x.Child.ParentId));
+            .Where(x => scopedParentIds.Contains(x.Child.ParentId)
+                && (x.Status != "Completed" || x.AssignedAt >= weekAgo));
 
         if (childId.HasValue)
         {
@@ -26,12 +28,15 @@ public sealed class AssignmentReadService(AppDbContext db) : IAssignmentReadServ
             .Select(x => new AssignmentResponse(
                 x.Id,
                 x.ChildId,
+                x.Child.Name,
                 x.LessonId,
                 x.Lesson.Title,
                 x.Lesson.Subject,
                 x.AssignedAt,
                 x.DueDate,
-                x.Status))
+                x.Status,
+                x.Result != null ? x.Result.Id : (Guid?)null,
+                x.Result != null ? x.Result.Score : (decimal?)null))
             .ToListAsync();
     }
 
@@ -46,12 +51,15 @@ public sealed class AssignmentReadService(AppDbContext db) : IAssignmentReadServ
             .Select(x => new AssignmentResponse(
                 x.Id,
                 x.ChildId,
+                x.Child.Name,
                 x.LessonId,
                 x.Lesson.Title,
                 x.Lesson.Subject,
                 x.AssignedAt,
                 x.DueDate,
-                x.Status))
+                x.Status,
+                x.Result != null ? x.Result.Id : (Guid?)null,
+                x.Result != null ? x.Result.Score : (decimal?)null))
             .ToListAsync();
     }
 }

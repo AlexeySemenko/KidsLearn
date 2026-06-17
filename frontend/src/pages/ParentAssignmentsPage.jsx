@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { useEffect, useMemo, useState } from 'react'
 import {
   createAssignment,
@@ -9,462 +10,416 @@ import {
 } from '../lib/api'
 import { useAuth } from '../auth/AuthProvider'
 import DropdownSelect from '../components/DropdownSelect'
+import LessonViewModal from '../components/LessonViewModal'
+import { SUBJECT_EMOJI, scoreEmoji, scoreVariant } from '../components/ChildStatsPanel'
 
-const emptyAssignmentForm = {
-  childId: '',
-  lessonId: '',
-  dueDate: '',
-}
+const STATUS_FILTER_OPTIONS = [
+  { value: '',           label: 'All statuses' },
+  { value: 'Assigned',   label: '✨ Assigned' },
+  { value: 'InProgress', label: '⚡ In progress' },
+  { value: 'Completed',  label: '✅ Completed' },
+]
 
-function validateAssignmentForm(form) {
-  if (!form.childId) {
-    return 'Select a child.'
-  }
-
-  if (!form.lessonId) {
-    return 'Select a lesson.'
-  }
-
-  return null
+const STATUS_PILL = {
+  Assigned:   { cls: 'status-new',     label: '✨ Assigned' },
+  InProgress: { cls: '',               label: '⚡ In progress' },
+  Completed:  { cls: 'status-success', label: '✅ Completed' },
 }
 
 function formatDate(value) {
-  if (!value) {
-    return 'No due date'
+  if (!value) return null
+  return new Date(value).toLocaleString()
+}
+
+function CreateAssignmentModal({ children, lessons, onSave, onClose, isSaving, error }) {
+  const [form, setForm] = useState({ childId: '', lessonId: '', dueDate: '' })
+
+  const childOptions = children.map((c) => ({
+    value: c.id,
+    label: `${c.name} · Grade ${c.grade}`,
+  }))
+
+  const lessonOptions = lessons.map((l) => ({
+    value: l.id,
+    label: l.title,
+    description: `${l.subject} · Grade ${l.grade} · ${l.topic}`,
+  }))
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    if (!form.childId || !form.lessonId) return
+    onSave({
+      childId: form.childId,
+      lessonId: form.lessonId,
+      dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : null,
+    })
   }
 
-  return new Date(value).toLocaleString()
+  return createPortal(
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-card" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+          <h3 style={{ margin: 0 }}>Create assignment</h3>
+          <button type="button" className="modal-close-btn" onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <DropdownSelect
+            id="modal-child"
+            label="Child"
+            placeholder="Select child"
+            value={form.childId}
+            options={childOptions}
+            onChange={(v) => setForm((f) => ({ ...f, childId: v }))}
+            disabled={children.length === 0}
+            searchable
+            searchPlaceholder="Search child"
+            size="compact"
+          />
+          <div style={{ marginTop: '0.75rem' }}>
+            <DropdownSelect
+              id="modal-lesson"
+              label="Lesson"
+              placeholder="Select lesson"
+              value={form.lessonId}
+              options={lessonOptions}
+              onChange={(v) => setForm((f) => ({ ...f, lessonId: v }))}
+              disabled={lessons.length === 0}
+              searchable
+              searchPlaceholder="Search lesson"
+              size="compact"
+            />
+          </div>
+          <div className="field" style={{ marginTop: '0.75rem' }}>
+            <label htmlFor="modal-due-date">
+              Due date <span style={{ opacity: 0.45, fontSize: '0.8em' }}>(optional)</span>
+            </label>
+            <input
+              id="modal-due-date"
+              className="input"
+              type="datetime-local"
+              value={form.dueDate}
+              onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
+            />
+          </div>
+          {error ? <div className="alert" style={{ marginTop: '0.75rem' }}>{error}</div> : null}
+          <div className="button-row modal-actions" style={{ marginTop: '1.25rem' }}>
+            <button
+              type="submit"
+              className="button"
+              disabled={isSaving || !form.childId || !form.lessonId}
+            >
+              {isSaving ? 'Creating...' : 'Create assignment'}
+            </button>
+            <button type="button" className="button-secondary" onClick={onClose}>Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>,
+    document.body,
+  )
 }
 
 export default function ParentAssignmentsPage() {
   const { session } = useAuth()
   const [assignments, setAssignments] = useState([])
-  const [children, setChildren] = useState([])
-  const [lessons, setLessons] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError] = useState('')
-  const [statusMessage, setStatusMessage] = useState('')
-  const [form, setForm] = useState(emptyAssignmentForm)
-  const [previewAssignment, setPreviewAssignment] = useState(null)
-  const [previewResult, setPreviewResult] = useState(null)
-  const [previewError, setPreviewError] = useState('')
-  const [isOpeningPreview, setIsOpeningPreview] = useState(false)
-  const [isLoadingResultDetail, setIsLoadingResultDetail] = useState(false)
-  const [resultLookupId, setResultLookupId] = useState('')
+  const [children, setChildren]       = useState([])
+  const [lessons, setLessons]         = useState([])
+  const [isLoading, setIsLoading]     = useState(true)
+  const [error, setError]             = useState('')
 
-  const childOptions = useMemo(
-    () => children.map((child) => ({
-      value: child.id,
-      label: `${child.name} · Grade ${child.grade}`,
-      description: child.accessCode ? `Access code: ${child.accessCode}` : 'Ready for new assignments',
-    })),
-    [children],
-  )
+  const [filterStatus, setFilterStatus] = useState('')
+  const [filterChild, setFilterChild]   = useState('')
 
-  const lessonOptions = useMemo(
-    () => lessons.map((lesson) => ({
-      value: lesson.id,
-      label: lesson.title,
-      description: `${lesson.subject} · Grade ${lesson.grade} · ${lesson.topic}`,
-    })),
-    [lessons],
-  )
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [isCreating, setIsCreating]           = useState(false)
+  const [createError, setCreateError]         = useState('')
 
-  const selectedChild = children.find((child) => child.id === form.childId) ?? null
-  const selectedLesson = lessons.find((lesson) => lesson.id === form.lessonId) ?? null
+  const [reviewAssignment, setReviewAssignment] = useState(null)
+  const [reviewResult, setReviewResult]         = useState(null)
+  const [isLoadingReview, setIsLoadingReview]   = useState(false)
 
   useEffect(() => {
-    let isMounted = true
-
-    async function loadData() {
-      if (!session?.accessToken) {
-        if (isMounted) {
-          setIsLoading(false)
-        }
-        return
-      }
-
+    let mounted = true
+    async function load() {
+      if (!session?.accessToken) { setIsLoading(false); return }
       try {
-        setError('')
-        setStatusMessage('')
-        const [assignmentResponse, childrenResponse, lessonsResponse] = await Promise.all([
+        const [a, ch, ls] = await Promise.all([
           getAssignments(session.accessToken),
           getChildren(session.accessToken),
           getLessons(session.accessToken),
         ])
-
-        if (!isMounted) {
-          return
+        if (mounted) {
+          setAssignments(a)
+          setChildren(ch)
+          setLessons(ls.items)
         }
-
-        setAssignments(assignmentResponse)
-        setChildren(childrenResponse)
-        setLessons(lessonsResponse.items)
-      } catch (requestError) {
-        if (isMounted) {
-          setError(requestError.message)
-        }
+      } catch (err) {
+        if (mounted) setError(err.message)
       } finally {
-        if (isMounted) {
-          setIsLoading(false)
-        }
+        if (mounted) setIsLoading(false)
       }
     }
-
-    loadData()
-
-    return () => {
-      isMounted = false
-    }
+    load()
+    return () => { mounted = false }
   }, [session?.accessToken])
 
-  useEffect(() => {
-    if (!previewAssignment) {
-      return undefined
+  const childFilterOptions = useMemo(() => [
+    { value: '', label: 'All children' },
+    ...children.map((c) => ({ value: c.id, label: c.name })),
+  ], [children])
+
+  async function handleCreate(payload) {
+    setIsCreating(true)
+    setCreateError('')
+    try {
+      const result = await createAssignment(session.accessToken, payload)
+      setAssignments((cur) => [result, ...cur])
+      setShowCreateModal(false)
+    } catch (err) {
+      setCreateError(err.message)
+    } finally {
+      setIsCreating(false)
     }
-
-    function handleKeyDown(event) {
-      if (event.key === 'Escape') {
-        closePreviewModal()
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [previewAssignment])
-
-  function updateField(name, value) {
-    setForm((current) => ({ ...current, [name]: value }))
   }
 
-  function findChildName(childId) {
-    return children.find((child) => child.id === childId)?.name ?? childId
-  }
-
-  function findLessonTitle(lessonId) {
-    return lessons.find((lesson) => lesson.id === lessonId)?.title ?? lessonId
-  }
-
-  function getLessonMeta(lessonId) {
-    const lesson = lessons.find((item) => item.id === lessonId)
-    if (!lesson) {
-      return 'Lesson metadata unavailable'
-    }
-
-    return `${lesson.subject} · Grade ${lesson.grade} · ${lesson.topic}`
-  }
-
-  async function handleCreateAssignment(event) {
-    event.preventDefault()
-    if (!session?.accessToken) {
-      return
-    }
-
-    const validationError = validateAssignmentForm(form)
-    if (validationError) {
-      setError(validationError)
-      setStatusMessage('')
-      return
-    }
-
+  async function handleReview(assignment) {
+    if (!session?.accessToken) return
+    setIsLoadingReview(true)
     setError('')
-    setStatusMessage('')
-    setIsSubmitting(true)
-
     try {
-      const response = await createAssignment(session.accessToken, {
-        childId: form.childId,
-        lessonId: form.lessonId,
-        dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : null,
-      })
-
-      setAssignments((current) => [response, ...current])
-      setForm(emptyAssignmentForm)
-      setStatusMessage('Assignment was created successfully.')
-    } catch (requestError) {
-      setError(requestError.message)
+      if (assignment.resultId) {
+        const result = await getParentResultDetail(session.accessToken, assignment.resultId)
+        setReviewResult(result)
+      } else {
+        const detail = await getParentAssignmentForSolving(session.accessToken, assignment.id)
+        setReviewAssignment(detail)
+      }
+    } catch (err) {
+      setError(err.message)
     } finally {
-      setIsSubmitting(false)
+      setIsLoadingReview(false)
     }
   }
 
-  async function handleOpenPreview(assignmentId) {
-    if (!session?.accessToken) {
-      return
-    }
-
-    setPreviewError('')
-    setPreviewResult(null)
-    setResultLookupId('')
-    setIsOpeningPreview(true)
-
-    try {
-      const response = await getParentAssignmentForSolving(session.accessToken, assignmentId)
-      setPreviewAssignment(response)
-    } catch (requestError) {
-      setPreviewAssignment(null)
-      setPreviewError(requestError.message)
-    } finally {
-      setIsOpeningPreview(false)
-    }
-  }
-
-  function closePreviewModal() {
-    setPreviewAssignment(null)
-    setPreviewResult(null)
-    setPreviewError('')
-    setResultLookupId('')
-  }
-
-  async function handleLoadResultDetail(event) {
-    event.preventDefault()
-
-    if (!session?.accessToken) {
-      return
-    }
-
-    const normalizedResultId = resultLookupId.trim()
-    if (!normalizedResultId) {
-      setPreviewError('Result ID is required to load result detail.')
-      return
-    }
-
-    setPreviewError('')
-    setIsLoadingResultDetail(true)
-
-    try {
-      const response = await getParentResultDetail(session.accessToken, normalizedResultId)
-      setPreviewResult(response)
-    } catch (requestError) {
-      setPreviewResult(null)
-      setPreviewError(requestError.message)
-    } finally {
-      setIsLoadingResultDetail(false)
-    }
-  }
+  const filtered = useMemo(() => assignments.filter((a) => {
+    if (filterStatus && a.status !== filterStatus) return false
+    if (filterChild && a.childId !== filterChild) return false
+    return true
+  }), [assignments, filterStatus, filterChild])
 
   return (
-    <section className="panel-grid">
-      <article className="hero-card assignments-hero">
-        <div className="brand-kicker">Epic 3.4</div>
-        <h2>Assignments management is now connected to the API.</h2>
-        <p>
-          This slice lets the parent assign lessons to children and review the assignment list
-          from the same authenticated workspace.
+    <section className="assignments-page">
+      <div className="children-list-header">
+        <div>
+          <h2>Assignments</h2>
+          <p>Active assignments + completed last 7 days.</p>
+        </div>
+        <button
+          type="button"
+          className="button"
+          onClick={() => { setShowCreateModal(true); setCreateError('') }}
+        >
+          + Create assignment
+        </button>
+      </div>
+
+      {error ? <div className="alert">{error}</div> : null}
+
+      <div className="admin-filter-bar">
+        <select
+          className="admin-filter-input"
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          aria-label="Filter by status"
+          style={{ flex: '0 1 180px' }}
+        >
+          {STATUS_FILTER_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <select
+          className="admin-filter-input"
+          value={filterChild}
+          onChange={(e) => setFilterChild(e.target.value)}
+          aria-label="Filter by child"
+          style={{ flex: '0 1 180px' }}
+        >
+          {childFilterOptions.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <span className="badge" style={{ alignSelf: 'center', marginLeft: 'auto' }}>
+          {filtered.length} assignment{filtered.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+
+      {isLoading ? (
+        <p className="children-empty">Loading assignments...</p>
+      ) : null}
+
+      {!isLoading && filtered.length === 0 ? (
+        <p className="children-empty">
+          {assignments.length === 0
+            ? 'No assignments yet. Create the first one!'
+            : 'No assignments match the current filters.'}
         </p>
-        <div className="badge-row">
-          <span className="badge">GET /assignments</span>
-          <span className="badge">POST /assignments</span>
-          <span className="badge">Child + lesson mapping</span>
-        </div>
-      </article>
+      ) : null}
 
-      <article className="panel-card assignments-form-card">
-        <div className="section-heading">
-          <span className="section-kicker">Create flow</span>
-          <h3>Create assignment</h3>
-          <p>Select a child, pair the right lesson, and optionally define a due date.</p>
-        </div>
+      {!isLoading && filtered.length > 0 ? (
+        <div className="children-list">
+          {filtered.map((assignment) => {
+            const pill = STATUS_PILL[assignment.status] ?? { cls: '', label: assignment.status }
+            const subjectIcon = SUBJECT_EMOJI[assignment.lessonSubject] || '📚'
+            const childName = assignment.childName
+              || children.find((c) => c.id === assignment.childId)?.name
+              || '—'
+            const assigned = formatDate(assignment.assignedAt)
+            const due = assignment.dueDate ? formatDate(assignment.dueDate) : null
 
-        <form className="auth-form compact-form" onSubmit={handleCreateAssignment}>
-          <div className="assignments-form-grid">
-            <DropdownSelect
-              id="assignment-child"
-              label="Child"
-              placeholder="Select child"
-              value={form.childId}
-              options={childOptions}
-              onChange={(nextValue) => updateField('childId', nextValue)}
-              disabled={children.length === 0}
-              helperText="Pick who should receive the lesson."
-              showHelperHint={false}
-              size="compact"
-              searchable
-              searchPlaceholder="Search child"
-            />
-
-            <DropdownSelect
-              id="assignment-lesson"
-              label="Lesson"
-              placeholder="Select lesson"
-              value={form.lessonId}
-              options={lessonOptions}
-              onChange={(nextValue) => updateField('lessonId', nextValue)}
-              disabled={lessons.length === 0}
-              helperText="Choose from lessons created in the parent workspace."
-              showHelperHint={false}
-              size="compact"
-              searchable
-              searchPlaceholder="Search lesson"
-            />
-          </div>
-
-          {selectedChild || selectedLesson ? (
-            <div className="assignment-preview-card">
-              <div className="assignment-preview-column">
-                <span className="section-kicker">Selected child</span>
-                <strong>{selectedChild ? selectedChild.name : 'No child selected yet'}</strong>
-                <span>{selectedChild ? `Grade ${selectedChild.grade}` : 'Choose a child to target the assignment.'}</span>
-              </div>
-              <div className="assignment-preview-column">
-                <span className="section-kicker">Selected lesson</span>
-                <strong>{selectedLesson ? selectedLesson.title : 'No lesson selected yet'}</strong>
-                <span>{selectedLesson ? `${selectedLesson.subject} · Grade ${selectedLesson.grade} · ${selectedLesson.topic}` : 'Choose a lesson to preview its placement.'}</span>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="field">
-            <label htmlFor="assignment-due-date">Due date</label>
-            <input id="assignment-due-date" className="input" type="datetime-local" value={form.dueDate} onChange={(event) => updateField('dueDate', event.target.value)} />
-            <span className="field-hint">Leave empty if this assignment should stay open-ended.</span>
-          </div>
-
-          <div className="assignment-form-footer">
-            <div className="assignments-form-note">
-              <strong>{children.length}</strong> children and <strong>{lessons.length}</strong> lessons are ready for assignment.
-            </div>
-
-            <button type="submit" className="button assignment-submit-button" disabled={isSubmitting || children.length === 0 || lessons.length === 0}>
-              {isSubmitting ? 'Creating...' : 'Create assignment'}
-            </button>
-          </div>
-        </form>
-
-        {statusMessage ? (
-          <div className="info-block success-block assignments-status-block">
-            <strong>Update</strong>
-            <span>{statusMessage}</span>
-          </div>
-        ) : null}
-
-        {error ? <div className="alert assignments-alert">{error}</div> : null}
-      </article>
-
-      <article className="assignments-list-card">
-        <div className="children-list-header">
-          <div>
-            <h3>Assignments</h3>
-            <p>Current assignments across the parent workspace, with child and lesson context.</p>
-          </div>
-          <span className="badge">{assignments.length} records</span>
-        </div>
-
-        {isLoading ? <p className="children-empty">Loading assignments...</p> : null}
-        {!isLoading && assignments.length === 0 ? <p className="children-empty">No assignments yet. Create the first assignment from the panel on the right.</p> : null}
-
-        {!isLoading && assignments.length > 0 ? (
-          <div className="children-list">
-            {assignments.map((assignment) => (
+            return (
               <article key={assignment.id} className="assignment-row">
                 <div className="assignment-copy">
                   <div className="assignment-topline">
-                    <div className="child-name">{findChildName(assignment.childId)}</div>
-                    <span className="assignment-status-pill">{assignment.status}</span>
+                    <div className="child-name">{childName}</div>
+                    {assignment.score != null ? (
+                      <span className={`assignment-status-pill ${scoreVariant(assignment.score)}`}>
+                        {scoreEmoji(assignment.score)} {assignment.score}%
+                      </span>
+                    ) : (
+                      <span className={`assignment-status-pill ${pill.cls}`}>{pill.label}</span>
+                    )}
                   </div>
-                  <div className="assignment-lesson-title">{findLessonTitle(assignment.lessonId)}</div>
-                  <div className="child-meta">{getLessonMeta(assignment.lessonId)}</div>
+                  <div className="assignment-lesson-title">
+                    <span style={{ marginRight: '0.35em' }}>{subjectIcon}</span>
+                    {assignment.lessonTitle}
+                  </div>
                   <div className="assignment-timeline">
-                    <span className="assignment-meta-chip">Assigned {formatDate(assignment.assignedAt)}</span>
-                    <span className="assignment-meta-chip">Due {formatDate(assignment.dueDate)}</span>
+                    {assigned ? <span className="assignment-meta-chip">Assigned {assigned}</span> : null}
+                    {due ? <span className="assignment-meta-chip">Due {due}</span> : null}
                   </div>
                 </div>
                 <div className="button-row child-actions">
                   <button
                     type="button"
-                    className="button-secondary"
-                    disabled={isOpeningPreview}
-                    onClick={() => handleOpenPreview(assignment.id)}
+                    className="button-secondary child-start-button"
+                    style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}
+                    disabled={isLoadingReview}
+                    onClick={() => handleReview(assignment)}
                   >
-                    {isOpeningPreview ? 'Opening...' : 'Review'}
+                    {isLoadingReview ? '⏳' : '🔍 Review'}
                   </button>
                 </div>
               </article>
-            ))}
-          </div>
-        ) : null}
-      </article>
+            )
+          })}
+        </div>
+      ) : null}
 
-      {previewAssignment ? (
-        <div className="modal-overlay" role="presentation" onClick={closePreviewModal}>
-          <section
-            className="modal-card lesson-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="parent-review-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="children-list-header modal-header">
-              <div>
-                <h3 id="parent-review-title">Assignment review</h3>
-                <p>{previewAssignment.lessonTitle} · {previewAssignment.questions.length} questions</p>
-              </div>
-              <button type="button" className="button-secondary" onClick={closePreviewModal}>Close</button>
-            </div>
+      {showCreateModal ? (
+        <CreateAssignmentModal
+          children={children}
+          lessons={lessons}
+          onSave={handleCreate}
+          onClose={() => setShowCreateModal(false)}
+          isSaving={isCreating}
+          error={createError}
+        />
+      ) : null}
 
-            <div className="children-list">
-              {previewAssignment.questions.map((question, index) => (
-                <article key={question.questionId} className="assignment-row question-card">
-                  <div className="assignment-copy">
-                    <div className="assignment-topline">
-                      <div className="child-name">Question {index + 1}</div>
-                    </div>
-
-                    <div>{question.questionText}</div>
-                    <div className="child-meta">Explanation: {question.explanation}</div>
-
-                    <div className="question-options">
-                      {question.answers.map((answer) => (
-                        <div key={answer.answerId} className="question-option">
-                          <span>{answer.answerText}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-
-            <form className="auth-form compact-form" onSubmit={handleLoadResultDetail}>
-              <div className="field">
-                <label htmlFor="parent-result-id">Result ID</label>
-                <input
-                  id="parent-result-id"
-                  className="input"
-                  value={resultLookupId}
-                  onChange={(event) => setResultLookupId(event.target.value)}
-                  placeholder="Paste result ID to review breakdown"
-                />
-              </div>
-
-              <button type="submit" className="button-secondary" disabled={isLoadingResultDetail}>
-                {isLoadingResultDetail ? 'Loading result...' : 'Load result detail'}
-              </button>
-            </form>
-
-            {previewResult ? (
-              <div className="info-block success-block assignments-status-block">
-                <strong>Result summary</strong>
-                <span>Score: {previewResult.score}% · Correct: {previewResult.correctAnswers}/{previewResult.totalQuestions}</span>
-                <span>Completed: {formatDate(previewResult.completedAt)}</span>
-                <div className="children-list">
-                  {previewResult.breakdown.map((item, index) => (
-                    <div key={`${item.questionId}-${index}`} className="assignment-timeline">
-                      <span className="assignment-meta-chip">Q{index + 1}</span>
-                      <span className={`assignment-status-pill ${item.correct ? 'status-success' : 'status-danger'}`}>
-                        {item.correct ? 'Correct' : 'Incorrect'}
-                      </span>
-                      <span className="assignment-meta-chip">{item.questionId}</span>
+      {reviewAssignment ? (
+        <LessonViewModal
+          title={`Review: ${reviewAssignment.lessonTitle}`}
+          subtitle={`${reviewAssignment.questions.length} question${reviewAssignment.questions.length !== 1 ? 's' : ''}`}
+          questions={reviewAssignment.questions}
+          onClose={() => setReviewAssignment(null)}
+          renderQuestion={(question, index) => (
+            <article key={question.questionId} className="assignment-row question-card">
+              <div className="assignment-copy">
+                <div className="assignment-topline">
+                  <div className="child-name">Question {index + 1}</div>
+                </div>
+                <div>{question.questionText}</div>
+                {question.explanation ? (
+                  <div className="child-meta">Explanation: {question.explanation}</div>
+                ) : null}
+                <div className="question-options">
+                  {question.answers.map((answer) => (
+                    <div
+                      key={answer.answerId}
+                      className={`question-option${answer.isCorrect ? ' correct-answer' : ''}`}
+                    >
+                      <span>{answer.answerText}</span>
+                      {answer.isCorrect ? <span className="answer-correct-badge">✓ Correct</span> : null}
                     </div>
                   ))}
                 </div>
               </div>
-            ) : null}
+            </article>
+          )}
+          footer={(
+            <div className="button-row modal-actions">
+              <button type="button" className="button-secondary" onClick={() => setReviewAssignment(null)}>Close</button>
+            </div>
+          )}
+        />
+      ) : null}
 
-            {previewError ? <div className="alert assignments-alert">{previewError}</div> : null}
-          </section>
-        </div>
+      {reviewResult ? (
+        <LessonViewModal
+          title={reviewResult.lessonTitle}
+          subtitle={`${scoreEmoji(reviewResult.score)} ${reviewResult.score}% · ${reviewResult.correctAnswers}/${reviewResult.totalQuestions} correct`}
+          questions={reviewResult.breakdown}
+          onClose={() => setReviewResult(null)}
+          renderQuestion={(item, index) => (
+            <article key={item.questionId} className="assignment-row question-card">
+              <div className="assignment-copy">
+                <div className="assignment-topline">
+                  <div className="child-name">Question {index + 1}</div>
+                  <span className={`assignment-status-pill ${item.correct ? 'status-success' : 'status-danger'}`}>
+                    {item.correct ? '✅ Correct' : '❌ Incorrect'}
+                  </span>
+                </div>
+                <div>{item.questionText}</div>
+                <div className="question-options">
+                  {item.answers.map((answer) => {
+                    const wasSelected = answer.answerId === item.selectedAnswerOptionId
+                    const isCorrect = answer.isCorrect
+                    let cls = 'question-option'
+                    if (isCorrect) cls += ' correct-answer'
+                    if (wasSelected && !isCorrect) cls += ' wrong-selected'
+                    return (
+                      <div key={answer.answerId} className={cls}>
+                        <span>{answer.answerText}</span>
+                        {isCorrect ? <span className="answer-correct-badge">✓ Correct</span> : null}
+                        {wasSelected && !isCorrect ? <span className="answer-wrong-badge">✗ Child's answer</span> : null}
+                        {wasSelected && isCorrect ? <span className="answer-correct-badge">✓ Child's answer</span> : null}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </article>
+          )}
+          footer={(
+            <div className="result-summary-footer">
+              <div className={`mission-complete ${reviewResult.score >= 90 ? 'grade-perfect' : reviewResult.score >= 70 ? 'grade-great' : reviewResult.score >= 50 ? 'grade-good' : 'grade-ok'}`}
+                style={{ paddingTop: '1rem', paddingBottom: '0.5rem' }}>
+                <div className="mission-complete-emoji" aria-hidden="true">
+                  {reviewResult.score >= 90 ? '🌟' : reviewResult.score >= 70 ? '🎊' : reviewResult.score >= 50 ? '👍' : '😊'}
+                </div>
+                <div className="mission-complete-title">
+                  {reviewResult.score >= 90 ? 'Perfect!' : reviewResult.score >= 70 ? 'Great job!' : reviewResult.score >= 50 ? 'Good job!' : 'Keep trying!'}
+                </div>
+                <div className="mission-complete-score">
+                  {reviewResult.score}% &nbsp;·&nbsp; {reviewResult.correctAnswers}/{reviewResult.totalQuestions} correct
+                </div>
+              </div>
+              <div className="button-row modal-actions">
+                <button type="button" className="button-secondary" onClick={() => setReviewResult(null)}>Close</button>
+              </div>
+            </div>
+          )}
+        />
       ) : null}
     </section>
   )
