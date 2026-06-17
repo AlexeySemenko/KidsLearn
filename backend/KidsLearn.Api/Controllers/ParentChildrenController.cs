@@ -106,6 +106,17 @@ public static class ParentChildrenController
             };
         });
 
+        parentApi.MapGet("/children/{childId:guid}/results", async (ISender sender, ClaimsPrincipal user, Guid childId) =>
+        {
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
+            {
+                return Results.Unauthorized();
+            }
+
+            var results = await sender.Send(new GetParentChildResultsQuery(parentId, childId));
+            return Results.Ok(results);
+        });
+
         return parentApi;
     }
 }

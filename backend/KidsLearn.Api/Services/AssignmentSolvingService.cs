@@ -24,6 +24,7 @@ public interface IAssignmentSolvingService
     Task<ServiceResult<CompleteAssignmentResponse>> CompleteAsync(AssignmentAccessScope scope, Guid scopeId, Guid assignmentId);
     Task<ServiceResult<ResultDetailResponse>> GetResultAsync(AssignmentAccessScope scope, Guid scopeId, Guid resultId);
     Task<List<ResultListItemResponse>> GetResultsAsync(Guid childId);
+    Task<List<ResultListItemResponse>> GetChildResultsForParentAsync(Guid parentId, Guid childId);
 }
 
 public class AssignmentSolvingService(AppDbContext db) : IAssignmentSolvingService
@@ -303,6 +304,37 @@ public class AssignmentSolvingService(AppDbContext db) : IAssignmentSolvingServi
                 x.Id,
                 x.AssignmentId,
                 x.Assignment.Lesson.Title,
+                x.Assignment.Lesson.Subject,
+                x.Assignment.Lesson.Topic,
+                x.Assignment.Lesson.Grade,
+                x.Score,
+                x.CompletedAt,
+                x.CorrectAnswers,
+                x.TotalQuestions))
+            .ToListAsync();
+    }
+
+    public async Task<List<ResultListItemResponse>> GetChildResultsForParentAsync(Guid parentId, Guid childId)
+    {
+        var owned = await ApiEndpointHelpers.EnsureParentOwnsChildAsync(db, parentId, childId);
+        if (!owned)
+        {
+            return [];
+        }
+
+        return await db.Results
+            .AsNoTracking()
+            .Include(x => x.Assignment)
+                .ThenInclude(x => x.Lesson)
+            .Where(x => x.Assignment.ChildId == childId)
+            .OrderByDescending(x => x.CompletedAt)
+            .Select(x => new ResultListItemResponse(
+                x.Id,
+                x.AssignmentId,
+                x.Assignment.Lesson.Title,
+                x.Assignment.Lesson.Subject,
+                x.Assignment.Lesson.Topic,
+                x.Assignment.Lesson.Grade,
                 x.Score,
                 x.CompletedAt,
                 x.CorrectAnswers,

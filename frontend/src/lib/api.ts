@@ -449,6 +449,9 @@ export interface ResultListItem {
   resultId: string
   assignmentId: string
   lessonTitle: string
+  subject: string
+  topic: string
+  grade: number
   score: number
   completedAt: string
   correctAnswers: number
@@ -513,6 +516,10 @@ export async function exportParentChildReportCsv(accessToken: string, childId: s
     fileBlob,
     fileName: fileNameMatch ? decodeURIComponent(fileNameMatch[1].replace(/\"/g, '')) : `child-report-${childId}.csv`,
   }
+}
+
+export async function getParentChildResults(accessToken: string, childId: string): Promise<ResultListItem[]> {
+  return request<ResultListItem[]>(`/api/v1/children/${childId}/results`, withAuth(accessToken))
 }
 
 export async function getLinkedParents(accessToken: string): Promise<LinkedParent[]> {

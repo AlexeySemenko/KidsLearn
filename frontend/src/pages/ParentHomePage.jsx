@@ -1,15 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
-import { getAssignments, getChildren, getLessons } from '../lib/api'
+import { getAssignments, getChildren, getLessons, getParentChildResults } from '../lib/api'
+import ChildStatsPanel from '../components/ChildStatsPanel'
 
-function formatDate(value) {
-  if (!value) {
-    return 'No due date'
-  }
-
-  return new Date(value).toLocaleString()
-}
+const PILLAR_COLORS = ['#60a5fa', '#34d399', '#a78bfa', '#f87171', '#fbbf24', '#fb923c']
+const PILLAR_EMOJIS = ['🦊', '🐻', '🐼', '🦁', '🐸', '🦋']
 
 export default function ParentHomePage() {
   const { session } = useAuth()
@@ -19,14 +15,16 @@ export default function ParentHomePage() {
   const [lessons, setLessons] = useState([])
   const [assignments, setAssignments] = useState([])
 
+  const [selectedChildId, setSelectedChildId] = useState(null)
+  const [childResults, setChildResults] = useState([])
+  const [childResultsLoading, setChildResultsLoading] = useState(false)
+
   useEffect(() => {
     let isMounted = true
 
     async function loadDashboard() {
       if (!session?.accessToken) {
-        if (isMounted) {
-          setIsLoading(false)
-        }
+        if (isMounted) setIsLoading(false)
         return
       }
 
@@ -38,189 +36,140 @@ export default function ParentHomePage() {
           getAssignments(session.accessToken),
         ])
 
-        if (!isMounted) {
-          return
-        }
+        if (!isMounted) return
 
         setChildren(childrenResponse)
         setLessons(lessonsResponse.items ?? [])
         setAssignments(assignmentsResponse)
       } catch (requestError) {
-        if (isMounted) {
-          setError(requestError.message)
-        }
+        if (isMounted) setError(requestError.message)
       } finally {
-        if (isMounted) {
-          setIsLoading(false)
-        }
+        if (isMounted) setIsLoading(false)
       }
     }
 
     loadDashboard()
-
-    return () => {
-      isMounted = false
-    }
+    return () => { isMounted = false }
   }, [session?.accessToken])
 
-  const childNameById = useMemo(
-    () => new Map(children.map((child) => [child.id, child.name])),
-    [children],
-  )
+  async function handlePillarClick(childId) {
+    if (selectedChildId === childId) {
+      setSelectedChildId(null)
+      setChildResults([])
+      return
+    }
 
-  const lessonTitleById = useMemo(
-    () => new Map(lessons.map((lesson) => [lesson.id, lesson.title])),
-    [lessons],
-  )
+    setSelectedChildId(childId)
+    setChildResultsLoading(true)
+    try {
+      const results = await getParentChildResults(session.accessToken, childId)
+      setChildResults(results)
+    } catch (err) {
+      setError(err.message)
+      setChildResults([])
+    } finally {
+      setChildResultsLoading(false)
+    }
+  }
 
-  const completedAssignments = useMemo(
-    () => assignments.filter((assignment) => assignment.status === 'Completed').length,
-    [assignments],
-  )
-
-  const overdueAssignments = useMemo(() => {
-    const now = Date.now()
-    return assignments.filter((assignment) => (
-      assignment.dueDate
-      && assignment.status !== 'Completed'
-      && new Date(assignment.dueDate).getTime() < now
-    )).length
-  }, [assignments])
-
+  const selectedChild = children.find((c) => c.id === selectedChildId)
+  const completedAssignments = assignments.filter((a) => a.status === 'Completed').length
+  const overdueAssignments = assignments.filter(
+    (a) => a.dueDate && a.status !== 'Completed' && new Date(a.dueDate).getTime() < Date.now()
+  ).length
   const completionRate = assignments.length === 0
     ? 0
     : Math.round((completedAssignments / assignments.length) * 100)
 
-  const recentAssignments = useMemo(() => {
-    return [...assignments]
-      .sort((a, b) => new Date(b.assignedAt).getTime() - new Date(a.assignedAt).getTime())
-      .slice(0, 5)
-  }, [assignments])
-
   return (
-    <section className="panel-grid">
-      <article className="hero-card">
-        <div className="brand-kicker">Parent dashboard</div>
-        <h2>Live workspace overview.</h2>
-        <p>
-          Monitor children, lessons, and assignment execution from one place,
-          then jump directly into the workspace that needs attention.
-        </p>
-        <div className="badge-row">
-          <span className="badge">Children: {children.length}</span>
-          <span className="badge">Lessons: {lessons.length}</span>
-          <span className="badge">Assignments: {assignments.length}</span>
+    <section className="parent-dash-page">
+      {error ? <div className="alert" style={{ marginBottom: '1rem' }}>{error}</div> : null}
+
+      {/* ── Children pillars ── */}
+      {!isLoading && children.length > 0 ? (
+        <div className="parent-dash-pillars-wrap">
+          <div className="parent-dash-pillars-label">My children</div>
+          <div className="parent-dash-pillars">
+            {children.map((child, i) => (
+              <button
+                key={child.id}
+                type="button"
+                className={`parent-child-pillar${selectedChildId === child.id ? ' is-active' : ''}`}
+                style={{ '--pillar-color': PILLAR_COLORS[i % PILLAR_COLORS.length] }}
+                onClick={() => handlePillarClick(child.id)}
+              >
+                <span className="pillar-avatar">{PILLAR_EMOJIS[i % PILLAR_EMOJIS.length]}</span>
+                <span className="pillar-name">{child.name}</span>
+                <span className="pillar-grade">Grade {child.grade}</span>
+                {selectedChildId === child.id ? (
+                  <span className="pillar-active-hint">tap to go back</span>
+                ) : null}
+              </button>
+            ))}
+          </div>
         </div>
-      </article>
-
-      <article className="side-card panel-card">
-        <h3>Quick actions</h3>
-        <p>Open the target workspace in one click.</p>
-        <div className="button-row">
-          <Link className="button-secondary inline-link" to="/parent/children">
-            Manage children
-          </Link>
-          <Link className="button-secondary inline-link" to="/parent/lessons">
-            Manage lessons
-          </Link>
-          <Link className="button-secondary inline-link" to="/parent/assignments">
-            Open assignments
-          </Link>
-          <Link className="button-secondary inline-link" to="/parent/reports">
-            Open reports
-          </Link>
-        </div>
-      </article>
-
-      {error ? <div className="alert">{error}</div> : null}
-
-      {isLoading ? (
-        <article className="assignments-list-card">
-          <p className="children-empty">Loading dashboard data...</p>
-        </article>
       ) : null}
 
-      {!isLoading ? (
-        <article className="assignments-list-card">
-          <div className="children-list-header">
-            <div>
-              <h3>Performance snapshot</h3>
-              <p>Current delivery state across the parent workspace.</p>
-            </div>
-            <span className="badge">Updated live</span>
+      {/* ── Selected child stats ── */}
+      {selectedChildId ? (
+        <div className="parent-child-stats-view">
+          <div className="parent-child-stats-header">
+            <h3>
+              {PILLAR_EMOJIS[children.findIndex((c) => c.id === selectedChildId) % PILLAR_EMOJIS.length]}{' '}
+              {selectedChild?.name ?? 'Child'}'s progress
+            </h3>
+            <span className="badge">Grade {selectedChild?.grade}</span>
           </div>
-
-          <div className="reports-metrics-grid">
-            <article className="report-metric-card">
-              <span className="section-kicker">Children</span>
-              <strong>{children.length}</strong>
-              <p>Active child profiles in your workspace.</p>
-            </article>
-
-            <article className="report-metric-card">
-              <span className="section-kicker">Lessons</span>
-              <strong>{lessons.length}</strong>
-              <p>Total lessons available for assignment.</p>
-            </article>
-
-            <article className="report-metric-card">
-              <span className="section-kicker">Completion rate</span>
-              <strong>{completionRate}%</strong>
-              <p>{completedAssignments} of {assignments.length} assignments completed.</p>
-            </article>
-
-            <article className="report-metric-card">
-              <span className="section-kicker">Overdue</span>
-              <strong>{overdueAssignments}</strong>
-              <p>Assignments past due and still pending.</p>
-            </article>
-          </div>
-        </article>
-      ) : null}
-
-      {!isLoading ? (
-        <article className="assignments-list-card">
-          <div className="children-list-header">
-            <div>
-              <h3>Recent assignments</h3>
-              <p>Most recently assigned lessons across all children.</p>
-            </div>
-            <span className="badge">Top 5</span>
-          </div>
-
-          {recentAssignments.length === 0 ? (
-            <p className="children-empty">No assignments yet. Create the first assignment from the assignments page.</p>
+          <ChildStatsPanel results={childResults} isLoading={childResultsLoading} />
+        </div>
+      ) : (
+        <>
+          {/* ── Parent overview stats ── */}
+          {isLoading ? (
+            <p className="children-empty" style={{ padding: '2rem 0' }}>Loading dashboard...</p>
           ) : (
-            <div className="children-list">
-              {recentAssignments.map((assignment) => (
-                <article key={assignment.id} className="assignment-row">
-                  <div className="assignment-copy">
-                    <div className="assignment-topline">
-                      <div className="assignment-lesson-title">
-                        {assignment.lessonTitle
-                          ?? lessonTitleById.get(assignment.lessonId)
-                          ?? assignment.lessonId}
-                      </div>
-                      <span className={`assignment-status-pill ${assignment.status === 'Completed' ? 'status-success' : ''}`}>
-                        {assignment.status}
-                      </span>
-                    </div>
+            <>
+              <div className="parent-overview-grid">
+                <div className="parent-overview-card" data-accent="blue">
+                  <span className="parent-ov-icon">👦</span>
+                  <span className="parent-ov-value">{children.length}</span>
+                  <span className="parent-ov-label">Children</span>
+                </div>
+                <div className="parent-overview-card" data-accent="green">
+                  <span className="parent-ov-icon">📚</span>
+                  <span className="parent-ov-value">{lessons.length}</span>
+                  <span className="parent-ov-label">Lessons</span>
+                </div>
+                <div className="parent-overview-card" data-accent="yellow">
+                  <span className="parent-ov-icon">✅</span>
+                  <span className="parent-ov-value">{completionRate}%</span>
+                  <span className="parent-ov-label">Completion rate</span>
+                </div>
+                <div className="parent-overview-card" data-accent="red">
+                  <span className="parent-ov-icon">⏰</span>
+                  <span className="parent-ov-value">{overdueAssignments}</span>
+                  <span className="parent-ov-label">Overdue</span>
+                </div>
+              </div>
 
-                    <div className="child-meta">
-                      Child: {childNameById.get(assignment.childId) ?? assignment.childId}
-                    </div>
-
-                    <div className="assignment-timeline">
-                      <span className="assignment-meta-chip">Assigned {formatDate(assignment.assignedAt)}</span>
-                      <span className="assignment-meta-chip">Due {formatDate(assignment.dueDate)}</span>
-                    </div>
+              <div className="parent-dash-actions-card">
+                <div className="children-list-header">
+                  <div>
+                    <h3>Quick actions</h3>
+                    <p>Open the target workspace in one click.</p>
                   </div>
-                </article>
-              ))}
-            </div>
+                </div>
+                <div className="button-row">
+                  <Link className="button-secondary inline-link" to="/parent/children">Manage children</Link>
+                  <Link className="button-secondary inline-link" to="/parent/lessons">Manage lessons</Link>
+                  <Link className="button-secondary inline-link" to="/parent/assignments">Assignments</Link>
+                  <Link className="button-secondary inline-link" to="/parent/reports">Reports</Link>
+                </div>
+              </div>
+            </>
           )}
-        </article>
-      ) : null}
+        </>
+      )}
     </section>
   )
 }
