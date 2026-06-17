@@ -10,8 +10,7 @@ export default function ProtectedRoute({ allowedRoles }) {
   }
 
   if (!isAuthenticated) {
-    const redirectTo = allowedRoles.includes('Child') ? '/login/child' : '/login/parent'
-    return <Navigate to={redirectTo} replace state={{ from: location }} />
+    return <Navigate to="/login" replace state={{ from: location }} />
   }
 
   if (allowedRoles.length > 0 && !allowedRoles.includes(role)) {
