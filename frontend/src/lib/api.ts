@@ -18,9 +18,31 @@ type ReportQueryRange = {
 
 export interface AuthUser {
   id: string
-  role: 'Parent' | 'Child'
+  role: 'Parent' | 'Child' | 'Admin'
   email: string
   displayName?: string | null
+}
+
+export interface AdminUser {
+  id: string
+  email: string
+  displayName: string | null
+  role: string
+  emailVerified: boolean
+  externalProvider: string | null
+  createdAt: string
+  lastAccessAt: string | null
+}
+
+export interface AdminCreateUserRequest {
+  email: string
+  displayName?: string | null
+  role: string
+}
+
+export interface AdminUpdateUserRequest {
+  displayName?: string | null
+  role?: string | null
 }
 
 export interface AuthSessionResponse {
@@ -516,6 +538,35 @@ export async function exportParentChildReportCsv(accessToken: string, childId: s
     fileBlob,
     fileName: fileNameMatch ? decodeURIComponent(fileNameMatch[1].replace(/\"/g, '')) : `child-report-${childId}.csv`,
   }
+}
+
+export async function getAdminUsers(accessToken: string): Promise<AdminUser[]> {
+  return request<AdminUser[]>('/api/v1/admin/users', withAuth(accessToken))
+}
+
+export interface AdminCreateUserResponse {
+  user: AdminUser
+  emailSent: boolean
+}
+
+export async function createAdminUser(accessToken: string, payload: AdminCreateUserRequest): Promise<AdminCreateUserResponse> {
+  return request<AdminCreateUserResponse>('/api/v1/admin/users', withAuth(accessToken, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }))
+}
+
+export async function updateAdminUser(accessToken: string, userId: string, payload: AdminUpdateUserRequest): Promise<AdminUser> {
+  return request<AdminUser>(`/api/v1/admin/users/${userId}`, withAuth(accessToken, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  }))
+}
+
+export async function deleteAdminUser(accessToken: string, userId: string): Promise<null> {
+  return request<null>(`/api/v1/admin/users/${userId}`, withAuth(accessToken, {
+    method: 'DELETE',
+  }))
 }
 
 export async function getParentChildResults(accessToken: string, childId: string): Promise<ResultListItem[]> {

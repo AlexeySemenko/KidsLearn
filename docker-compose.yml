@@ -38,6 +38,12 @@ services:
       GoogleAuth__ChildFrontendCallbackUrl: "${GOOGLE_AUTH_CHILD_FRONTEND_CALLBACK_URL:-http://localhost:8080/login/child/google/callback}"
       OpenAI__ApiKey: "${OPENAI_API_KEY:-}"
       OpenAI__Model: "${OPENAI_MODEL:-gpt-4o-mini}"
+      Email__SmtpHost: "${EMAIL_SMTP_HOST:-}"
+      Email__SmtpPort: "${EMAIL_SMTP_PORT:-587}"
+      Email__SmtpUsername: "${EMAIL_SMTP_USERNAME:-}"
+      Email__SmtpPassword: "${EMAIL_SMTP_PASSWORD:-}"
+      Email__FromAddress: "${EMAIL_FROM_ADDRESS:-}"
+      Email__FromName: "${EMAIL_FROM_NAME:-KidsLearnAI}"
     depends_on:
       postgres:
         condition: service_healthy

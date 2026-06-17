@@ -67,6 +67,7 @@ builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(connectionStrin
 
 builder.Services.AddScoped<IPasswordHasherService, PasswordHasherService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IAssignmentSolvingService, AssignmentSolvingService>();
 builder.Services.AddScoped<IAssignmentReadService, AssignmentReadService>();
 builder.Services.AddScoped<IAiLessonGenerationService, AiLessonGenerationService>();
@@ -135,7 +136,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("ParentOnly", policy => policy.RequireRole(UserRole.Parent.ToString()));
+    options.AddPolicy("ParentOnly", policy => policy.RequireRole(UserRole.Parent.ToString(), UserRole.Admin.ToString()));
     options.AddPolicy("ChildOnly", policy => policy.RequireRole(UserRole.Child.ToString()));
     options.AddPolicy("AdminOnly", policy => policy.RequireRole(UserRole.Admin.ToString()));
 });
@@ -205,6 +206,18 @@ using (var scope = app.Services.CreateScope())
     {
         db.Database.EnsureCreated();
     }
+
+    // Promote configured admin emails to Admin role
+    var adminEmails = app.Configuration.GetSection("AdminEmails").Get<string[]>() ?? [];
+    if (adminEmails.Length > 0)
+    {
+        var normalizedAdminEmails = adminEmails.Select(e => e.Trim().ToLowerInvariant()).ToHashSet();
+        var usersToPromote = db.Users
+            .Where(u => normalizedAdminEmails.Contains(u.Email) && u.Role != UserRole.Admin)
+            .ToList();
+        foreach (var u in usersToPromote) u.Role = UserRole.Admin;
+        if (usersToPromote.Count > 0) db.SaveChanges();
+    }
 }
 
 app.UseCors("AllowFrontend");
@@ -271,6 +284,7 @@ apiV1.MapGet("/health/ready", async (AppDbContext db) =>
 apiV1.MapAuthController();
 apiV1.MapParentController();
 apiV1.MapChildController();
+apiV1.MapAdminController();
 
 app.MapFallbackToFile("index.html");
 

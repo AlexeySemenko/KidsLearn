@@ -209,7 +209,10 @@ public static class AuthController
                 x => x.ExternalProvider == GoogleProviderName && x.ExternalSubject == profile.Sub,
                 cancellationToken);
 
-            if (user is not null && user.Role != UserRole.Parent)
+            var adminEmails = configuration.GetSection("AdminEmails").Get<string[]>() ?? Array.Empty<string>();
+            var isAdminEmail = adminEmails.Any(e => string.Equals(e.Trim(), normalizedEmail, StringComparison.OrdinalIgnoreCase));
+
+            if (user is not null && user.Role != UserRole.Parent && user.Role != UserRole.Admin)
             {
                 return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_role_not_allowed", null, returnPath));
             }
@@ -219,7 +222,7 @@ public static class AuthController
                 var userByEmail = await db.Users.FirstOrDefaultAsync(x => x.Email == normalizedEmail, cancellationToken);
                 if (userByEmail is not null)
                 {
-                    if (userByEmail.Role != UserRole.Parent)
+                    if (userByEmail.Role != UserRole.Parent && userByEmail.Role != UserRole.Admin)
                     {
                         return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_role_not_allowed", null, returnPath));
                     }
@@ -237,6 +240,8 @@ public static class AuthController
                     userByEmail.ExternalProvider = GoogleProviderName;
                     userByEmail.ExternalSubject = profile.Sub;
                     userByEmail.EmailVerified = true;
+                    if (!string.IsNullOrWhiteSpace(profile.Name)) userByEmail.DisplayName = profile.Name;
+                    if (isAdminEmail) userByEmail.Role = UserRole.Admin;
                     user = userByEmail;
                 }
                 else
@@ -244,8 +249,9 @@ public static class AuthController
                     user = new AppUser
                     {
                         Email = normalizedEmail,
+                        DisplayName = string.IsNullOrWhiteSpace(profile.Name) ? null : profile.Name,
                         PasswordHash = string.Empty,
-                        Role = UserRole.Parent,
+                        Role = isAdminEmail ? UserRole.Admin : UserRole.Parent,
                         CreatedAt = DateTime.UtcNow,
                         ExternalProvider = GoogleProviderName,
                         ExternalSubject = profile.Sub,
@@ -255,6 +261,13 @@ public static class AuthController
                     db.Users.Add(user);
                 }
             }
+            else
+            {
+                if (!string.IsNullOrWhiteSpace(profile.Name)) user.DisplayName = profile.Name;
+                if (isAdminEmail) user.Role = UserRole.Admin;
+            }
+
+            user.LastAccessAt = DateTime.UtcNow;
 
             var accessToken = tokenService.CreateAccessToken(user);
             var refreshToken = tokenService.CreateRefreshToken();
@@ -280,7 +293,7 @@ public static class AuthController
                 accessToken,
                 refreshToken,
                 expiresIn,
-                new AuthUserResponse(user.Id, user.Email, user.Role.ToString(), user.Email));
+                new AuthUserResponse(user.Id, user.Email, user.Role.ToString(), user.DisplayName ?? user.Email));
 
                 if (string.IsNullOrWhiteSpace(jwtSigningKey))
                 {
@@ -815,5 +828,6 @@ public static class AuthController
     private sealed record GoogleUserProfile(
         [property: JsonPropertyName("sub")] string Sub,
         [property: JsonPropertyName("email")] string Email,
-        [property: JsonPropertyName("email_verified")] bool EmailVerified);
+        [property: JsonPropertyName("email_verified")] bool EmailVerified,
+        [property: JsonPropertyName("name")] string? Name);
 }

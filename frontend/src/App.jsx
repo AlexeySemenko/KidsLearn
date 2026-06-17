@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './auth/AuthProvider'
 import AppShell from './components/AppShell'
 import AuthBootstrap from './components/AuthBootstrap'
 import ProtectedRoute from './components/ProtectedRoute'
+import AdminUsersPage from './pages/AdminUsersPage'
 import ChildHomePage from './pages/ChildHomePage'
 import LoginPage from './pages/LoginPage'
 import ParentGoogleCallbackPage from './pages/ParentGoogleCallbackPage'
@@ -23,7 +24,9 @@ function LandingPage() {
     return <Navigate to="/login" replace />
   }
 
-  return <Navigate to={role === 'Child' ? '/child' : '/parent'} replace />
+  if (role === 'Child') return <Navigate to="/child" replace />
+  if (role === 'Admin') return <Navigate to="/admin/users" replace />
+  return <Navigate to="/parent" replace />
 }
 
 export default function App() {
@@ -39,7 +42,7 @@ export default function App() {
           <Route path="/login/parent/google/callback" element={<ParentGoogleCallbackPage />} />
           <Route path="/login/child/google/callback" element={<ChildGoogleCallbackPage />} />
 
-          <Route element={<ProtectedRoute allowedRoles={['Parent']} />}>
+          <Route element={<ProtectedRoute allowedRoles={['Parent', 'Admin']} />}>
             <Route path="/parent" element={<AppShell />}>
               <Route index element={<ParentHomePage />} />
               <Route
@@ -60,6 +63,13 @@ export default function App() {
               />
               <Route path="ai" element={<ParentAiGenerationPage />} />
               <Route path="manage" element={<ParentManagePage />} />
+            </Route>
+          </Route>
+
+          <Route element={<ProtectedRoute allowedRoles={['Admin']} />}>
+            <Route path="/admin" element={<AppShell />}>
+              <Route index element={<Navigate to="/admin/users" replace />} />
+              <Route path="users" element={<AdminUsersPage />} />
             </Route>
           </Route>
 

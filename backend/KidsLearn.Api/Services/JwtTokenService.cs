@@ -24,8 +24,13 @@ public class JwtTokenService(IConfiguration configuration) : IJwtTokenService
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(JwtRegisteredClaimNames.Email, user.Email),
-            new(ClaimTypes.Role, user.Role.ToString())
+            new(ClaimTypes.Role, user.Role.ToString()),
         };
+
+        if (!string.IsNullOrWhiteSpace(user.DisplayName))
+        {
+            claims.Add(new(JwtRegisteredClaimNames.Name, user.DisplayName));
+        }
 
         var credentials = new SigningCredentials(
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),

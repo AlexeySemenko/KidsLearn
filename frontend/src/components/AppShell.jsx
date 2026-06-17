@@ -19,6 +19,16 @@ const navByRole = {
     { to: '/child', label: 'Home' },
     { to: '/child/results', label: 'Results' },
   ],
+  Admin: [
+    { to: '/parent', label: 'Home' },
+    { to: '/parent/children', label: 'Children' },
+    { to: '/parent/lessons', label: 'Lessons' },
+    { to: '/parent/assignments', label: 'Assignments' },
+    { to: '/parent/ai', label: 'AI Lessons' },
+    { to: '/parent/reports', label: 'Reports' },
+    { to: '/parent/manage', label: 'Manage' },
+    { to: '/admin/users', label: 'Users', adminBadge: true },
+  ],
 }
 
 function toNameOnly(value) {
@@ -68,7 +78,7 @@ function UserMenu({ displayName, userInitial, role, user, isOpen, onToggle, onLo
       >
         <span className="user-avatar-initial" aria-hidden="true">{userInitial}</span>
         <span className="user-avatar-name">{displayName || user?.email}</span>
-        {showRole ? <span className="user-avatar-role">{role}</span> : null}
+        {showRole ? <span className={`user-avatar-role${role === 'Admin' ? ' user-avatar-role--admin' : ''}`}>{role}</span> : null}
       </button>
 
       {isOpen ? createPortal(
@@ -76,7 +86,7 @@ function UserMenu({ displayName, userInitial, role, user, isOpen, onToggle, onLo
           <div className="user-dropdown-header">
             <strong>{displayName || '—'}</strong>
             {user?.email ? <span>{user.email}</span> : null}
-            <span className="user-dropdown-role">{role}</span>
+            <span className={`user-dropdown-role${role === 'Admin' ? ' user-dropdown-role--admin' : ''}`}>{role}</span>
           </div>
           <hr className="user-dropdown-divider" />
           <button
@@ -257,6 +267,7 @@ export default function AppShell() {
                   className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
                 >
                   {item.label}
+                  {item.adminBadge ? <span className="badge badge--admin nav-admin-badge">ADMIN</span> : null}
                 </NavLink>
               </li>
             ))}
