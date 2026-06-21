@@ -109,9 +109,12 @@ public class AiLessonGenerationIntegrationTests
 
     private sealed class InvalidSchemaAiProvider : IAIProvider
     {
-        public Task<GeneratedLessonDraft> GenerateLessonDraftAsync(GenerateAiLessonRequest request, CancellationToken cancellationToken = default)
+        public Task<GeneratedLessonDraft> GenerateLessonDraftAsync(GenerateAiLessonRequest request, string? validatorFeedback = null, CancellationToken cancellationToken = default)
         {
             throw new AiSchemaValidationException("Question #1 must contain 'questionText' and array 'answers'.");
         }
+
+        public Task<DraftValidationResult?> ValidateDraftAsync(GenerateAiLessonRequest request, GeneratedLessonDraft draft, CancellationToken cancellationToken = default)
+            => Task.FromResult<DraftValidationResult?>(null);
     }
 }

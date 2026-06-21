@@ -3,8 +3,21 @@ using System.Text.Json;
 
 public interface IAIProvider
 {
-    Task<GeneratedLessonDraft> GenerateLessonDraftAsync(GenerateAiLessonRequest request, CancellationToken cancellationToken = default);
+    Task<GeneratedLessonDraft> GenerateLessonDraftAsync(GenerateAiLessonRequest request, string? validatorFeedback = null, CancellationToken cancellationToken = default);
+    Task<DraftValidationResult?> ValidateDraftAsync(GenerateAiLessonRequest request, GeneratedLessonDraft draft, CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// Validation agent result.
+/// Score is 0-100 (percentage of acceptance).
+/// QuestionsToRegenerate contains 1-based question indices where story-answer mismatch was detected.
+/// </summary>
+public sealed record DraftValidationResult(
+    bool Accepted,
+    int Score,
+    string[] Issues,
+    string Feedback,
+    int[] QuestionsToRegenerate);
 
 public sealed class AiSchemaValidationException(string message) : Exception(message);
 
@@ -36,7 +49,7 @@ public sealed record GeneratedAnswerDraft(
 
 public sealed class OpenAiProvider(IConfiguration configuration, HttpClient httpClient) : IAIProvider
 {
-    public async Task<GeneratedLessonDraft> GenerateLessonDraftAsync(GenerateAiLessonRequest request, CancellationToken cancellationToken = default)
+    public async Task<GeneratedLessonDraft> GenerateLessonDraftAsync(GenerateAiLessonRequest request, string? validatorFeedback = null, CancellationToken cancellationToken = default)
     {
         var apiKey = configuration["OpenAI:ApiKey"];
         var model = configuration["OpenAI:Model"] ?? "gpt-4o-mini";
@@ -49,7 +62,7 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
 
         try
         {
-            var prompt = BuildPrompt(request);
+            var prompt = BuildPrompt(request, validatorFeedback);
             var payload = JsonSerializer.Serialize(new
             {
                 model,
@@ -95,7 +108,164 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
         }
     }
 
-    private static string BuildPrompt(GenerateAiLessonRequest request)
+    public async Task<DraftValidationResult?> ValidateDraftAsync(GenerateAiLessonRequest request, GeneratedLessonDraft draft, CancellationToken cancellationToken = default)
+    {
+        var apiKey = configuration["OpenAI:ApiKey"];
+        var model = configuration["OpenAI:Model"] ?? "gpt-4o-mini";
+
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return null; // no key — skip validation
+        }
+
+        try
+        {
+            var prompt = BuildValidationPrompt(request, draft);
+            var payload = JsonSerializer.Serialize(new { model, input = prompt });
+
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/responses");
+            requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+            requestMessage.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+            using var response = await httpClient.SendAsync(requestMessage, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null; // validation unavailable — skip
+            }
+
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            return TryParseValidationResult(body);
+        }
+        catch
+        {
+            return null; // validation agent failure — skip, don't block generation
+        }
+    }
+
+    private static string BuildValidationPrompt(GenerateAiLessonRequest request, GeneratedLessonDraft draft)
+    {
+        // Number questions explicitly so the validator can reference them by 1-based index.
+        var numberedQuestions = draft.Questions.Select((q, i) => new
+        {
+            question_number = i + 1,
+            q.QuestionText,
+            answers = q.Answers.Select(a => new { a.AnswerText, a.IsCorrect })
+        });
+        var questionsJson = JsonSerializer.Serialize(numberedQuestions);
+
+        var storySection = draft.Story is not null
+            ? $"\nStory: {draft.Story}"
+            : "\nStory: (none)";
+
+        var storyCheckInstruction = draft.Story is not null
+            ? "8. STORY ANSWER CHECK (CRITICAL): For each question, count how many of its answer options " +
+              "are NOT mentioned or derivable from the story. If MORE THAN 2 answers of a single question " +
+              "cannot be found in or inferred from the story, that question must be listed in 'questions_to_regenerate' " +
+              "(use the 1-based question_number). This check applies to every question individually.\n"
+            : "";
+
+        var jsonShape = draft.Story is not null
+            ? """{"accepted": true/false, "score": <0-100>, "issues": ["issue1"], "feedback": "<instructions or empty>", "questions_to_regenerate": [1, 3]}"""
+            : """{"accepted": true/false, "score": <0-100>, "issues": ["issue1"], "feedback": "<instructions or empty>", "questions_to_regenerate": []}""";
+
+        return
+            "You are a strict lesson quality validator. Evaluate the following AI-generated lesson content against the requested parameters.\n\n" +
+            "REQUESTED PARAMETERS:\n" +
+            $"- Subject: {request.Subject}\n" +
+            $"- Grade: {request.Grade}\n" +
+            $"- Topic: {request.Topic}\n" +
+            $"- Difficulty: {request.Difficulty ?? "Medium"}\n" +
+            $"- Language: {request.Language ?? "en"}\n" +
+            $"- QuestionCount: {request.QuestionCount}\n" +
+            $"- IncludeStory: {(request.IncludeStory == true ? "yes" : "no")}\n\n" +
+            "GENERATED CONTENT:\n" +
+            $"- Title: {draft.Title}\n" +
+            $"- Questions ({draft.Questions.Count}): {questionsJson}{storySection}\n\n" +
+            "CHECK THE FOLLOWING (flag as CRITICAL if violated):\n" +
+            "1. Questions match the requested subject and topic.\n" +
+            $"2. Language of all text matches requested language ('{request.Language ?? "en"}').\n" +
+            $"3. Difficulty level is appropriate for grade {request.Grade}.\n" +
+            $"4. Exactly {request.QuestionCount} question(s) are present.\n" +
+            "5. Each question has at least one correct answer marked.\n" +
+            "6. If story was requested, story is present and all questions relate to it.\n" +
+            "7. No question is trivially easy or nonsensical.\n" +
+            storyCheckInstruction + "\n" +
+            "Respond with a strict JSON object only — no markdown, no code fences, no comments:\n" +
+            jsonShape + "\n\n" +
+            "Rules for the response:\n" +
+            "- Set accepted=false only for CRITICAL flaws: language mismatch, completely wrong topic, or story-answer mismatch on more than half the questions.\n" +
+            "- When accepted=false, 'feedback' MUST be a non-empty string describing exactly what needs to be fixed.\n" +
+            "- When accepted=true, 'feedback' should be empty string.\n" +
+            "- Populate 'questions_to_regenerate' ONLY when accepted=false and specific questions fail the story-answer check (rule 8).\n" +
+            "- When accepted=true, 'questions_to_regenerate' must be an empty array [].";
+    }
+
+    private static DraftValidationResult? TryParseValidationResult(string body)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+
+            // Support both direct JSON and the OpenAI responses API wrapper
+            string? jsonText = null;
+            if (root.TryGetProperty("output_text", out var outputTextEl) && outputTextEl.ValueKind == JsonValueKind.String)
+            {
+                jsonText = outputTextEl.GetString();
+            }
+            else if (root.TryGetProperty("output", out var outputEl) && outputEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in outputEl.EnumerateArray())
+                {
+                    if (item.TryGetProperty("content", out var contentEl) && contentEl.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var c in contentEl.EnumerateArray())
+                        {
+                            if (c.TryGetProperty("text", out var textEl) && textEl.ValueKind == JsonValueKind.String)
+                            {
+                                jsonText = textEl.GetString();
+                                break;
+                            }
+                        }
+                    }
+                    if (jsonText is not null) break;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(jsonText)) return null;
+
+            // Strip markdown code fences if present
+            var trimmed = jsonText.Trim();
+            if (trimmed.StartsWith("```")) trimmed = System.Text.RegularExpressions.Regex.Replace(trimmed, @"^```[a-z]*\n?", "").TrimEnd('`').Trim();
+
+            using var valDoc = JsonDocument.Parse(trimmed);
+            var val = valDoc.RootElement;
+
+            var accepted = val.TryGetProperty("accepted", out var accProp) && accProp.GetBoolean();
+            var score = val.TryGetProperty("score", out var scoreProp) && scoreProp.TryGetInt32(out var s) ? s : 50;
+            var issues = val.TryGetProperty("issues", out var issuesProp) && issuesProp.ValueKind == JsonValueKind.Array
+                ? issuesProp.EnumerateArray().Select(i => i.GetString() ?? "").Where(i => i.Length > 0).ToArray()
+                : [];
+            var feedback = val.TryGetProperty("feedback", out var fbProp) ? fbProp.GetString() ?? "" : "";
+            var questionsToRegen = val.TryGetProperty("questions_to_regenerate", out var qtrProp) && qtrProp.ValueKind == JsonValueKind.Array
+                ? qtrProp.EnumerateArray()
+                    .Where(e => e.TryGetInt32(out _))
+                    .Select(e => { e.TryGetInt32(out var n); return n; })
+                    .Where(n => n > 0)
+                    .Distinct()
+                    .OrderBy(n => n)
+                    .ToArray()
+                : [];
+
+            return new DraftValidationResult(accepted, Math.Clamp(score, 0, 100), issues, feedback, questionsToRegen);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string BuildPrompt(GenerateAiLessonRequest request, string? validatorFeedback = null)
     {
         var types = request.QuestionTypes is { Count: > 0 }
             ? string.Join(", ", request.QuestionTypes).ToLowerInvariant()
@@ -116,7 +286,11 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
         }
 
         var storyInstruction = request.IncludeStory == true
-            ? "Also include a 'story' field: a short engaging narrative paragraph (3-6 sentences) that sets the scene for the lesson topic. All questions must relate to events or facts in this story. "
+            ? $"Also include a 'story' field: a short engaging narrative paragraph (number of sentences {request.Grade + 3} to  {request.Grade + 5}) that sets the scene for the lesson topic. Take into consideration the grade = {request.Grade} of the child, make a story difficulty according to grade. Add a twist of humor or surprise to make it engaging. All questions must be strictly related to facts in this story. An answer to each question MUST be present in or inferable from the story. If a question's answer cannot be found in or inferred from the story, it must be listed in 'questions_to_regenerate' (1-based index)."
+            : "";
+
+        var feedbackSection = !string.IsNullOrWhiteSpace(validatorFeedback)
+            ? $" IMPORTANT — a previous attempt was rejected by the quality validator. You MUST address these issues: {validatorFeedback}"
             : "";
 
         return $"Generate a strict JSON object with fields: title, subject, grade, topic, difficulty, questions{(request.IncludeStory == true ? ", story" : "")}. " +
@@ -126,7 +300,8 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
                $"{storyInstruction}" +
                "Output valid JSON only — no markdown, no code fences, no comments. " +
                $"Subject: {request.Subject}; Grade: {request.Grade}; Topic: {request.Topic}; Difficulty: {request.Difficulty ?? "Medium"}; " +
-               $"QuestionCount: {request.QuestionCount}; Language: {request.Language ?? "en"}.";
+               $"QuestionCount: {request.QuestionCount}; Language: {request.Language ?? "en"}." +
+               feedbackSection;
     }
 
     private static bool TryParseDraftFromResponse(string body, GenerateAiLessonRequest request, string model, out GeneratedLessonDraft draft, out string? error)
@@ -336,7 +511,7 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
     }
 }
 
-public sealed class AiLessonGenerationService(AppDbContext db, IAIProvider aiProvider) : IAiLessonGenerationService
+public sealed class AiLessonGenerationService(AppDbContext db, IAIProvider aiProvider, ILogger<AiLessonGenerationService> logger) : IAiLessonGenerationService
 {
     public async Task<ServiceResult<GenerateAiLessonResponse>> GenerateAndPersistAsync(Guid parentId, GenerateAiLessonRequest request, CancellationToken cancellationToken = default)
     {
@@ -351,7 +526,81 @@ public sealed class AiLessonGenerationService(AppDbContext db, IAIProvider aiPro
         GeneratedLessonDraft draft;
         try
         {
-            draft = await aiProvider.GenerateLessonDraftAsync(request, cancellationToken);
+            // --- Initial generation ---
+            draft = await aiProvider.GenerateLessonDraftAsync(request, null, cancellationToken);
+
+            // --- Validation + regeneration loop (max 3 cycles) ---
+            if (!draft.ProviderMeta.FallbackUsed)
+            {
+                for (var cycle = 1; cycle <= 3; cycle++)
+                {
+                    var validation = await aiProvider.ValidateDraftAsync(request, draft, cancellationToken);
+
+                    if (validation is null)
+                    {
+                        logger.LogInformation(
+                            "AI validation agent unavailable or skipped (cycle {Cycle}) for Subject: {Subject}, Topic: {Topic}.",
+                            cycle, request.Subject, request.Topic);
+                        break;
+                    }
+
+                    logger.LogInformation(
+                        "AI validation cycle {Cycle} — Subject: {Subject}, Topic: {Topic}, Grade: {Grade} | " +
+                        "Accepted: {Accepted}, Score: {Score}%, QuestionsToRegenerate: [{QTR}], Issues: [{Issues}], Feedback: {Feedback}",
+                        cycle, request.Subject, request.Topic, request.Grade,
+                        validation.Accepted, validation.Score,
+                        string.Join(", ", validation.QuestionsToRegenerate),
+                        string.Join("; ", validation.Issues),
+                        validation.Feedback);
+
+                    if (validation.Accepted)
+                    {
+                        // Validator approved — stop regardless of QuestionsToRegenerate.
+                        logger.LogInformation("AI validation cycle {Cycle}: accepted. Using draft.", cycle);
+                        break;
+                    }
+
+                    // Not accepted — build targeted or general feedback.
+                    string? feedback;
+
+                    if (validation.QuestionsToRegenerate.Length > 0)
+                    {
+                        var badList = string.Join(", ", validation.QuestionsToRegenerate);
+                        var storyRef = draft.Story is not null
+                            ? $" The story is: \"{draft.Story}\""
+                            : "";
+                        var extra = !string.IsNullOrWhiteSpace(validation.Feedback) ? $" Additionally: {validation.Feedback}" : "";
+
+                        feedback =
+                            $"Questions {badList} have more than 2 answer options that are not present in or inferable from the story." +
+                            $"{storyRef} Regenerate ONLY questions {badList} so that every answer option can be found in or clearly inferred from the story.{extra}";
+
+                        logger.LogInformation(
+                            "AI validation cycle {Cycle}: regenerating questions [{BadQ}] for story-answer mismatch.",
+                            cycle, badList);
+                    }
+                    else if (!string.IsNullOrWhiteSpace(validation.Feedback))
+                    {
+                        feedback = validation.Feedback;
+                        logger.LogInformation(
+                            "AI validation cycle {Cycle}: full regeneration (score {Score}%).",
+                            cycle, validation.Score);
+                    }
+                    else
+                    {
+                        // Not accepted but no actionable feedback — cannot improve, stop.
+                        logger.LogInformation("AI validation cycle {Cycle}: not accepted but no actionable feedback. Using draft.", cycle);
+                        break;
+                    }
+
+                    draft = await aiProvider.GenerateLessonDraftAsync(request, feedback, cancellationToken);
+
+                    if (cycle == 3)
+                    {
+                        logger.LogInformation("AI validation: max cycles (3) reached. Using last generated draft.");
+                    }
+                }
+            }
         }
         catch (AiSchemaValidationException ex)
         {

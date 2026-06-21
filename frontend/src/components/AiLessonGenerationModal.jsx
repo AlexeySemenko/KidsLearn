@@ -56,6 +56,7 @@ function resolveQuestionTypes(value) {
   return ['mixed']
 }
 
+
 export default function AiLessonGenerationModal({
   isOpen,
   onClose,
@@ -170,13 +171,14 @@ export default function AiLessonGenerationModal({
               <div className="ai-ring" />
               <div className="ai-orb">AI</div>
             </div>
-            <p className="ai-generating-label">Generating your lesson…</p>
+            <p className="ai-generating-label">Generating AI lesson</p>
+            <p className="ai-generating-hint" style={{ marginTop: 0 }}>AI quality checks may take a few moments...</p>
             <div className="ai-generating-dots">
               <span /><span /><span />
             </div>
             {form.topic ? (
               <p className="ai-generating-hint">
-                {form.subject} · Grade {form.grade}<br />{form.topic}
+                {resolveSubject(form)} · Grade {form.grade}<br />{form.topic}
               </p>
             ) : null}
           </div>

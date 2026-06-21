@@ -90,6 +90,7 @@ export default function ParentLessonsPage() {
   const [assignPreselectedLessonId, setAssignPreselectedLessonId] = useState('')
   const [isCreatingAssignment, setIsCreatingAssignment] = useState(false)
   const [assignError, setAssignError] = useState('')
+  const [pendingEditAfterAssign, setPendingEditAfterAssign] = useState(null)
 
   const availableSubjects = useMemo(() => {
     return [...new Set(lessons.map((lesson) => lesson.subject).filter(Boolean))].sort((a, b) => a.localeCompare(b))
@@ -195,12 +196,13 @@ export default function ParentLessonsPage() {
       grade: String(lesson.grade),
       topic: lesson.topic,
       difficulty: lesson.difficulty,
+      story: '',
       questions: [],
     })
     setIsLoadingEditDetail(true)
     try {
       const detail = await getLesson(session.accessToken, lesson.id)
-      setEditForm((prev) => ({ ...prev, questions: questionsFromDetail(detail.questions) }))
+      setEditForm((prev) => ({ ...prev, story: detail.story ?? '', questions: questionsFromDetail(detail.questions) }))
     } catch (err) {
       setError(err.message)
     } finally {
@@ -210,7 +212,7 @@ export default function ParentLessonsPage() {
 
   function cancelEditing() {
     setEditingLessonId(null)
-    setEditForm({ title: '', subject: '', grade: '1', topic: '', difficulty: 'Medium', questions: [] })
+    setEditForm({ title: '', subject: '', grade: '1', topic: '', difficulty: 'Medium', story: '', questions: [] })
   }
 
   async function handleSaveLesson(lessonId, formData) {
@@ -386,7 +388,7 @@ export default function ParentLessonsPage() {
   function handleAiGenerated(response) {
     const draft = response.lessonDraft
     const summary = {
-      id: draft.id,
+      id: response.createdLessonId,
       title: draft.title,
       subject: draft.subject,
       grade: draft.grade,
@@ -399,8 +401,8 @@ export default function ParentLessonsPage() {
     setLessons((current) => [summary, ...current])
     setStatusMessage(`AI lesson "${draft.title}" was generated.`)
     setIsAiModalOpen(false)
-    setViewingLesson(draft)
-    setAssignPreselectedLessonId(draft.id)
+    setPendingEditAfterAssign(summary)
+    setAssignPreselectedLessonId(response.createdLessonId)
     setAssignError('')
     setShowAssignModal(true)
   }
@@ -412,6 +414,11 @@ export default function ParentLessonsPage() {
       await createAssignment(session.accessToken, payload)
       setShowAssignModal(false)
       setStatusMessage('Assignment created.')
+      if (pendingEditAfterAssign) {
+        const lessonToEdit = pendingEditAfterAssign
+        setPendingEditAfterAssign(null)
+        startEditing(lessonToEdit)
+      }
     } catch (err) {
       setAssignError(err.message)
     } finally {
@@ -575,7 +582,7 @@ export default function ParentLessonsPage() {
           lessons={lessons}
           preselectedLessonId={assignPreselectedLessonId}
           onSave={handleCreateAssignment}
-          onClose={() => setShowAssignModal(false)}
+          onClose={() => { setShowAssignModal(false); setPendingEditAfterAssign(null) }}
           isSaving={isCreatingAssignment}
           error={assignError}
         />
