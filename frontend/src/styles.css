@@ -4091,6 +4091,16 @@ select.input:invalid {
   cursor: wait;
 }
 
+.parent-dash-recent-grid--2col {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (max-width: 900px) {
+  .parent-dash-recent-grid--2col {
+    grid-template-columns: 1fr;
+  }
+}
+
 .parent-dash-recent-main {
   display: flex;
   flex-direction: column;

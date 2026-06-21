@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
-import { getAssignments, getChildren, getLessons, getParentChildResults, getParentAssignmentForSolving, getParentResultDetail } from '../lib/api'
+import { getAssignments, getChildren, getLesson, getLessons, getParentChildResults, getParentAssignmentForSolving, getParentResultDetail } from '../lib/api'
 import ChildStatsPanel, { SUBJECT_EMOJI, scoreEmoji, scoreVariant } from '../components/ChildStatsPanel'
 import LessonViewModal from '../components/LessonViewModal'
 
@@ -41,6 +41,7 @@ export default function ParentHomePage() {
 
   const [reviewAssignment, setReviewAssignment] = useState(null)
   const [reviewResult, setReviewResult] = useState(null)
+  const [reviewLesson, setReviewLesson] = useState(null)
   const [isLoadingReview, setIsLoadingReview] = useState(false)
 
   useEffect(() => {
@@ -93,6 +94,19 @@ export default function ParentHomePage() {
       setChildResults([])
     } finally {
       setChildResultsLoading(false)
+    }
+  }
+
+  async function handleLessonReview(lesson) {
+    if (!session?.accessToken) return
+    setIsLoadingReview(true)
+    try {
+      const detail = await getLesson(session.accessToken, lesson.id)
+      setReviewLesson(detail)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoadingReview(false)
     }
   }
 
@@ -190,7 +204,7 @@ export default function ParentHomePage() {
           </div>
           <ChildStatsPanel results={childResults} isLoading={childResultsLoading} pendingCount={selectedChildPendingCount} />
 
-          <div className="parent-dash-recent-grid" style={{ marginTop: '1.5rem' }}>
+          <div className="parent-dash-recent-grid parent-dash-recent-grid--2col" style={{ marginTop: '1.5rem' }}>
             <div className="parent-dash-recent-card">
               <div className="parent-dash-recent-header">
                 <h4>⏳ Lessons waiting</h4>
@@ -289,7 +303,13 @@ export default function ParentHomePage() {
                   {recentLessons.length === 0 ? (
                     <p className="parent-dash-recent-empty">No lessons yet.</p>
                   ) : recentLessons.map((lesson) => (
-                    <div key={lesson.id} className="parent-dash-recent-item">
+                    <button
+                      key={lesson.id}
+                      type="button"
+                      className="parent-dash-recent-item parent-dash-recent-item--clickable"
+                      disabled={isLoadingReview}
+                      onClick={() => handleLessonReview(lesson)}
+                    >
                       <div className="parent-dash-recent-main">
                         <span className="parent-dash-recent-title">
                           {SUBJECT_EMOJI[lesson.subject] || '📚'} {lesson.title}
@@ -297,7 +317,7 @@ export default function ParentHomePage() {
                         <span className="parent-dash-recent-meta">Grade {lesson.grade} · {lesson.subject}</span>
                       </div>
                       <span className="parent-dash-recent-time">{formatRelative(lesson.createdAt)}</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
 
@@ -310,7 +330,13 @@ export default function ParentHomePage() {
                   {recentAssigned.length === 0 ? (
                     <p className="parent-dash-recent-empty">No active assignments.</p>
                   ) : recentAssigned.map((a) => (
-                    <div key={a.id} className="parent-dash-recent-item">
+                    <button
+                      key={a.id}
+                      type="button"
+                      className="parent-dash-recent-item parent-dash-recent-item--clickable"
+                      disabled={isLoadingReview}
+                      onClick={() => handleReview(a)}
+                    >
                       <div className="parent-dash-recent-main">
                         <span className="parent-dash-recent-title">{a.childName}</span>
                         <span className="parent-dash-recent-meta">
@@ -320,7 +346,7 @@ export default function ParentHomePage() {
                       <span className={`assignment-status-pill ${STATUS_PILL[a.status]?.cls ?? ''}`} style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem' }}>
                         {STATUS_PILL[a.status]?.label ?? a.status}
                       </span>
-                    </div>
+                    </button>
                   ))}
                 </div>
 
@@ -333,7 +359,13 @@ export default function ParentHomePage() {
                   {recentSolved.length === 0 ? (
                     <p className="parent-dash-recent-empty">No completed assignments yet.</p>
                   ) : recentSolved.map((a) => (
-                    <div key={a.id} className="parent-dash-recent-item">
+                    <button
+                      key={a.id}
+                      type="button"
+                      className="parent-dash-recent-item parent-dash-recent-item--clickable"
+                      disabled={isLoadingReview}
+                      onClick={() => handleReview(a)}
+                    >
                       <div className="parent-dash-recent-main">
                         <span className="parent-dash-recent-title">{a.childName}</span>
                         <span className="parent-dash-recent-meta">
@@ -345,7 +377,7 @@ export default function ParentHomePage() {
                           {scoreEmoji(a.score)} {a.score}%
                         </span>
                       ) : null}
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -353,6 +385,45 @@ export default function ParentHomePage() {
           )}
         </>
       )}
+      {reviewLesson ? (
+        <LessonViewModal
+          title={reviewLesson.title}
+          subtitle={`${reviewLesson.questions.length} question${reviewLesson.questions.length !== 1 ? 's' : ''} · Grade ${reviewLesson.grade}`}
+          story={reviewLesson.story}
+          questions={reviewLesson.questions}
+          onClose={() => setReviewLesson(null)}
+          renderQuestion={(question, index) => (
+            <article key={question.id} className="assignment-row question-card">
+              <div className="assignment-copy">
+                <div className="assignment-topline">
+                  <div className="child-name">Question {index + 1}</div>
+                </div>
+                <div>{question.questionText}</div>
+                {question.explanation ? (
+                  <div className="child-meta">Explanation: {question.explanation}</div>
+                ) : null}
+                <div className="question-options">
+                  {question.answers.map((answer) => (
+                    <div
+                      key={answer.id}
+                      className={`question-option${answer.isCorrect ? ' correct-answer' : ''}`}
+                    >
+                      <span>{answer.answerText}</span>
+                      {answer.isCorrect ? <span className="answer-correct-badge">✓ Correct</span> : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </article>
+          )}
+          footer={(
+            <div className="button-row modal-actions">
+              <button type="button" className="button-secondary" onClick={() => setReviewLesson(null)}>Close</button>
+            </div>
+          )}
+        />
+      ) : null}
+
       {reviewAssignment ? (
         <LessonViewModal
           title={`Review: ${reviewAssignment.lessonTitle}`}

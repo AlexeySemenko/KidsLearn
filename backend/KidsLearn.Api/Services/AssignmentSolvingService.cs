@@ -222,11 +222,25 @@ public class AssignmentSolvingService(AppDbContext db, IEmailService emailServic
         // Pre-fetch email data while the DbContext scope is still valid.
         var childForEmail = await db.Children
             .AsNoTracking()
-            .Include(c => c.Parent)
             .FirstOrDefaultAsync(c => c.Id == assignment.ChildId);
 
-        if (childForEmail?.Parent?.Email is not null)
+        if (childForEmail is not null)
         {
+            // Collect the direct parent + all linked parents.
+            var linkedParentIds = await db.ParentAccountLinks
+                .AsNoTracking()
+                .Where(x => x.ParentAId == childForEmail.ParentId || x.ParentBId == childForEmail.ParentId)
+                .Select(x => x.ParentAId == childForEmail.ParentId ? x.ParentBId : x.ParentAId)
+                .ToListAsync();
+
+            var allParentIds = new HashSet<Guid>(linkedParentIds) { childForEmail.ParentId };
+
+            var parentRecipients = await db.Users
+                .AsNoTracking()
+                .Where(u => allParentIds.Contains(u.Id))
+                .Select(u => new { u.Email, Name = u.DisplayName ?? u.Email })
+                .ToListAsync();
+
             var recentResults = await db.Results
                 .AsNoTracking()
                 .Include(r => r.Assignment).ThenInclude(a => a.Lesson)
@@ -236,8 +250,6 @@ public class AssignmentSolvingService(AppDbContext db, IEmailService emailServic
                 .Select(r => new { r.Assignment.Lesson.Title, r.Score })
                 .ToListAsync();
 
-            var parentEmail = childForEmail.Parent.Email;
-            var parentName = childForEmail.Parent.DisplayName ?? childForEmail.Parent.Email;
             var childName = childForEmail.Name;
             var lessonTitle = assignment.Lesson.Title;
             var emailScore = score;
@@ -247,15 +259,18 @@ public class AssignmentSolvingService(AppDbContext db, IEmailService emailServic
 
             _ = Task.Run(async () =>
             {
-                try
+                foreach (var parent in parentRecipients)
                 {
-                    await emailService.SendAssignmentCompletedToParentAsync(
-                        parentEmail, parentName, childName, lessonTitle,
-                        emailScore, emailCorrect, emailTotal, emailRecent);
-                }
-                catch (Exception)
-                {
-                    // fire-and-forget — swallow
+                    try
+                    {
+                        await emailService.SendAssignmentCompletedToParentAsync(
+                            parent.Email, parent.Name, childName, lessonTitle,
+                            emailScore, emailCorrect, emailTotal, emailRecent);
+                    }
+                    catch (Exception)
+                    {
+                        // fire-and-forget — swallow per recipient
+                    }
                 }
             });
         }
