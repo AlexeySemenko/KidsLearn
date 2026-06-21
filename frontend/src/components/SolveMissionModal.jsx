@@ -98,6 +98,16 @@ export default function SolveMissionModal({ assignmentId, accessToken, onClose, 
     setError('')
     setIsCompleting(true)
     try {
+      // Always submit the current answer selections before scoring so the
+      // backend has up-to-date answers even if the child skipped "Check".
+      const answersPayload = Object.entries(selectedAnswers).map(([questionId, answerId]) => ({
+        questionId,
+        selectedAnswerOptionId: answerId,
+        textAnswer: null,
+      }))
+      if (answersPayload.length > 0) {
+        await submitChildAssignmentAnswers(accessToken, assignment.assignmentId, { answers: answersPayload })
+      }
       const response = await completeChildAssignment(accessToken, assignment.assignmentId)
       setCompletion(response)
       onAssignmentStatusChange?.(assignment.assignmentId, 'Completed')
