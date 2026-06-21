@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { createAssignment, deleteLesson, duplicateLesson, getChildren, getLesson, getLessons, updateLesson } from '../lib/api'
+import { createPortal } from 'react-dom'
+import { createAssignment, deleteLesson, duplicateLesson, getChildren, getLesson, getLessons, updateLesson, updateLessonQuestions } from '../lib/api'
 import { useAuth } from '../auth/AuthProvider'
 import AiLessonGenerationModal from '../components/AiLessonGenerationModal'
 import LessonViewModal from '../components/LessonViewModal'
 import CreateAssignmentModal from '../components/CreateAssignmentModal'
+import QuestionEditor, { questionsFromDetail } from '../components/QuestionEditor'
 
 const LESSONS_FILTERS_STORAGE_KEY = 'kidslearn.parent.lessons.filters.v1'
 
@@ -21,6 +23,19 @@ function validateEditLesson(form) {
     return 'Difficulty cannot be empty.'
   }
 
+  return null
+}
+
+function validateQuestions(questions) {
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i]
+    if (!q.questionText.trim()) return `Question ${i + 1}: question text is required.`
+    if (q.answers.length < 2) return `Question ${i + 1}: at least 2 answers required.`
+    if (!q.answers.some((a) => a.isCorrect)) return `Question ${i + 1}: at least one correct answer is required.`
+    if (q.answerType === 'multiple_choice' && q.answers.some((a) => !a.answerText.trim())) {
+      return `Question ${i + 1}: answer text cannot be empty.`
+    }
+  }
   return null
 }
 
@@ -46,6 +61,8 @@ function readStoredLessonsFilters() {
   }
 }
 
+// ── Page ─────────────────────────────────────────────────────────────────────
+
 export default function ParentLessonsPage() {
   const { session } = useAuth()
   const [lessons, setLessons] = useState([])
@@ -53,7 +70,8 @@ export default function ParentLessonsPage() {
   const [error, setError] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
   const [editingLessonId, setEditingLessonId] = useState(null)
-  const [editForm, setEditForm] = useState({ title: '', subject: '', grade: '1', topic: '', difficulty: 'Medium' })
+  const [editForm, setEditForm] = useState({ title: '', subject: '', grade: '1', topic: '', difficulty: 'Medium', questions: [] })
+  const [isLoadingEditDetail, setIsLoadingEditDetail] = useState(false)
   const [pendingActionId, setPendingActionId] = useState(null)
   const [storedFilters] = useState(() => readStoredLessonsFilters())
   const [searchTerm, setSearchTerm] = useState(storedFilters.searchTerm)
@@ -184,7 +202,7 @@ export default function ParentLessonsPage() {
     setEditForm((current) => ({ ...current, [name]: value }))
   }
 
-  function startEditing(lesson) {
+  async function startEditing(lesson) {
     setError('')
     setStatusMessage('')
     setEditingLessonId(lesson.id)
@@ -194,12 +212,22 @@ export default function ParentLessonsPage() {
       grade: String(lesson.grade),
       topic: lesson.topic,
       difficulty: lesson.difficulty,
+      questions: [],
     })
+    setIsLoadingEditDetail(true)
+    try {
+      const detail = await getLesson(session.accessToken, lesson.id)
+      setEditForm((prev) => ({ ...prev, questions: questionsFromDetail(detail.questions) }))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoadingEditDetail(false)
+    }
   }
 
   function cancelEditing() {
     setEditingLessonId(null)
-    setEditForm({ title: '', subject: '', grade: '1', topic: '', difficulty: 'Medium' })
+    setEditForm({ title: '', subject: '', grade: '1', topic: '', difficulty: 'Medium', questions: [] })
   }
 
   async function handleSaveLesson(lessonId) {
@@ -207,9 +235,16 @@ export default function ParentLessonsPage() {
       return
     }
 
-    const validationError = validateEditLesson(editForm)
-    if (validationError) {
-      setError(validationError)
+    const summaryError = validateEditLesson(editForm)
+    if (summaryError) {
+      setError(summaryError)
+      setStatusMessage('')
+      return
+    }
+
+    const questionsError = validateQuestions(editForm.questions)
+    if (questionsError) {
+      setError(questionsError)
       setStatusMessage('')
       return
     }
@@ -228,6 +263,21 @@ export default function ParentLessonsPage() {
       })
 
       setLessons((current) => current.map((lesson) => (lesson.id === lessonId ? response : lesson)))
+
+      const questionsPayload = editForm.questions.map((q) => ({
+        id: q.id || undefined,
+        questionText: q.questionText.trim(),
+        explanation: q.explanation.trim(),
+        answers: q.answerType === 'true_false'
+          ? [
+              { answerText: 'True', isCorrect: q.answers[0]?.isCorrect ?? true },
+              { answerText: 'False', isCorrect: !(q.answers[0]?.isCorrect ?? true) },
+            ]
+          : q.answers.map((a) => ({ answerText: a.answerText.trim(), isCorrect: a.isCorrect })),
+      }))
+
+      await updateLessonQuestions(session.accessToken, lessonId, questionsPayload)
+
       setStatusMessage(`${response.title} was updated.`)
       cancelEditing()
     } catch (requestError) {
@@ -460,13 +510,13 @@ export default function ParentLessonsPage() {
         />
       ) : null}
 
-      {editingLessonId ? (
+      {editingLessonId ? createPortal(
         <div className="modal-overlay" role="presentation">
-          <section className="modal-card lesson-modal" role="dialog" aria-modal="true" aria-labelledby="lesson-edit-title">
+          <section className="modal-card lesson-edit-modal" role="dialog" aria-modal="true" aria-labelledby="lesson-edit-title">
             <div className="children-list-header modal-header">
               <div>
                 <h3 id="lesson-edit-title">Edit lesson</h3>
-                <p>Update summary fields for the selected lesson.</p>
+                <p>Update summary fields and questions.</p>
               </div>
               <button type="button" className="button-secondary" onClick={cancelEditing}>Close</button>
             </div>
@@ -494,14 +544,27 @@ export default function ParentLessonsPage() {
               </div>
             </div>
 
+            <div className="lesson-edit-questions-section">
+              <h4 className="lesson-edit-questions-title">Questions</h4>
+              {isLoadingEditDetail ? (
+                <p className="children-empty" style={{ padding: '1rem 0' }}>Loading questions…</p>
+              ) : (
+                <QuestionEditor
+                  questions={editForm.questions}
+                  onChange={(qs) => setEditForm((prev) => ({ ...prev, questions: qs }))}
+                />
+              )}
+            </div>
+
             <div className="button-row modal-actions">
-              <button type="button" className="button" disabled={pendingActionId === editingLessonId} onClick={() => handleSaveLesson(editingLessonId)}>
+              <button type="button" className="button" disabled={pendingActionId === editingLessonId || isLoadingEditDetail} onClick={() => handleSaveLesson(editingLessonId)}>
                 {pendingActionId === editingLessonId ? 'Saving...' : 'Save'}
               </button>
               <button type="button" className="button-secondary" onClick={cancelEditing}>Cancel</button>
             </div>
           </section>
-        </div>
+        </div>,
+        document.body
       ) : null}
 
       <AiLessonGenerationModal

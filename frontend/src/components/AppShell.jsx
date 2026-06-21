@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 
 const THEME_STORAGE_KEY = 'kidslearn.theme.mode'
@@ -125,6 +125,7 @@ export default function AppShell() {
     .filter((item) => location.pathname === item.to || location.pathname.startsWith(item.to + '/'))
     .sort((a, b) => b.to.length - a.to.length)[0]
   const pageTitle = currentNavItem?.label ?? ''
+  const homeRoute = role === 'Child' ? '/child' : '/parent'
 
   useEffect(() => {
     setIsSidebarOpen(false)
@@ -221,7 +222,7 @@ export default function AppShell() {
     <div className={`app-shell${isSidebarOpen ? ' nav-open' : ''}${role === 'Child' ? ' child-shell' : ''}`}>
       <div className="mobile-shell-bar">
         <span className="mobile-shell-title">
-          KidsLearnAI
+          <Link to={homeRoute} className="mobile-shell-brand-link">KidsLearnAI</Link>
           {pageTitle ? <span className="mobile-shell-page-title"> › {pageTitle}</span> : null}
         </span>
 

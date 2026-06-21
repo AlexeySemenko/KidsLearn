@@ -92,9 +92,14 @@ export default function ParentHomePage() {
   }
 
   const selectedChild = children.find((c) => c.id === selectedChildId)
-  const selectedChildPendingCount = selectedChildId
-    ? assignments.filter((a) => a.childId === selectedChildId && a.status !== 'Completed').length
-    : 0
+  const selectedChildAssignments = selectedChildId
+    ? assignments.filter((a) => a.childId === selectedChildId)
+    : []
+  const selectedChildPendingCount = selectedChildAssignments.filter((a) => a.status !== 'Completed').length
+  const childPendingAssignments = selectedChildAssignments.filter((a) => a.status !== 'Completed')
+  const childDoneAssignments = [...selectedChildAssignments]
+    .filter((a) => a.status === 'Completed')
+    .sort((a, b) => new Date(b.assignedAt) - new Date(a.assignedAt))
   const completedAssignments = assignments.filter((a) => a.status === 'Completed').length
   const overdueAssignments = assignments.filter(
     (a) => a.dueDate && a.status !== 'Completed' && new Date(a.dueDate).getTime() < Date.now()
@@ -161,6 +166,52 @@ export default function ParentHomePage() {
             <span className="badge">Grade {selectedChild?.grade}</span>
           </div>
           <ChildStatsPanel results={childResults} isLoading={childResultsLoading} pendingCount={selectedChildPendingCount} />
+
+          <div className="parent-dash-recent-grid" style={{ marginTop: '1.5rem' }}>
+            <div className="parent-dash-recent-card">
+              <div className="parent-dash-recent-header">
+                <h4>⏳ Lessons waiting</h4>
+              </div>
+              {childPendingAssignments.length === 0 ? (
+                <p className="parent-dash-recent-empty">No pending lessons.</p>
+              ) : childPendingAssignments.map((a) => (
+                <div key={a.id} className="parent-dash-recent-item">
+                  <div className="parent-dash-recent-main">
+                    <span className="parent-dash-recent-title">
+                      {SUBJECT_EMOJI[a.lessonSubject] || '📚'} {a.lessonTitle}
+                    </span>
+                    <span className="parent-dash-recent-meta">{a.lessonSubject} · {formatRelative(a.assignedAt)}</span>
+                  </div>
+                  <span className={`assignment-status-pill ${STATUS_PILL[a.status]?.cls ?? ''}`} style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem' }}>
+                    {STATUS_PILL[a.status]?.label ?? a.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="parent-dash-recent-card">
+              <div className="parent-dash-recent-header">
+                <h4>✅ Lessons done</h4>
+              </div>
+              {childDoneAssignments.length === 0 ? (
+                <p className="parent-dash-recent-empty">No completed lessons yet.</p>
+              ) : childDoneAssignments.map((a) => (
+                <div key={a.id} className="parent-dash-recent-item">
+                  <div className="parent-dash-recent-main">
+                    <span className="parent-dash-recent-title">
+                      {SUBJECT_EMOJI[a.lessonSubject] || '📚'} {a.lessonTitle}
+                    </span>
+                    <span className="parent-dash-recent-meta">{a.lessonSubject} · {formatRelative(a.assignedAt)}</span>
+                  </div>
+                  {a.score != null ? (
+                    <span className={`assignment-status-pill ${scoreVariant(a.score)}`} style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem' }}>
+                      {scoreEmoji(a.score)} {a.score}%
+                    </span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       ) : (
         <>

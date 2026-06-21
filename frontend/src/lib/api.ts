@@ -378,6 +378,25 @@ export async function updateLesson(accessToken: string, lessonId: string, payloa
   }))
 }
 
+export interface UpdateAnswerInput {
+  answerText: string
+  isCorrect: boolean
+}
+
+export interface UpdateQuestionInput {
+  id?: string | null
+  questionText: string
+  explanation?: string | null
+  answers: UpdateAnswerInput[]
+}
+
+export async function updateLessonQuestions(accessToken: string, lessonId: string, questions: UpdateQuestionInput[]): Promise<LessonDetail> {
+  return request<LessonDetail>(`/api/v1/lessons/${lessonId}/questions`, withAuth(accessToken, {
+    method: 'PUT',
+    body: JSON.stringify({ questions }),
+  }))
+}
+
 export async function duplicateLesson(accessToken: string, lessonId: string) {
   return request(`/api/v1/lessons/${lessonId}/duplicate`, withAuth(accessToken, {
     method: 'POST',

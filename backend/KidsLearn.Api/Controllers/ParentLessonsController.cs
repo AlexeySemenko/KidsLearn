@@ -94,6 +94,23 @@ public static class ParentLessonsController
             return Results.Ok(result.Lesson);
         });
 
+        parentApi.MapPut("/lessons/{lessonId:guid}/questions", async (ISender sender, ClaimsPrincipal user, Guid lessonId, UpdateLessonQuestionsRequest request) =>
+        {
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
+            {
+                return Results.Unauthorized();
+            }
+
+            var result = await sender.Send(new UpdateParentLessonQuestionsCommand(parentId, lessonId, request));
+            return result.StatusCode switch
+            {
+                StatusCodes.Status200OK when result.Lesson is not null => Results.Ok(result.Lesson),
+                StatusCodes.Status400BadRequest => Results.BadRequest(new { error = result.Error ?? "Bad request." }),
+                StatusCodes.Status404NotFound => Results.NotFound(new { error = result.Error ?? "Not found." }),
+                _ => Results.Problem(result.Error ?? "Unexpected error.")
+            };
+        });
+
         parentApi.MapDelete("/lessons/{lessonId:guid}", async (ISender sender, ClaimsPrincipal user, Guid lessonId) =>
         {
             if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
