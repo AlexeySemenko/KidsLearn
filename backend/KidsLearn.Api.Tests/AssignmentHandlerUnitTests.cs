@@ -87,7 +87,7 @@ public class AssignmentHandlerUnitTests
         db.Assignments.Add(assignment);
         await db.SaveChangesAsync();
 
-        var service = new AssignmentSolvingService(db);
+        var service = new AssignmentSolvingService(db, new FakeEmailService());
         var result = await service.GetForSolvingAsync(AssignmentAccessScope.Parent, parent.Id, assignment.Id);
 
         Assert.Equal(StatusCodes.Status404NotFound, result.StatusCode);
@@ -110,7 +110,7 @@ public class AssignmentHandlerUnitTests
         db.Assignments.Add(assignment);
         await db.SaveChangesAsync();
 
-        var service = new AssignmentSolvingService(db);
+        var service = new AssignmentSolvingService(db, new FakeEmailService());
         var result = await service.GetForSolvingAsync(AssignmentAccessScope.Child, Guid.NewGuid(), assignment.Id);
 
         Assert.Equal(StatusCodes.Status404NotFound, result.StatusCode);
@@ -133,7 +133,7 @@ public class AssignmentHandlerUnitTests
         db.Assignments.Add(assignment);
         await db.SaveChangesAsync();
 
-        var service = new AssignmentSolvingService(db);
+        var service = new AssignmentSolvingService(db, new FakeEmailService());
         var result = await service.SubmitAnswersAsync(
             AssignmentAccessScope.Parent,
             parent.Id,
@@ -178,7 +178,7 @@ public class AssignmentHandlerUnitTests
         db.Assignments.Add(assignment);
         await db.SaveChangesAsync();
 
-        var service = new AssignmentSolvingService(db);
+        var service = new AssignmentSolvingService(db, new FakeEmailService());
         var result = await service.SubmitAnswersAsync(
             AssignmentAccessScope.Child,
             child.Id,
@@ -208,7 +208,7 @@ public class AssignmentHandlerUnitTests
         db.Assignments.Add(assignment);
         await db.SaveChangesAsync();
 
-        var service = new AssignmentSolvingService(db);
+        var service = new AssignmentSolvingService(db, new FakeEmailService());
 
         var submit = await service.SubmitAnswersAsync(
             AssignmentAccessScope.Parent,
@@ -248,7 +248,7 @@ public class AssignmentHandlerUnitTests
         db.Assignments.Add(assignment);
         await db.SaveChangesAsync();
 
-        var service = new AssignmentSolvingService(db);
+        var service = new AssignmentSolvingService(db, new FakeEmailService());
         await service.SubmitAnswersAsync(
             AssignmentAccessScope.Child,
             child.Id,
@@ -377,5 +377,23 @@ public class AssignmentHandlerUnitTests
         {
             return Task.FromResult(_response);
         }
+    }
+
+    private sealed class FakeEmailService : IEmailService
+    {
+        public Task<bool> SendInvitationAsync(string toEmail, string? displayName, string inviterName)
+            => Task.FromResult(true);
+
+        public Task<bool> SendParentLinkedAsync(string toEmail, string? displayName, string linkedByEmail)
+            => Task.FromResult(true);
+
+        public Task<bool> SendFriendInviteAsync(string toEmail, string inviterName, string inviteUrl)
+            => Task.FromResult(true);
+
+        public Task<bool> SendAssignmentCompletedToParentAsync(string toEmail, string parentName, string childName, string lessonTitle, decimal score, int correctAnswers, int totalQuestions, IList<(string LessonTitle, decimal Score)> recentResults)
+            => Task.FromResult(true);
+
+        public Task<bool> SendAssignmentCreatedToChildAsync(string toEmail, string childName, string lessonTitle, string subject, DateTime? dueDate)
+            => Task.FromResult(true);
     }
 }

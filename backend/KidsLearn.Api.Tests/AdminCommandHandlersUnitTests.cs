@@ -285,5 +285,11 @@ public class AdminCommandHandlersUnitTests
 
         public Task<bool> SendFriendInviteAsync(string toEmail, string inviterName, string inviteUrl)
             => Task.FromResult(true);
+
+        public Task<bool> SendAssignmentCompletedToParentAsync(string toEmail, string parentName, string childName, string lessonTitle, decimal score, int correctAnswers, int totalQuestions, IList<(string LessonTitle, decimal Score)> recentResults)
+            => Task.FromResult(true);
+
+        public Task<bool> SendAssignmentCreatedToChildAsync(string toEmail, string childName, string lessonTitle, string subject, DateTime? dueDate)
+            => Task.FromResult(true);
     }
 }

@@ -415,5 +415,11 @@ public class FriendCommandHandlersUnitTests
             FriendInviteSent = true;
             return Task.FromResult(true);
         }
+
+        public Task<bool> SendAssignmentCompletedToParentAsync(string toEmail, string parentName, string childName, string lessonTitle, decimal score, int correctAnswers, int totalQuestions, IList<(string LessonTitle, decimal Score)> recentResults)
+            => Task.FromResult(true);
+
+        public Task<bool> SendAssignmentCreatedToChildAsync(string toEmail, string childName, string lessonTitle, string subject, DateTime? dueDate)
+            => Task.FromResult(true);
     }
 }
