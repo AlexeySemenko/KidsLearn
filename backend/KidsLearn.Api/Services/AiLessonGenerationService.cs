@@ -20,7 +20,8 @@ public sealed record GeneratedLessonDraft(
     string Topic,
     string Difficulty,
     List<GeneratedQuestionDraft> Questions,
-    AiProviderMetaResponse ProviderMeta);
+    AiProviderMetaResponse ProviderMeta,
+    string? Story = null);
 
 public sealed record GeneratedQuestionDraft(
     string QuestionText,
@@ -114,10 +115,15 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
             answerInstruction = "Every question must have exactly 4 answer options, with exactly 1 marked isCorrect=true and the remaining 3 marked isCorrect=false.";
         }
 
-        return $"Generate a strict JSON object with fields: title, subject, grade, topic, difficulty, questions. " +
+        var storyInstruction = request.IncludeStory == true
+            ? "Also include a 'story' field: a short engaging narrative paragraph (3-6 sentences) that sets the scene for the lesson topic. All questions must relate to events or facts in this story. "
+            : "";
+
+        return $"Generate a strict JSON object with fields: title, subject, grade, topic, difficulty, questions{(request.IncludeStory == true ? ", story" : "")}. " +
                "Each question must include questionText, explanation, order, answers. " +
                "Each answer must include answerText, isCorrect (boolean), order. " +
                $"{answerInstruction} " +
+               $"{storyInstruction}" +
                "Output valid JSON only — no markdown, no code fences, no comments. " +
                $"Subject: {request.Subject}; Grade: {request.Grade}; Topic: {request.Topic}; Difficulty: {request.Difficulty ?? "Medium"}; " +
                $"QuestionCount: {request.QuestionCount}; Language: {request.Language ?? "en"}.";
@@ -220,6 +226,10 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
             return false;
         }
 
+        var story = root.TryGetProperty("story", out var storyProp) && storyProp.ValueKind == JsonValueKind.String
+            ? storyProp.GetString()?.Trim()
+            : null;
+
         draft = new GeneratedLessonDraft(
             titleProp.GetString() ?? $"{request.Topic} Practice",
             request.Subject,
@@ -227,7 +237,8 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
             request.Topic,
             request.Difficulty?.Trim() ?? "Medium",
             questions,
-            new AiProviderMetaResponse("OpenAI", model, false, null));
+            new AiProviderMetaResponse("OpenAI", model, false, null),
+            story);
 
         }
         }
@@ -367,6 +378,7 @@ public sealed class AiLessonGenerationService(AppDbContext db, IAIProvider aiPro
             Grade = request.Grade,
             Topic = request.Topic.Trim(),
             Difficulty = string.IsNullOrWhiteSpace(request.Difficulty) ? "Medium" : request.Difficulty.Trim(),
+            Story = string.IsNullOrWhiteSpace(draft.Story) ? null : draft.Story,
             CreatedBy = parentId,
             CreatedAt = DateTime.UtcNow
         };
@@ -417,7 +429,8 @@ public sealed class AiLessonGenerationService(AppDbContext db, IAIProvider aiPro
                             .OrderBy(a => a.Order)
                             .Select(a => new AnswerOptionResponse(a.Id, a.AnswerText, a.IsCorrect, a.Order))
                             .ToList()))
-                    .ToList()),
+                    .ToList(),
+                lesson.Story),
             draft.ProviderMeta);
 
         return ServiceResult<GenerateAiLessonResponse>.Success(response);

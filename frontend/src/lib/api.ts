@@ -112,6 +112,7 @@ export interface LessonDetail {
   difficulty: string
   createdAt: string
   questions: LessonQuestion[]
+  story?: string
 }
 
 export interface AssignmentResponse {
@@ -170,6 +171,7 @@ export interface GenerateAiLessonRequest {
   difficulty?: string | null
   language?: string | null
   questionTypes?: string[] | null
+  includeStory?: boolean | null
 }
 
 export interface GenerateAiLessonResponse {

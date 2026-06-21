@@ -130,6 +130,7 @@ export default function SolveMissionModal({ assignmentId, accessToken, onClose, 
     <LessonViewModal
       title="Mission time!"
       subtitle={`${assignment.lessonTitle} · ${assignment.questions.length} questions`}
+      story={assignment.lessonStory}
       questions={assignment.questions}
       onClose={onClose}
       renderQuestion={(question, index) => (

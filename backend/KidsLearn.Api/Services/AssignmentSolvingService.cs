@@ -68,7 +68,8 @@ public class AssignmentSolvingService(AppDbContext db) : IAssignmentSolvingServi
                         .OrderBy(a => a.Order)
                         .Select(a => new AssignmentQuestionAnswerResponse(a.Id, a.AnswerText, a.Order))
                         .ToList()))
-                .ToList());
+                .ToList(),
+            assignment.Lesson.Story);
 
         return ServiceResult<AssignmentForSolvingResponse>.Success(response);
     }

@@ -319,6 +319,10 @@ namespace KidsLearn.Api.EFMigration
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("Story")
+                        .HasColumnType("text")
+                        .IsRequired(false);
+
                     b.Property<int>("Grade")
                         .HasColumnType("integer");
 

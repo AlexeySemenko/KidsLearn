@@ -68,6 +68,11 @@ public sealed class UpdateParentLessonCommandHandler : IRequestHandler<UpdatePar
             lesson.Grade = request.Grade.Value;
         }
 
+        if (request.Story is not null)
+        {
+            lesson.Story = string.IsNullOrWhiteSpace(request.Story) ? null : request.Story.Trim();
+        }
+
         await _db.SaveChangesAsync(cancellationToken);
 
         var response = new LessonSummaryResponse(

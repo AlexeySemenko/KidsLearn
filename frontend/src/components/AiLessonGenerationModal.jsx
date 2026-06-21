@@ -21,6 +21,7 @@ const emptyForm = {
   difficulty: 'Medium',
   language: 'English',
   questionTypes: 'mixed',
+  includeStory: false,
 }
 
 function resolveSubject(form) {
@@ -126,6 +127,7 @@ export default function AiLessonGenerationModal({
         difficulty: form.difficulty,
         language: form.language,
         questionTypes: resolveQuestionTypes(form.questionTypes),
+        includeStory: form.includeStory || null,
       })
 
       setProviderMeta(response.providerMeta)
@@ -286,6 +288,20 @@ export default function AiLessonGenerationModal({
                   ))}
                 </select>
               </div>
+            </div>
+
+            <div className="field">
+              <label className="ai-checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={form.includeStory}
+                  onChange={(e) => updateField('includeStory', e.target.checked)}
+                />
+                <span>
+                  <strong>Include lesson story</strong>
+                  <span className="ai-checkbox-hint"> — AI will write a short narrative and base questions on it</span>
+                </span>
+              </label>
             </div>
 
             <div className="button-row modal-actions">

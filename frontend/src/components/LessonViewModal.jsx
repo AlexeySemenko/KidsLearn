@@ -31,6 +31,7 @@ function DefaultQuestion({ question, index }) {
 export default function LessonViewModal({
   title,
   subtitle,
+  story,
   questions,
   onClose,
   renderQuestion,
@@ -62,6 +63,13 @@ export default function LessonViewModal({
           </div>
           <button type="button" className="button-secondary" onClick={onClose}>Close</button>
         </div>
+
+        {story ? (
+          <div className="lesson-story-block">
+            <div className="lesson-story-label">📖 Story</div>
+            <p className="lesson-story-text">{story}</p>
+          </div>
+        ) : null}
 
         <div className="children-list">
           {questions.map((question, index) =>

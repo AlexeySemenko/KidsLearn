@@ -1635,6 +1635,11 @@ select.input:invalid {
   gap: 0.55rem;
 }
 
+.create-lesson-button {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #fff;
+}
+
 .ai-button-icon {
   display: inline-flex;
   align-items: center;
@@ -1980,6 +1985,77 @@ select.input:invalid {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+}
+
+.lesson-story-section {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+.lesson-story-optional {
+  font-size: 0.75rem;
+  font-weight: 400;
+  opacity: 0.6;
+}
+
+.lesson-story-hint {
+  font-size: 0.8rem;
+  opacity: 0.65;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.lesson-story-textarea {
+  width: 100%;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.6;
+}
+
+/* Story display in view/solve modal */
+.lesson-story-block {
+  background: rgba(99, 102, 241, 0.07);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.lesson-story-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+  margin-bottom: 0.5rem;
+}
+
+.lesson-story-text {
+  margin: 0;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+/* Checkbox in AI modal */
+.ai-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  cursor: pointer;
+  padding: 0.5rem 0;
+}
+
+.ai-checkbox-label input[type="checkbox"] {
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+}
+
+.ai-checkbox-hint {
+  font-size: 0.8rem;
+  opacity: 0.65;
+  font-weight: 400;
 }
 
 .lesson-edit-questions-section {

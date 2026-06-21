@@ -8,14 +8,16 @@ public sealed record CreateLessonRequest(
     int Grade,
     string Topic,
     string? Difficulty,
-    List<CreateQuestionRequest> Questions);
+    List<CreateQuestionRequest> Questions,
+    string? Story = null);
 
 public sealed record UpdateLessonRequest(
     string? Title,
     string? Subject,
     int? Grade,
     string? Topic,
-    string? Difficulty);
+    string? Difficulty,
+    string? Story = null);
 
 public sealed record UpdateAnswerRequest(string AnswerText, bool IsCorrect);
 
@@ -46,4 +48,5 @@ public sealed record LessonDetailResponse(
     string Topic,
     string Difficulty,
     DateTime CreatedAt,
-    List<QuestionResponse> Questions);
+    List<QuestionResponse> Questions,
+    string? Story = null);

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { createAssignment, deleteLesson, duplicateLesson, getChildren, getLesson, getLessons, updateLesson, updateLessonQuestions } from '../lib/api'
+import { createAssignment, createLesson, deleteLesson, duplicateLesson, getChildren, getLesson, getLessons, updateLesson, updateLessonQuestions } from '../lib/api'
 import { useAuth } from '../auth/AuthProvider'
 import AiLessonGenerationModal from '../components/AiLessonGenerationModal'
 import LessonViewModal from '../components/LessonViewModal'
+import LessonFormModal from '../components/LessonFormModal'
 import CreateAssignmentModal from '../components/CreateAssignmentModal'
-import QuestionEditor, { questionsFromDetail } from '../components/QuestionEditor'
+import { questionsFromDetail } from '../components/QuestionEditor'
 
 const LESSONS_FILTERS_STORAGE_KEY = 'kidslearn.parent.lessons.filters.v1'
 
@@ -78,6 +78,9 @@ export default function ParentLessonsPage() {
   const [subjectFilter, setSubjectFilter] = useState(storedFilters.subjectFilter)
   const [sortBy, setSortBy] = useState(storedFilters.sortBy)
   const [isAiModalOpen, setIsAiModalOpen] = useState(false)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isCreatingLesson, setIsCreatingLesson] = useState(false)
+  const [createError, setCreateError] = useState('')
   const [viewingLesson, setViewingLesson] = useState(null)
   const [isLoadingView, setIsLoadingView] = useState(false)
   const [viewError, setViewError] = useState('')
@@ -182,26 +185,6 @@ export default function ParentLessonsPage() {
     }
   }, [session?.accessToken])
 
-  useEffect(() => {
-    if (!editingLessonId) {
-      return undefined
-    }
-
-    function handleKeyDown(event) {
-      if (event.key === 'Escape') {
-        cancelEditing()
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [editingLessonId])
-
-
-  function updateEditField(name, value) {
-    setEditForm((current) => ({ ...current, [name]: value }))
-  }
-
   async function startEditing(lesson) {
     setError('')
     setStatusMessage('')
@@ -230,24 +213,14 @@ export default function ParentLessonsPage() {
     setEditForm({ title: '', subject: '', grade: '1', topic: '', difficulty: 'Medium', questions: [] })
   }
 
-  async function handleSaveLesson(lessonId) {
-    if (!session?.accessToken) {
-      return
-    }
+  async function handleSaveLesson(lessonId, formData) {
+    if (!session?.accessToken) return
 
-    const summaryError = validateEditLesson(editForm)
-    if (summaryError) {
-      setError(summaryError)
-      setStatusMessage('')
-      return
-    }
+    const summaryError = validateEditLesson(formData)
+    if (summaryError) { setError(summaryError); setStatusMessage(''); return }
 
-    const questionsError = validateQuestions(editForm.questions)
-    if (questionsError) {
-      setError(questionsError)
-      setStatusMessage('')
-      return
-    }
+    const questionsError = validateQuestions(formData.questions)
+    if (questionsError) { setError(questionsError); setStatusMessage(''); return }
 
     setPendingActionId(lessonId)
     setError('')
@@ -255,16 +228,17 @@ export default function ParentLessonsPage() {
 
     try {
       const response = await updateLesson(session.accessToken, lessonId, {
-        title: editForm.title.trim(),
-        subject: editForm.subject.trim(),
-        grade: Number(editForm.grade),
-        topic: editForm.topic.trim(),
-        difficulty: editForm.difficulty.trim(),
+        title: formData.title,
+        subject: formData.subject,
+        grade: Number(formData.grade),
+        topic: formData.topic,
+        difficulty: formData.difficulty,
+        story: formData.story ?? null,
       })
 
       setLessons((current) => current.map((lesson) => (lesson.id === lessonId ? response : lesson)))
 
-      const questionsPayload = editForm.questions.map((q) => ({
+      const questionsPayload = formData.questions.map((q) => ({
         id: q.id || undefined,
         questionText: q.questionText.trim(),
         explanation: q.explanation.trim(),
@@ -361,6 +335,54 @@ export default function ParentLessonsPage() {
     }
   }
 
+  async function handleCreateLesson(formData) {
+    if (!session?.accessToken) return
+
+    const summaryError = validateEditLesson(formData)
+    if (summaryError) { setCreateError(summaryError); return }
+
+    const questionsError = validateQuestions(formData.questions)
+    if (questionsError) { setCreateError(questionsError); return }
+
+    setIsCreatingLesson(true)
+    setCreateError('')
+    try {
+      const newLesson = await createLesson(session.accessToken, {
+        title: formData.title,
+        subject: formData.subject,
+        grade: Number(formData.grade),
+        topic: formData.topic,
+        difficulty: formData.difficulty,
+        story: formData.story ?? null,
+        questions: [],
+      })
+
+      if (formData.questions.length > 0) {
+        const questionsPayload = formData.questions.map((q) => ({
+          id: undefined,
+          questionText: q.questionText.trim(),
+          explanation: q.explanation.trim(),
+          answers: q.answerType === 'true_false'
+            ? [
+                { answerText: 'True', isCorrect: q.answers[0]?.isCorrect ?? true },
+                { answerText: 'False', isCorrect: !(q.answers[0]?.isCorrect ?? true) },
+              ]
+            : q.answers.map((a) => ({ answerText: a.answerText.trim(), isCorrect: a.isCorrect })),
+        }))
+        await updateLessonQuestions(session.accessToken, newLesson.id, questionsPayload)
+        newLesson.questionCount = formData.questions.length
+      }
+
+      setLessons((current) => [newLesson, ...current])
+      setStatusMessage(`Lesson "${newLesson.title}" was created.`)
+      setIsCreateModalOpen(false)
+    } catch (err) {
+      setCreateError(err.message)
+    } finally {
+      setIsCreatingLesson(false)
+    }
+  }
+
   function handleAiGenerated(response) {
     const draft = response.lessonDraft
     const summary = {
@@ -404,10 +426,15 @@ export default function ParentLessonsPage() {
           <h3>Lessons</h3>
           <p>{visibleLessons.length} of {lessons.length} lessons</p>
         </div>
-        <button type="button" className="button ai-launch-button" onClick={() => setIsAiModalOpen(true)}>
-          <span className="ai-button-icon" aria-hidden="true">AI</span>
-          <span>Generate</span>
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <button type="button" className="button create-lesson-button" onClick={() => { setCreateError(''); setIsCreateModalOpen(true) }}>
+            + Create
+          </button>
+          <button type="button" className="button ai-launch-button" onClick={() => setIsAiModalOpen(true)}>
+            <span className="ai-button-icon" aria-hidden="true">AI</span>
+            <span>Generate</span>
+          </button>
+        </div>
       </div>
 
       {statusMessage ? (
@@ -505,66 +532,32 @@ export default function ParentLessonsPage() {
         <LessonViewModal
           title={viewingLesson.title}
           subtitle={`${viewingLesson.subject} · Grade ${viewingLesson.grade} · ${viewingLesson.topic} · ${viewingLesson.difficulty} · ${viewingLesson.questions.length} questions`}
+          story={viewingLesson.story}
           questions={viewingLesson.questions}
           onClose={closeViewModal}
         />
       ) : null}
 
-      {editingLessonId ? createPortal(
-        <div className="modal-overlay" role="presentation">
-          <section className="modal-card lesson-edit-modal" role="dialog" aria-modal="true" aria-labelledby="lesson-edit-title">
-            <div className="children-list-header modal-header">
-              <div>
-                <h3 id="lesson-edit-title">Edit lesson</h3>
-                <p>Update summary fields and questions.</p>
-              </div>
-              <button type="button" className="button-secondary" onClick={cancelEditing}>Close</button>
-            </div>
+      {isCreateModalOpen ? (
+        <LessonFormModal
+          mode="create"
+          isSaving={isCreatingLesson}
+          error={createError}
+          onSave={handleCreateLesson}
+          onClose={() => setIsCreateModalOpen(false)}
+        />
+      ) : null}
 
-            <div className="lesson-edit-grid">
-              <div className="field">
-                <label htmlFor="modal-lesson-title">Title</label>
-                <input id="modal-lesson-title" className="input" value={editForm.title} onChange={(event) => updateEditField('title', event.target.value)} autoFocus />
-              </div>
-              <div className="field">
-                <label htmlFor="modal-lesson-subject">Subject</label>
-                <input id="modal-lesson-subject" className="input" value={editForm.subject} onChange={(event) => updateEditField('subject', event.target.value)} />
-              </div>
-              <div className="field">
-                <label htmlFor="modal-lesson-grade">Grade</label>
-                <input id="modal-lesson-grade" className="input" type="number" min="1" max="12" value={editForm.grade} onChange={(event) => updateEditField('grade', event.target.value)} />
-              </div>
-              <div className="field">
-                <label htmlFor="modal-lesson-topic">Topic</label>
-                <input id="modal-lesson-topic" className="input" value={editForm.topic} onChange={(event) => updateEditField('topic', event.target.value)} />
-              </div>
-              <div className="field">
-                <label htmlFor="modal-lesson-difficulty">Difficulty</label>
-                <input id="modal-lesson-difficulty" className="input" value={editForm.difficulty} onChange={(event) => updateEditField('difficulty', event.target.value)} />
-              </div>
-            </div>
-
-            <div className="lesson-edit-questions-section">
-              <h4 className="lesson-edit-questions-title">Questions</h4>
-              {isLoadingEditDetail ? (
-                <p className="children-empty" style={{ padding: '1rem 0' }}>Loading questions…</p>
-              ) : (
-                <QuestionEditor
-                  questions={editForm.questions}
-                  onChange={(qs) => setEditForm((prev) => ({ ...prev, questions: qs }))}
-                />
-              )}
-            </div>
-
-            <div className="button-row modal-actions">
-              <button type="button" className="button" disabled={pendingActionId === editingLessonId || isLoadingEditDetail} onClick={() => handleSaveLesson(editingLessonId)}>
-                {pendingActionId === editingLessonId ? 'Saving...' : 'Save'}
-              </button>
-              <button type="button" className="button-secondary" onClick={cancelEditing}>Cancel</button>
-            </div>
-          </section>
-        </div>,
-        document.body
+      {editingLessonId ? (
+        <LessonFormModal
+          mode="edit"
+          initialData={editForm}
+          isLoadingQuestions={isLoadingEditDetail}
+          isSaving={pendingActionId === editingLessonId}
+          error={error}
+          onSave={(formData) => handleSaveLesson(editingLessonId, formData)}
+          onClose={cancelEditing}
+        />
       ) : null}
 
       <AiLessonGenerationModal

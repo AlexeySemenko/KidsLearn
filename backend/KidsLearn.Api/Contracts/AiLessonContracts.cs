@@ -5,7 +5,8 @@ public sealed record GenerateAiLessonRequest(
     int QuestionCount,
     string? Difficulty,
     string? Language,
-    List<string>? QuestionTypes);
+    List<string>? QuestionTypes,
+    bool? IncludeStory = null);
 
 public sealed record AiProviderMetaResponse(
     string Provider,

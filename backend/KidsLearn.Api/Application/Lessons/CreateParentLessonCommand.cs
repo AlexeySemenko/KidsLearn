@@ -36,6 +36,7 @@ public sealed class CreateParentLessonCommandHandler : IRequestHandler<CreatePar
             Grade = request.Grade,
             Topic = request.Topic!.Trim(),
             Difficulty = string.IsNullOrWhiteSpace(request.Difficulty) ? "Medium" : request.Difficulty.Trim(),
+            Story = string.IsNullOrWhiteSpace(request.Story) ? null : request.Story.Trim(),
             CreatedBy = command.ParentId,
             CreatedAt = DateTime.UtcNow
         };

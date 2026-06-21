@@ -50,6 +50,7 @@ public sealed class DuplicateParentLessonCommandHandler : IRequestHandler<Duplic
             Grade = sourceLesson.Grade,
             Topic = sourceLesson.Topic,
             Difficulty = sourceLesson.Difficulty,
+            Story = sourceLesson.Story,
             CreatedBy = command.ParentId,
             CreatedAt = DateTime.UtcNow
         };

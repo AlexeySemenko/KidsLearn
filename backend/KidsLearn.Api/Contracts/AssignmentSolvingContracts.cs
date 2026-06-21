@@ -51,4 +51,5 @@ public sealed record AssignmentForSolvingResponse(
     DateTime? DueDate,
     string Status,
     string LessonTitle,
-    List<AssignmentQuestionResponse> Questions);
+    List<AssignmentQuestionResponse> Questions,
+    string? LessonStory = null);
