@@ -1,5 +1,7 @@
 public sealed record CreateAssignmentRequest(Guid ChildId, Guid LessonId, DateTime? DueDate);
 
+public sealed record SelfAssignRequest(Guid LessonId);
+
 public sealed record AssignmentResponse(
     Guid Id,
     Guid ChildId,

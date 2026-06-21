@@ -661,6 +661,26 @@ export async function getFriendResults(accessToken: string, friendChildId: strin
   return request<ResultListItem[]>(`/api/v1/child/friends/${friendChildId}/results`, withAuth(accessToken))
 }
 
+export interface FriendAssignment {
+  assignmentId: string
+  lessonId: string
+  lessonTitle: string
+  lessonSubject: string
+  status: string
+  assignedAt: string
+}
+
+export async function getFriendAssignments(accessToken: string, friendChildId: string): Promise<FriendAssignment[]> {
+  return request<FriendAssignment[]>(`/api/v1/child/friends/${friendChildId}/assignments`, withAuth(accessToken))
+}
+
+export async function selfAssignLesson(accessToken: string, lessonId: string): Promise<AssignmentResponse> {
+  return request<AssignmentResponse>('/api/v1/child/self-assign', withAuth(accessToken, {
+    method: 'POST',
+    body: JSON.stringify({ lessonId }),
+  }))
+}
+
 export async function getFriendNote(accessToken: string, friendChildId: string): Promise<{ lastNoteText: string | null; lastNoteIsFromMe: boolean; myNote: string | null; theirNote: string | null }> {
   return request<{ lastNoteText: string | null; lastNoteIsFromMe: boolean; myNote: string | null; theirNote: string | null }>(`/api/v1/child/friends/${friendChildId}/note`, withAuth(accessToken))
 }

@@ -1,15 +1,12 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import {
-  completeChildAssignment,
-  getChildAssignmentForSolving,
   getChildAssignments,
   getChildResultDetail,
   getChildResults,
-  submitChildAssignmentAnswers,
 } from '../lib/api'
 import LessonViewModal from '../components/LessonViewModal'
+import SolveMissionModal from '../components/SolveMissionModal'
 import ChildStatsPanel, { SUBJECT_EMOJI, scoreEmoji, scoreVariant } from '../components/ChildStatsPanel'
 
 function getGreeting() {
@@ -19,13 +16,6 @@ function getGreeting() {
   if (h < 17) return { text: 'Good afternoon', emoji: '☀️' }
   if (h < 22) return { text: 'Good evening',   emoji: '🌤️' }
   return       { text: 'Good night',     emoji: '🌙' }
-}
-
-function completionGrade(score) {
-  if (score >= 90) return { label: 'Perfect!',    emoji: '🌟', css: 'grade-perfect' }
-  if (score >= 70) return { label: 'Great job!',  emoji: '🎊', css: 'grade-great' }
-  if (score >= 50) return { label: 'Good job!',   emoji: '👍', css: 'grade-good' }
-  return               { label: 'Keep trying!', emoji: '😊', css: 'grade-ok' }
 }
 
 function formatDate(value) {
@@ -38,25 +28,16 @@ function shortId(value) {
 }
 
 export default function ChildHomePage() {
-  const navigate = useNavigate()
   const { session, user } = useAuth()
 
   const [assignments, setAssignments] = useState([])
   const [results, setResults]         = useState([])
   const [isLoading, setIsLoading]     = useState(true)
+  const [error, setError]             = useState('')
 
-  const [solvingAssignment, setSolvingAssignment] = useState(null)
-  const [selectedAnswers, setSelectedAnswers]     = useState({})
-  const [instantCheckMap, setInstantCheckMap]     = useState({})
-  const [partialScore, setPartialScore]           = useState(null)
-  const [completion, setCompletion]               = useState(null)
-  const [checksRemaining, setChecksRemaining]     = useState(3)
-  const [isOpening, setIsOpening]           = useState(false)
-  const [isSubmitting, setIsSubmitting]     = useState(false)
-  const [isCompleting, setIsCompleting]     = useState(false)
-  const [error, setError]                   = useState('')
-  const [viewingResult, setViewingResult]   = useState(null)
-  const [isLoadingResult, setIsLoadingResult] = useState(false)
+  const [solvingAssignmentId, setSolvingAssignmentId] = useState(null)
+  const [viewingResult, setViewingResult]             = useState(null)
+  const [isLoadingResult, setIsLoadingResult]         = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -96,70 +77,10 @@ export default function ChildHomePage() {
   const completedAssignments = assignments.filter((a) => a.status === 'Completed')
   const pendingCount = pendingAssignments.length
 
-  async function handleOpenAssignment(assignmentId) {
-    if (!session?.accessToken) return
-    setError('')
-    setIsOpening(true)
-    try {
-      const response = await getChildAssignmentForSolving(session.accessToken, assignmentId)
-      setSolvingAssignment(response)
-      setSelectedAnswers({})
-      setInstantCheckMap({})
-      setPartialScore(null)
-      setCompletion(null)
-      setChecksRemaining(3)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setIsOpening(false)
-    }
-  }
-
-  function handleSelectAnswer(questionId, answerId) {
-    setSelectedAnswers((cur) => ({ ...cur, [questionId]: answerId }))
-  }
-
-  function closeSolvingModal() {
-    setSolvingAssignment(null)
-    setSelectedAnswers({})
-    setInstantCheckMap({})
-    setPartialScore(null)
-    setCompletion(null)
-    setChecksRemaining(3)
-  }
-
-  async function handleCheckAnswers() {
-    if (!session?.accessToken || !solvingAssignment) return
-
-    const answersPayload = Object.entries(selectedAnswers).map(([questionId, answerId]) => ({
-      questionId,
-      selectedAnswerOptionId: answerId,
-      textAnswer: null,
-    }))
-    if (answersPayload.length === 0) {
-      setError('Choose at least one answer before checking.')
-      return
-    }
-
-    setError('')
-    setIsSubmitting(true)
-    try {
-      const response = await submitChildAssignmentAnswers(session.accessToken, solvingAssignment.assignmentId, {
-        answers: answersPayload,
-      })
-      const checkMap = {}
-      response.instantCheck.forEach((item) => { checkMap[item.questionId] = item })
-      setInstantCheckMap(checkMap)
-      setPartialScore(response.partialScore)
-      setChecksRemaining((n) => Math.max(0, n - 1))
-      setAssignments((cur) => cur.map((a) =>
-        a.id === solvingAssignment.assignmentId ? { ...a, status: 'InProgress' } : a
-      ))
-      setSolvingAssignment((cur) => cur ? { ...cur, status: 'InProgress' } : cur)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setIsSubmitting(false)
+  function handleAssignmentStatusChange(assignmentId, status) {
+    setAssignments((cur) => cur.map((a) => a.id === assignmentId ? { ...a, status } : a))
+    if (status === 'Completed') {
+      getChildResults(session.accessToken).then(setResults).catch(() => {})
     }
   }
 
@@ -176,25 +97,6 @@ export default function ChildHomePage() {
       setError(err.message)
     } finally {
       setIsLoadingResult(false)
-    }
-  }
-
-  async function handleCompleteAssignment() {
-    if (!session?.accessToken || !solvingAssignment) return
-    setError('')
-    setIsCompleting(true)
-    try {
-      const response = await completeChildAssignment(session.accessToken, solvingAssignment.assignmentId)
-      setCompletion(response)
-      setAssignments((cur) => cur.map((a) =>
-        a.id === solvingAssignment.assignmentId ? { ...a, status: 'Completed' } : a
-      ))
-      setSolvingAssignment((cur) => cur ? { ...cur, status: 'Completed' } : cur)
-      getChildResults(session.accessToken).then(setResults).catch(() => {})
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setIsCompleting(false)
     }
   }
 
@@ -230,6 +132,64 @@ export default function ChildHomePage() {
       </div>
 
       <ChildStatsPanel results={results} isLoading={isLoading} pendingCount={pendingCount} />
+
+      {/* ── Missions waiting ── */}
+      <div className="child-missions-card">
+        <div className="children-list-header">
+          <div>
+            <h3>⏳ Missions waiting</h3>
+            <p>Assigned — ready to start.</p>
+          </div>
+          <span className="badge">{isLoading ? '…' : pendingAssignments.length}</span>
+        </div>
+
+        {isLoading ? <p className="children-empty child-empty">Loading...</p> : null}
+        {!isLoading && pendingAssignments.length === 0 ? (
+          <p className="children-empty child-empty">All caught up! No missions waiting. 🎉</p>
+        ) : null}
+
+        {!isLoading && pendingAssignments.length > 0 ? (
+          <div className="children-list">
+            {pendingAssignments.map((assignment) => {
+              const isInProgress = assignment.status === 'InProgress'
+              const pillClass = isInProgress ? '' : 'status-new'
+              const pillLabel = isInProgress ? '⚡ In progress' : '✨ New'
+              const subjectIcon = SUBJECT_EMOJI[assignment.lessonSubject] || '📚'
+              return (
+                <article key={assignment.id} className="assignment-row">
+                  <div className="assignment-copy">
+                    <div className="assignment-topline">
+                      <div className="child-name">
+                        <span style={{ marginRight: '0.35em' }}>{subjectIcon}</span>
+                        {assignment.lessonTitle || `Lesson ${shortId(assignment.lessonId)}`}
+                      </div>
+                      <span className={`assignment-status-pill ${pillClass}`}>{pillLabel}</span>
+                    </div>
+                    <div className="assignment-timeline">
+                      <span className="assignment-meta-chip">Assigned {formatDate(assignment.assignedAt)}</span>
+                      {assignment.dueDate ? (
+                        <span className="assignment-meta-chip">Due {formatDate(assignment.dueDate)}</span>
+                      ) : null}
+                      {assignment.assignedByName ? (
+                        <span className="assignment-meta-chip">By {assignment.assignedByName}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="button-row child-actions">
+                    <button
+                      type="button"
+                      className="button-secondary child-start-button"
+                      onClick={() => setSolvingAssignmentId(assignment.id)}
+                    >
+                      🚀 Start mission
+                    </button>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        ) : null}
+      </div>
 
       {/* ── Missions done ── */}
       <div className="child-missions-card">
@@ -283,65 +243,6 @@ export default function ChildHomePage() {
                       onClick={() => handleViewResult(assignment.id)}
                     >
                       {isLoadingResult ? '⏳' : '👁 View'}
-                    </button>
-                  </div>
-                </article>
-              )
-            })}
-          </div>
-        ) : null}
-      </div>
-
-      {/* ── Missions waiting ── */}
-      <div className="child-missions-card">
-        <div className="children-list-header">
-          <div>
-            <h3>⏳ Missions waiting</h3>
-            <p>Assigned — ready to start.</p>
-          </div>
-          <span className="badge">{isLoading ? '…' : pendingAssignments.length}</span>
-        </div>
-
-        {isLoading ? <p className="children-empty child-empty">Loading...</p> : null}
-        {!isLoading && pendingAssignments.length === 0 ? (
-          <p className="children-empty child-empty">All caught up! No missions waiting. 🎉</p>
-        ) : null}
-
-        {!isLoading && pendingAssignments.length > 0 ? (
-          <div className="children-list">
-            {pendingAssignments.map((assignment) => {
-              const isInProgress = assignment.status === 'InProgress'
-              const pillClass = isInProgress ? '' : 'status-new'
-              const pillLabel = isInProgress ? '⚡ In progress' : '✨ New'
-              const subjectIcon = SUBJECT_EMOJI[assignment.lessonSubject] || '📚'
-              return (
-                <article key={assignment.id} className="assignment-row">
-                  <div className="assignment-copy">
-                    <div className="assignment-topline">
-                      <div className="child-name">
-                        <span style={{ marginRight: '0.35em' }}>{subjectIcon}</span>
-                        {assignment.lessonTitle || `Lesson ${shortId(assignment.lessonId)}`}
-                      </div>
-                      <span className={`assignment-status-pill ${pillClass}`}>{pillLabel}</span>
-                    </div>
-                    <div className="assignment-timeline">
-                      <span className="assignment-meta-chip">Assigned {formatDate(assignment.assignedAt)}</span>
-                      {assignment.dueDate ? (
-                        <span className="assignment-meta-chip">Due {formatDate(assignment.dueDate)}</span>
-                      ) : null}
-                      {assignment.assignedByName ? (
-                        <span className="assignment-meta-chip">By {assignment.assignedByName}</span>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="button-row child-actions">
-                    <button
-                      type="button"
-                      className="button-secondary child-start-button"
-                      disabled={isOpening}
-                      onClick={() => handleOpenAssignment(assignment.id)}
-                    >
-                      {isOpening ? '⏳ Opening...' : '🚀 Start mission'}
                     </button>
                   </div>
                 </article>
@@ -412,111 +313,12 @@ export default function ChildHomePage() {
         />
       ) : null}
 
-      {solvingAssignment ? (
-        <LessonViewModal
-          title="Mission time!"
-          subtitle={`${solvingAssignment.lessonTitle} · ${solvingAssignment.questions.length} questions`}
-          questions={solvingAssignment.questions}
-          onClose={closeSolvingModal}
-          renderQuestion={(question, index) => (
-            <article key={question.questionId} className="assignment-row question-card">
-              <div className="assignment-copy">
-                <div className="assignment-topline">
-                  <div className="child-name">Question {index + 1}</div>
-                  {instantCheckMap[question.questionId] ? (
-                    <span className={`assignment-status-pill ${instantCheckMap[question.questionId].correct ? 'status-success' : 'status-danger'}`}>
-                      {instantCheckMap[question.questionId].correct ? '✅ Nice Job!' : '❌ Try once more'}
-                    </span>
-                  ) : null}
-                </div>
-                <div>{question.questionText}</div>
-                <div className="question-options">
-                  {question.answers.map((answer) => (
-                    <label key={answer.answerId} className="question-option">
-                      <input
-                        type="radio"
-                        name={`question-${question.questionId}`}
-                        checked={selectedAnswers[question.questionId] === answer.answerId}
-                        onChange={() => handleSelectAnswer(question.questionId, answer.answerId)}
-                      />
-                      <span>{answer.answerText}</span>
-                    </label>
-                  ))}
-                </div>
-                {instantCheckMap[question.questionId] ? (
-                  <div className="child-meta">Explanation: {instantCheckMap[question.questionId].explanation}</div>
-                ) : null}
-              </div>
-            </article>
-          )}
-          footer={(
-            <>
-              {completion ? (() => {
-                const grade = completionGrade(completion.score)
-                return (
-                  <div className={`mission-complete ${grade.css}`}>
-                    <div className="mission-complete-emoji" aria-hidden="true">{grade.emoji}</div>
-                    <div className="mission-complete-title">{grade.label}</div>
-                    <div className="mission-complete-score">
-                      {completion.score}% &nbsp;·&nbsp; {completion.correctAnswers}/{completion.totalQuestions} correct
-                    </div>
-                    {grade.css === 'grade-perfect' ? (
-                      <div className="mission-confetti" aria-hidden="true">
-                        {['⭐','🌟','✨','💫','⭐','🌟','✨','💫','⭐','🌟'].map((s, i) => (
-                          <span key={i} className={`confetti-star s${i + 1}`}>{s}</span>
-                        ))}
-                      </div>
-                    ) : null}
-                    <div className="button-row modal-actions">
-                      <button
-                        type="button"
-                        className="button"
-                        onClick={() => navigate(`/child/results?resultId=${completion.resultId}`)}
-                      >
-                        View my results
-                      </button>
-                      <button type="button" className="button-secondary" onClick={closeSolvingModal}>Close</button>
-                    </div>
-                  </div>
-                )
-              })() : (
-                <>
-                  {partialScore !== null ? (
-                    <div className="mission-score-bar">
-                      <span className="mission-score-emoji">{scoreEmoji(partialScore)}</span>
-                      <span className="mission-score-value">{partialScore}%</span>
-                      <span className="mission-score-label">current score</span>
-                      <span className="mission-checks-left">
-                        {checksRemaining > 0
-                          ? `${checksRemaining} check${checksRemaining === 1 ? '' : 's'} left`
-                          : 'No checks left'}
-                      </span>
-                    </div>
-                  ) : null}
-                  <div className="button-row modal-actions">
-                    <button
-                      type="button"
-                      className="button-secondary"
-                      disabled={isSubmitting || isCompleting || checksRemaining === 0}
-                      onClick={handleCheckAnswers}
-                    >
-                      {isSubmitting ? 'Checking...' : checksRemaining === 0 ? 'No checks left' : `Check my answers (${checksRemaining} left)`}
-                    </button>
-                    <button
-                      type="button"
-                      className="button"
-                      disabled={isSubmitting || isCompleting || solvingAssignment.status === 'Completed'}
-                      onClick={handleCompleteAssignment}
-                    >
-                      {isCompleting ? 'Finishing...' : (solvingAssignment.status === 'Completed' ? 'Completed' : 'Finish mission')}
-                    </button>
-                  </div>
-                </>
-              )}
-            </>
-          )}
-        />
-      ) : null}
+      <SolveMissionModal
+        assignmentId={solvingAssignmentId}
+        accessToken={session?.accessToken}
+        onClose={() => setSolvingAssignmentId(null)}
+        onAssignmentStatusChange={handleAssignmentStatusChange}
+      />
     </section>
   )
 }

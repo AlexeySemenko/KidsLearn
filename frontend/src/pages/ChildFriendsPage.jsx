@@ -1,8 +1,11 @@
 import { HubConnectionBuilder, LogLevel } from '@microsoft/signalr'
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../auth/AuthProvider'
 import ChildStatsPanel from '../components/ChildStatsPanel'
-import { getFriendNote, getFriendResults, getChildFriends, sendChildFriendInvite, updateFriendNote } from '../lib/api'
+import SolveMissionModal from '../components/SolveMissionModal'
+import { SUBJECT_EMOJI, scoreVariant, scoreEmoji } from '../components/ChildStatsPanel'
+import { getFriendNote, getFriendResults, getFriendAssignments, getChildFriends, sendChildFriendInvite, updateFriendNote, selfAssignLesson } from '../lib/api'
 
 const FRIEND_EMOJIS = ['🐼', '🦊', '🐸', '🦁', '🐨', '🐯', '🦄', '🐻', '🐙', '🦋']
 const FRIEND_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#84cc16']
@@ -122,6 +125,13 @@ export default function ChildFriendsPage() {
   const [selectedFriend, setSelectedFriend] = useState(null)
   const [friendResults, setFriendResults] = useState([])
   const [friendResultsLoading, setFriendResultsLoading] = useState(false)
+  const [friendAssignments, setFriendAssignments] = useState([])
+  const [friendAssignmentsLoading, setFriendAssignmentsLoading] = useState(false)
+
+  const [solvingAssignmentId, setSolvingAssignmentId] = useState(null)
+  const [isSelfAssigning, setIsSelfAssigning] = useState(false)
+  const [selfAssignError, setSelfAssignError] = useState('')
+  const [toast, setToast] = useState(null)
 
   const [bubbleFriendId, setBubbleFriendId] = useState(null)
   const [hubConnection, setHubConnection] = useState(null)
@@ -171,20 +181,46 @@ export default function ChildFriendsPage() {
     if (selectedFriend?.friendshipId === friend.friendshipId) {
       setSelectedFriend(null)
       setFriendResults([])
+      setFriendAssignments([])
+      setSelfAssignError('')
       return
     }
 
     setSelectedFriend(friend)
     setFriendResults([])
+    setFriendAssignments([])
+    setSelfAssignError('')
     setFriendResultsLoading(true)
+    setFriendAssignmentsLoading(true)
 
     try {
-      const results = await getFriendResults(session.accessToken, friend.childId)
-      setFriendResults(results)
+      const [results, assignments] = await Promise.allSettled([
+        getFriendResults(session.accessToken, friend.childId),
+        getFriendAssignments(session.accessToken, friend.childId),
+      ])
+      setFriendResults(results.status === 'fulfilled' ? results.value : [])
+      setFriendAssignments(assignments.status === 'fulfilled' ? assignments.value : [])
     } catch {
-      setFriendResults([])
+      // individual errors handled above via allSettled
     } finally {
       setFriendResultsLoading(false)
+      setFriendAssignmentsLoading(false)
+    }
+  }
+
+  async function handleSolveByMyself(lessonId) {
+    if (!session?.accessToken) return
+    setIsSelfAssigning(true)
+    setSelfAssignError('')
+    try {
+      const assignment = await selfAssignLesson(session.accessToken, lessonId)
+      setToast({ message: '🎯 Mission added! Let\'s go!', type: 'success' })
+      setTimeout(() => setToast(null), 3000)
+      setSolvingAssignmentId(assignment.id)
+    } catch (err) {
+      setSelfAssignError(err.message)
+    } finally {
+      setIsSelfAssigning(false)
     }
   }
 
@@ -224,6 +260,8 @@ export default function ChildFriendsPage() {
     setInviteError('')
     setInviteSuccess('')
   }
+
+  const isDetailLoading = friendResultsLoading || friendAssignmentsLoading
 
   return (
     <section className="child-dash-page">
@@ -297,7 +335,103 @@ export default function ChildFriendsPage() {
               <span className="badge">Grade {selectedFriend.grade}</span>
             </div>
           </div>
-          <ChildStatsPanel results={friendResults} isLoading={friendResultsLoading} pendingCount={0} />
+
+          <ChildStatsPanel results={friendResults} isLoading={isDetailLoading} pendingCount={friendAssignments.length} />
+
+          {selfAssignError ? <div className="alert" style={{ marginTop: '0.75rem' }}>{selfAssignError}</div> : null}
+
+          {/* ── Friend's missions waiting ── */}
+          <div className="child-missions-card" style={{ marginTop: '1.25rem' }}>
+            <div className="children-list-header">
+              <div>
+                <h3>⏳ {selectedFriend.name}'s missions waiting</h3>
+              </div>
+              <span className="badge">{isDetailLoading ? '…' : friendAssignments.length}</span>
+            </div>
+
+            {isDetailLoading ? <p className="children-empty child-empty">Loading…</p> : null}
+            {!isDetailLoading && friendAssignments.length === 0 ? (
+              <p className="children-empty child-empty">No pending missions.</p>
+            ) : null}
+
+            {!isDetailLoading && friendAssignments.length > 0 ? (
+              <div className="children-list">
+                {friendAssignments.map((a) => (
+                  <article key={a.assignmentId} className="assignment-row friend-mission-row">
+                    <div className="assignment-copy">
+                      <div className="child-name">
+                        <span style={{ marginRight: '0.35em' }}>{SUBJECT_EMOJI[a.lessonSubject] || '📚'}</span>
+                        {a.lessonTitle}
+                      </div>
+                      <div className="friend-mission-actions">
+                        <span className={`assignment-status-pill${a.status === 'InProgress' ? '' : ' status-new'}`}>
+                          {a.status === 'InProgress' ? '⚡ In progress' : '✨ New'}
+                        </span>
+                        <button
+                          type="button"
+                          className="solve-myself-btn"
+                          disabled={isSelfAssigning}
+                          onClick={() => handleSolveByMyself(a.lessonId)}
+                        >
+                          {isSelfAssigning ? '⏳' : '🚀 Solve'}
+                        </button>
+                      </div>
+                      <div className="assignment-timeline">
+                        <span className="assignment-meta-chip">{a.lessonSubject}</span>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          {/* ── Friend's missions done ── */}
+          <div className="child-missions-card" style={{ marginTop: '1rem' }}>
+            <div className="children-list-header">
+              <div>
+                <h3>✅ {selectedFriend.name}'s missions done</h3>
+              </div>
+              <span className="badge">{isDetailLoading ? '…' : friendResults.length}</span>
+            </div>
+
+            {isDetailLoading ? <p className="children-empty child-empty">Loading…</p> : null}
+            {!isDetailLoading && friendResults.length === 0 ? (
+              <p className="children-empty child-empty">No completed missions yet.</p>
+            ) : null}
+
+            {!isDetailLoading && friendResults.length > 0 ? (
+              <div className="children-list">
+                {friendResults.map((r) => (
+                  <article key={r.resultId} className="assignment-row friend-mission-row">
+                    <div className="assignment-copy">
+                      <div className="child-name">
+                        <span style={{ marginRight: '0.35em' }}>{SUBJECT_EMOJI[r.subject] || '📚'}</span>
+                        {r.lessonTitle}
+                      </div>
+                      <div className="friend-mission-actions">
+                        <span className={`assignment-status-pill ${scoreVariant(r.score)}`}>
+                          {scoreEmoji(r.score)} {r.score}%
+                        </span>
+                        <button
+                          type="button"
+                          className="solve-myself-btn"
+                          disabled={isSelfAssigning}
+                          onClick={() => handleSolveByMyself(r.lessonId)}
+                        >
+                          {isSelfAssigning ? '⏳' : '🚀 Solve'}
+                        </button>
+                      </div>
+                      <div className="assignment-timeline">
+                        <span className="assignment-meta-chip">{r.subject}</span>
+                        {r.grade ? <span className="assignment-meta-chip">Grade {r.grade}</span> : null}
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
@@ -344,6 +478,20 @@ export default function ChildFriendsPage() {
           </section>
         </div>
       ) : null}
+
+      {toast ? createPortal(
+        <div className={`admin-toast admin-toast--${toast.type}`} role="status">
+          {toast.message}
+          <button type="button" className="admin-toast-close" onClick={() => setToast(null)} aria-label="Dismiss">✕</button>
+        </div>,
+        document.body
+      ) : null}
+
+      <SolveMissionModal
+        assignmentId={solvingAssignmentId}
+        accessToken={session?.accessToken}
+        onClose={() => setSolvingAssignmentId(null)}
+      />
     </section>
   )
 }

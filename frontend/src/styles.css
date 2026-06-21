@@ -2142,6 +2142,41 @@ select.input:invalid {
   cursor: pointer;
 }
 
+.friend-mission-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
+}
+
+.solve-myself-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0.35rem 0.75rem;
+  white-space: nowrap;
+  border-radius: 999px;
+  border: none;
+  background: #f59e0b;
+  color: #1a1a1a;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.solve-myself-btn:hover:not(:disabled) {
+  background: #d97706;
+}
+
+.solve-myself-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .answer-add-btn {
   align-self: flex-start;
   font-size: 0.8rem;

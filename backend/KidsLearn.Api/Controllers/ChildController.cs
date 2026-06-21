@@ -80,6 +80,24 @@ public static class ChildController
             };
         });
 
+        childApi.MapPost("/self-assign", async (AppDbContext db, ISender sender, ClaimsPrincipal user, SelfAssignRequest request) =>
+        {
+            var childId = await ApiEndpointHelpers.ResolveChildIdAsync(db, user);
+            if (!childId.HasValue)
+            {
+                return Results.Unauthorized();
+            }
+
+            var result = await sender.Send(new SelfAssignLessonCommand(childId.Value, request.LessonId));
+            return result.StatusCode switch
+            {
+                StatusCodes.Status200OK when result.Assignment is not null => Results.Ok(result.Assignment),
+                StatusCodes.Status201Created when result.Assignment is not null => Results.Created($"/api/v1/child/assignments/{result.Assignment.Id}/for-solving", result.Assignment),
+                StatusCodes.Status404NotFound => Results.NotFound(new { error = result.Error ?? "Not found." }),
+                _ => Results.Problem(result.Error ?? "Unexpected error.")
+            };
+        });
+
         childApi.MapGet("/results", async (AppDbContext db, ISender sender, ClaimsPrincipal user) =>
         {
             var childId = await ApiEndpointHelpers.ResolveChildIdAsync(db, user);
