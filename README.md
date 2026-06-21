@@ -1,13 +1,26 @@
 # KidsLearn — React + .NET 8 + PostgreSQL
 
-Responsive full-stack starter. Runs locally with Docker Compose; deploys to a single Fly.io app via GitHub Actions.
+Responsive full-stack learning platform for kids and parents. Runs locally with Docker Compose; deploys to a single Fly.io app via GitHub Actions.
 
-## Current Status (2026-06-07)
+## Current Status (2026-06-21)
 
-- Backend: complete and stable for core domain flows (auth, children, lessons, assignments, child solving, reports, AI generation/edit endpoints).
-- Frontend: foundation and major feature slices are implemented.
-  - Done: auth/session, role-protected shell, parent dashboard/children/lessons/assignments/reports, child assignments solving + child result detail, AI lesson generation/editing + revision history.
-  - Hardening delivered: global error boundary, shared typed API module, frontend regression tests in CI, keyboard/focus/accessibility pass on key flows.
+- Backend: complete and stable. All core domain flows implemented and tested.
+- Frontend: fully implemented across all major feature areas.
+
+**Implemented:**
+- Auth: parent login (email/password + Google SSO), child login (access code + Google SSO), session persistence, role-protected routes
+- Parent dashboard: overview stats, per-child progress drill-down with clickable lesson/result rows
+- Children management: create, edit, reset access code, delete
+- Lessons management: create, edit, duplicate, delete; subject/difficulty dropdowns; optional story field; AI generation with optional story; AI edit commands + revision history
+- Assignments: create, review, result breakdown with per-question feedback
+- Child workspace: assignments list, solving flow with instant check, result detail, result history
+- Social: child friends system — invite by email, accept invite, view friend missions, self-assign a friend's lesson, friend notes, SignalR notifications
+- Linked parent accounts: two parent accounts share children/lessons/assignments
+- Reports: per-child progress summary, CSV export, date filters
+- Email notifications: parent notified (all linked parents) on child assignment completion with score + recent stats; child notified on assignment creation
+- Dashboard UX: all lesson/assignment rows in parent dashboard are clickable and open LessonViewModal
+
+---
 
 ## Stack
 
@@ -16,6 +29,7 @@ Responsive full-stack starter. Runs locally with Docker Compose; deploys to a si
 | Frontend   | React 18 + Vite             |
 | Backend    | .NET 8 Minimal API          |
 | Database   | PostgreSQL 16               |
+| Realtime   | SignalR (friend notifications) |
 | Deploy     | Fly.io (single app)         |
 | CI/CD      | GitHub Actions              |
 
@@ -72,20 +86,16 @@ OPENAI_API_KEY=<your-key>
 OPENAI_MODEL=gpt-4o-mini
 ```
 
-### Google SSO config for parent login/registration
+### Google SSO config
 
-`docker-compose.yml` also reads:
+`docker-compose.yml` reads the following for parent and child SSO:
 
 - `GOOGLE_AUTH_CLIENT_ID`
 - `GOOGLE_AUTH_CLIENT_SECRET`
-- `GOOGLE_AUTH_REDIRECT_URI` (default `http://localhost:8080/api/v1/auth/google/callback`)
-- `GOOGLE_AUTH_FRONTEND_CALLBACK_URL` (default `http://localhost:8080/login/parent/google/callback`)
-
-Google Cloud OAuth app setup notes:
-
-- Authorized redirect URI: `http://localhost:8080/api/v1/auth/google/callback`
-- Frontend callback page (compose flow): `http://localhost:8080/login/parent/google/callback`
-- For local Vite flow, use: `http://localhost:5173/login/parent/google/callback`
+- `GOOGLE_AUTH_REDIRECT_URI` (parent callback, default `http://localhost:8080/api/v1/auth/google/callback`)
+- `GOOGLE_AUTH_FRONTEND_CALLBACK_URL` (parent frontend, default `http://localhost:8080/login/parent/google/callback`)
+- `GOOGLE_AUTH_CHILD_REDIRECT_URI` (child callback, default `http://localhost:8080/api/v1/auth/child/google/callback`)
+- `GOOGLE_AUTH_CHILD_FRONTEND_CALLBACK_URL` (child frontend, default `http://localhost:8080/login/child/google/callback`)
 
 Add these to root `.env`:
 
@@ -94,7 +104,26 @@ GOOGLE_AUTH_CLIENT_ID=<google-client-id>
 GOOGLE_AUTH_CLIENT_SECRET=<google-client-secret>
 GOOGLE_AUTH_REDIRECT_URI=http://localhost:8080/api/v1/auth/google/callback
 GOOGLE_AUTH_FRONTEND_CALLBACK_URL=http://localhost:8080/login/parent/google/callback
+GOOGLE_AUTH_CHILD_REDIRECT_URI=http://localhost:8080/api/v1/auth/child/google/callback
+GOOGLE_AUTH_CHILD_FRONTEND_CALLBACK_URL=http://localhost:8080/login/child/google/callback
 ```
+
+In Google Cloud Console, add both redirect URIs to your OAuth client:
+- `http://localhost:8080/api/v1/auth/google/callback`
+- `http://localhost:8080/api/v1/auth/child/google/callback`
+
+### Email notifications config
+
+```env
+Email__SmtpHost=<smtp-host>
+Email__SmtpPort=587
+Email__SmtpUsername=<username>
+Email__SmtpPassword=<password>
+Email__FromAddress=noreply@yourdomain.com
+Email__FromName=KidsLearnAI
+```
+
+Email is optional — the app runs without it and logs what would have been sent.
 
 ---
 
@@ -111,45 +140,49 @@ GOOGLE_AUTH_FRONTEND_CALLBACK_URL=http://localhost:8080/login/parent/google/call
 
 ### 2 — Set backend secrets on Fly
 
-Set these on your Fly app:
-
-```
+```bash
 fly secrets set DATABASE_URL=<postgres-connection-string> AllowedOrigins__0=https://<your-app>.fly.dev -a <your-app>
 ```
 
-For AI generation/editing in production, also set:
+For AI generation/editing in production:
 
 ```bash
 fly secrets set OpenAI__ApiKey=<openai-key> OpenAI__Model=gpt-4o-mini -a <your-app>
 ```
 
-For Google SSO in production, set:
+For Google SSO in production:
 
 ```bash
 fly secrets set \
   GoogleAuth__ClientId=<google-client-id> \
   GoogleAuth__ClientSecret=<google-client-secret> \
   GoogleAuth__RedirectUri=https://<your-app>.fly.dev/api/v1/auth/google/callback \
-  GoogleAuth__FrontendCallbackUrl=https://<your-app>.fly.dev/login/parent/google/callback \
+  GoogleAuth__ParentFrontendCallbackUrl=https://<your-app>.fly.dev/login/parent/google/callback \
+  GoogleAuth__ChildRedirectUri=https://<your-app>.fly.dev/api/v1/auth/child/google/callback \
+  GoogleAuth__ChildFrontendCallbackUrl=https://<your-app>.fly.dev/login/child/google/callback \
   AllowedOrigins__0=https://<your-app>.fly.dev \
   -a <your-app>
 ```
 
-In Google Cloud Console, add the production redirect URI to the same OAuth client:
+In Google Cloud Console, add the production redirect URIs to the same OAuth client.
 
-- `https://<your-app>.fly.dev/api/v1/auth/google/callback`
+For email notifications in production:
 
-Use Fly Postgres or any managed Postgres provider and place its connection string in `DATABASE_URL`.
+```bash
+fly secrets set \
+  Email__SmtpHost=<smtp-host> \
+  Email__SmtpPort=587 \
+  Email__SmtpUsername=<username> \
+  Email__SmtpPassword=<password> \
+  Email__FromAddress=noreply@yourdomain.com \
+  -a <your-app>
+```
 
 ### 2.1 — Deploy from repository root
-
-If you run deploy commands from repository root, use the root `fly.toml`:
 
 ```bash
 flyctl deploy --remote-only --config fly.toml --app <your-app>
 ```
-
-Why: this project keeps `backend/KidsLearn.Api/Dockerfile` outside root. The root `fly.toml` points Fly to the correct Dockerfile path so deploy works without changing directories.
 
 ### 3 — Add GitHub secrets
 
@@ -164,8 +197,6 @@ The Fly app name is configured in workflow env as `FLY_APP_NAME` in `.github/wor
 ### 4 — Push to main
 
 ```bash
-git add .
-git commit -m "initial commit"
 git push origin main
 ```
 
@@ -179,53 +210,121 @@ GitHub Actions will:
 
 ## API Endpoints
 
-| Method | Path        | Description                   |
-|--------|-------------|-------------------------------|
-| GET    | /health     | Health check                  |
-| GET    | /api/v1/health | Versioned health check     |
-| POST   | /api/v1/auth/register | Register parent account |
-| POST   | /api/v1/auth/login | Get access and refresh token |
-| POST   | /api/v1/auth/child-login | Child login by `childId + accessCode` |
-| GET    | /api/v1/auth/google/start | Start Google OAuth redirect flow for parent auth |
-| GET    | /api/v1/auth/google/callback | Google OAuth callback endpoint |
-| POST   | /api/v1/auth/google/finalize | Exchange one-time auth code for app JWT + refresh tokens |
-| POST   | /api/v1/auth/refresh | Rotate refresh token and issue new access token |
-| POST   | /api/v1/auth/revoke | Revoke refresh token |
-| GET    | /api/v1/children | List children for authenticated parent |
-| POST   | /api/v1/children | Create child `{ "name": "...", "grade": 1..12, "accessCode": "2468" }` |
-| PATCH  | /api/v1/children/{childId} | Update child name/grade and optional access code |
-| POST   | /api/v1/children/{childId}/access-code/reset | Reset child access code |
+### Auth
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | /api/v1/auth/register | Register parent account |
+| POST | /api/v1/auth/login | Get access and refresh token |
+| POST | /api/v1/auth/refresh | Rotate refresh token |
+| POST | /api/v1/auth/revoke | Revoke refresh token |
+| GET | /api/v1/auth/google/start | Start Google OAuth for parent |
+| GET | /api/v1/auth/google/callback | Google OAuth callback (parent) |
+| POST | /api/v1/auth/google/finalize | Exchange one-time code for JWT (parent) |
+| GET | /api/v1/auth/child/google/start | Start Google OAuth for child |
+| GET | /api/v1/auth/child/google/callback | Google OAuth callback (child) |
+| POST | /api/v1/auth/child/google/finalize | Exchange one-time code for JWT (child) |
+| POST | /api/v1/auth/child-login | Child login by `childId + accessCode` |
+
+### Parent — Children
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/v1/children | List parent's children |
+| POST | /api/v1/children | Create child |
+| PATCH | /api/v1/children/{childId} | Update child name/grade/accessCode |
+| POST | /api/v1/children/{childId}/access-code/reset | Reset child access code |
 | DELETE | /api/v1/children/{childId} | Delete child |
-| POST   | /api/v1/ai/lessons/generate | Generate AI lesson draft and persist lesson |
-| POST   | /api/v1/ai/lessons/{lessonId}/edit | Apply AI lesson edit command and create revision |
-| GET    | /api/v1/ai/lessons/{lessonId}/revisions | Get AI lesson revision history |
-| POST   | /api/v1/lessons | Create lesson with nested questions and answers |
-| GET    | /api/v1/lessons?page=1&pageSize=20 | List parent lessons with pagination |
-| GET    | /api/v1/lessons/{lessonId} | Get lesson details |
-| POST   | /api/v1/lessons/{lessonId}/duplicate | Duplicate own lesson with questions/answers |
-| PATCH  | /api/v1/lessons/{lessonId} | Update lesson metadata |
-| DELETE | /api/v1/lessons/{lessonId} | Delete lesson (if no assignments) |
-| POST   | /api/v1/assignments | Assign parent lesson to parent child |
-| GET    | /api/v1/assignments | List assignments for authenticated parent |
-| GET    | /api/v1/assignments/{assignmentId}/for-solving | Get assignment payload for solving |
-| POST   | /api/v1/assignments/{assignmentId}/answers | Submit answers and get instant check |
-| POST   | /api/v1/assignments/{assignmentId}/complete | Complete assignment and calculate score |
-| GET    | /api/v1/results/{resultId} | Get result with correctness breakdown |
-| GET    | /api/v1/reports/children/{childId}?from=&to= | Parent child progress summary |
-| GET    | /api/v1/reports/children/{childId}/export?format=csv&from=&to= | Parent child report CSV export |
-| GET    | /api/v1/child/assignments | Child list of own assignments |
-| GET    | /api/v1/child/assignments/{assignmentId}/for-solving | Child gets own assignment for solving |
-| POST   | /api/v1/child/assignments/{assignmentId}/answers | Child submits answers and gets instant check |
-| POST   | /api/v1/child/assignments/{assignmentId}/complete | Child completes own assignment |
-| GET    | /api/v1/child/results/{resultId} | Child gets own result |
+
+### Parent — Lessons
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/v1/lessons | List lessons (paginated, filterable) |
+| POST | /api/v1/lessons | Create lesson with questions |
+| GET | /api/v1/lessons/{lessonId} | Get lesson detail |
+| PATCH | /api/v1/lessons/{lessonId} | Update lesson metadata and story |
+| PUT | /api/v1/lessons/{lessonId}/questions | Replace lesson questions |
+| POST | /api/v1/lessons/{lessonId}/duplicate | Duplicate lesson |
+| DELETE | /api/v1/lessons/{lessonId} | Delete lesson |
+
+### Parent — Assignments
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/v1/assignments | List parent assignments |
+| POST | /api/v1/assignments | Assign lesson to child |
+| GET | /api/v1/assignments/{assignmentId}/for-solving | Get assignment for review |
+| POST | /api/v1/assignments/{assignmentId}/answers | Submit answers (instant check) |
+| POST | /api/v1/assignments/{assignmentId}/complete | Complete assignment |
+| GET | /api/v1/results/{resultId} | Get result with breakdown |
+
+### Parent — Manage (Linked Accounts)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/v1/manage/linked-parents | List linked parent accounts |
+| POST | /api/v1/manage/linked-parents | Link another parent account by email |
+| DELETE | /api/v1/manage/linked-parents/{linkedParentId} | Unlink a parent account |
+
+### Parent — AI
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | /api/v1/ai/lessons/generate | Generate AI lesson (optionally with story) |
+| POST | /api/v1/ai/lessons/{lessonId}/edit | Apply AI edit command |
+| GET | /api/v1/ai/lessons/{lessonId}/revisions | Get revision history |
+
+### Parent — Reports
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/v1/reports/children/{childId} | Child progress summary |
+| GET | /api/v1/reports/children/{childId}/export | CSV export |
+| GET | /api/v1/results | List child results for parent |
+| GET | /api/v1/results/{childId}/list | Child results list for parent |
+
+### Child
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/v1/child/assignments | List own assignments |
+| GET | /api/v1/child/assignments/{assignmentId}/for-solving | Get assignment for solving |
+| POST | /api/v1/child/assignments/{assignmentId}/answers | Submit answers (instant check) |
+| POST | /api/v1/child/assignments/{assignmentId}/complete | Complete assignment |
+| POST | /api/v1/child/self-assign | Self-assign a friend's lesson |
+| GET | /api/v1/child/results | List own results |
+| GET | /api/v1/child/results/{resultId} | Get own result detail |
+
+### Child — Friends
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/v1/child/friends | List friends |
+| POST | /api/v1/child/friends/invite | Send friend invite by email |
+| POST | /api/v1/child/friends/invite/{token}/accept | Accept friend invite |
+| GET | /api/v1/child/friends/invite/{token} | Get invite info (public) |
+| GET | /api/v1/child/friends/{friendChildId}/results | View friend's results |
+| GET | /api/v1/child/friends/{friendChildId}/assignments | View friend's assignments |
+| GET | /api/v1/child/friends/{friendChildId}/note | Get friend note |
+| PUT | /api/v1/child/friends/{friendChildId}/note | Update friend note |
+
+### Health
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /health | Health check |
+| GET | /health/live | Liveness check |
+| GET | /health/ready | Readiness check (DB ping) |
+| GET | /api/v1/health | Versioned health check |
 
 ### Auth header for protected routes
 
-Send a bearer token returned by `/api/v1/auth/login`.
-
-Example:
-
 `Authorization: Bearer <access-token>`
+
+### SignalR
+
+`/hubs/friends` — real-time friend notifications for child users.
 
 ---
 
@@ -235,18 +334,24 @@ Example:
 .
 ├── .github/
 │   └── workflows/
-│       └── ci-deploy.yml     # CI + Fly.io deploy
+│       └── ci-deploy.yml         # CI + Fly.io deploy
 ├── backend/
 │   └── KidsLearn.Api/
-│       ├── Program.cs          # Minimal API + EF Core
-│       ├── Dockerfile          # Builds frontend + backend in one image
-│       └── fly.toml
+│       ├── Application/          # CQRS commands and queries (MediatR)
+│       ├── Controllers/          # Minimal API route groups
+│       ├── EFMigration/          # EF Core migrations
+│       ├── Models/               # Domain models + AppDbContext
+│       ├── Services/             # Email, AI generation, assignment solving
+│       ├── Program.cs            # App startup + DI
+│       └── Dockerfile
+├── backend/
+│   └── KidsLearn.Api.Tests/      # xUnit unit tests
 ├── frontend/
-│   ├── src/
-│   │   ├── main.jsx
-│   │   └── App.jsx             # Responsive UI
-│   ├── Dockerfile
-│   ├── nginx.conf
-│   └── vite.config.js
-└── docker-compose.yml          # Local dev
+│   └── src/
+│       ├── auth/                 # AuthProvider + session management
+│       ├── components/           # Shared UI components
+│       ├── lib/                  # Typed API client (api.ts)
+│       ├── pages/                # Page-level components
+│       └── App.jsx               # Router + layout
+└── docker-compose.yml            # Local dev
 ```

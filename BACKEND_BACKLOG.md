@@ -6,19 +6,26 @@ Related files:
 - [FRONTEND_BACKLOG.md](FRONTEND_BACKLOG.md)
 - [MASTER_ROADMAP.md](MASTER_ROADMAP.md)
 
-## Status Summary
+## Status Summary (2026-06-21)
 
-The core backend implementation is complete and currently in a stable state.
-- CQRS/MediatR is in place across lessons, assignments, child flows, reports, AI, and auth.
-- Validation, request logging, health checks, error handling, and security middleware are implemented.
-- Backend tests are green.
+The backend is complete and stable across all implemented domains.
 
-Because the main backend epics are already delivered, the remaining backlog is focused on maintenance, hardening, and any backend follow-up needed by frontend work.
+**Delivered:**
+- CQRS/MediatR across auth, children, lessons, assignments, child flows, reports, AI, friends, linked accounts.
+- Validation, request logging, health checks, error handling, and security middleware.
+- EF Core migrations with auto-apply on startup.
+- Email notifications: parent (all linked) on assignment completion, child on assignment creation.
+- SignalR hub for real-time friend notifications.
+- Lesson story field: stored, served through all read/write/AI paths.
+- Child Google SSO (separate redirect URI from parent).
+- Linked parent accounts: shared scope across children, lessons, assignments, results.
+- Self-assign command: child can assign a friend's lesson to themselves.
+- Backend tests are green in CI.
 
 ## Epic 1. API Contract Stability
 
 ### 1.1 Keep response contracts aligned with frontend needs
-- Verify request/response shapes remain stable for auth, children, lessons, assignments, reports, and AI.
+- Verify request/response shapes remain stable for auth, children, lessons, assignments, reports, AI, friends, and manage endpoints.
 - Add contract tests for any newly introduced endpoints.
 
 Acceptance criteria:
@@ -51,7 +58,7 @@ Acceptance criteria:
 ## Epic 3. Performance and Reliability
 
 ### 3.1 Review hot paths
-- Revisit assignment solving, reports, and AI generation for performance if usage grows.
+- Revisit assignment solving, reports, AI generation, and email dispatch for performance if usage grows.
 - Keep EF queries predictable and maintainable.
 
 Acceptance criteria:
@@ -92,6 +99,7 @@ Acceptance criteria:
 ### 5.2 Support AI workflow UX
 - Preserve stable error/status semantics for AI generation and AI editing.
 - Keep 422 validation and fallback behavior explicit.
+- Ensure story field is included in all relevant AI generation and lesson responses.
 
 Acceptance criteria:
 - Frontend can distinguish validation failure, fallback success, and true server errors.
@@ -99,11 +107,12 @@ Acceptance criteria:
 ## Relationship to Frontend Backlog
 
 Backend work is the dependency layer for the frontend epics in [FRONTEND_BACKLOG.md](FRONTEND_BACKLOG.md):
-- Frontend auth depends on `/api/v1/auth/*`.
-- Parent dashboard depends on `/api/v1/children`, `/api/v1/lessons`, `/api/v1/assignments`, and result/report endpoints.
-- Child workspace depends on `/api/v1/child/*` assignment and result endpoints.
+- Frontend auth depends on `/api/v1/auth/*` and `/api/v1/auth/child/*`.
+- Parent dashboard depends on `/api/v1/children`, `/api/v1/lessons`, `/api/v1/assignments`, result/report endpoints, and `/api/v1/manage/*`.
+- Child workspace depends on `/api/v1/child/*` assignment, result, self-assign, and friend endpoints.
 - Reports and analytics depend on `/api/v1/reports/children/{childId}` and CSV export.
 - AI lesson workflows depend on `/api/v1/ai/lessons/generate` and `/api/v1/ai/lessons/{lessonId}/edit`.
+- Social features depend on `/api/v1/child/friends/*` and SignalR `/hubs/friends`.
 
 ## Recommended Ongoing Order
 1. Keep API contracts stable.

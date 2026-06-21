@@ -1,87 +1,105 @@
 # Frontend Plan
 
-Стек: React 18 + Vite + backend KidsLearn.Api.
+Stack: React 18 + Vite + backend KidsLearn.Api.
 
-## Текущий статус (2026-06-07)
+## Current Status (2026-06-21)
 
-- Эпик 1 (Базовый UI и навигация): выполнено.
-- Эпик 2 (Авторизация и сессия): выполнено.
-- Эпик 3 (Родительский кабинет): выполнено (dashboard + children/lessons/assignments + review popup).
-- Эпик 4 (AI-уроки): выполнено для текущего scope (генерация, команды редактирования, revision history).
-- Эпик 5 (Детский кабинет): выполнено для core-flow (list/solve/result detail).
-- Эпик 6 (Отчеты и аналитика): выполнено для текущего scope (summary + CSV export + date filters).
-- Эпик 7 (Интеграция и качество): выполнено для текущего hardening scope (typed API module, error boundary, frontend tests in CI, a11y pass on key screens).
+All epics delivered. Frontend is feature-complete and in iteration mode.
 
-## Эпик 1. Базовый UI и навигация
-- Собрать общую структуру приложения: layout, header, sidebar или top navigation.
-- Определить роуты для родителя и ребенка.
-- Добавить общий слой UI-компонентов: кнопки, поля, карточки, таблицы, модалки, уведомления.
-- Обработать загрузку, пустые состояния и ошибки.
+- Epic 1 (Auth and Session): done — parent and child login, Google SSO for both, session persistence, role-protected routes.
+- Epic 2 (App Shell): done — responsive layout, navigation, reusable UI primitives.
+- Epic 3 (Parent Dashboard): done — overview stats, per-child drill-down, children/lessons/assignments CRUD, result review. All rows clickable.
+- Epic 4 (Child Workspace): done — assignments list, solving flow, instant check, story display, completion, result detail + history.
+- Epic 5 (Reports): done — per-child summary, CSV export, date filters, ChildStatsPanel with charts.
+- Epic 6 (AI Lessons): done — generation form with story option, AI edit commands, revision history.
+- Epic 7 (Social / Friends): done — friends list, invite, accept, friend page, self-assign, notes, SignalR notifications.
+- Epic 8 (Linked Parent Accounts): done — manage page, link/unlink by email, shared scope.
+- Epic 9 (Lesson Story): done — story field in create/edit and AI generation, shown in view and solve modals.
+- Epic 10 (Email Notifications): done at backend layer, triggered by normal API calls.
+- Epic 11 (Hardening): done — typed API module, error boundary, CI tests, a11y pass.
 
-Критерий готовности:
-- Пользователь видит стабильную оболочку приложения и может переходить между основными разделами.
+## Epic 1. Auth and Session
+- Parent login: email/password + Google SSO.
+- Child login: redesigned screen with access code + Google SSO.
+- Session: persist across reload, auto-refresh token, logout.
+- Route protection by role.
 
-## Эпик 2. Авторизация и сессия
-- Экран логина родителя.
-- Экран детского входа по `childId` и `access code`.
-- Хранение access token и refresh token.
-- Автообновление сессии и выход из аккаунта.
-- Защита роутов по ролям `Parent` и `Child`.
+Done criteria: users can log in, stay logged in, and are gated by role.
 
-Критерий готовности:
-- Пользователь может войти, остаться в сессии после обновления страницы и выйти из аккаунта.
+## Epic 2. App Shell
+- Responsive layout: header, navigation, content area.
+- Reusable primitives: buttons, inputs, selects, cards, modals, alerts, empty states.
+- Global loading and error states.
 
-## Эпик 3. Родительский кабинет
-- Дашборд с обзором детей, уроков, назначений и прогресса.
-- CRUD для детей: список, создание, редактирование, сброс access code, удаление.
-- CRUD для уроков: список, создание, редактирование, дублирование, удаление.
-- Назначение урока ребенку и просмотр списка назначений.
-- Просмотр результата и детального breakdown по ответам.
+Done criteria: stable shell across all screens, consistent look.
 
-Критерий готовности:
-- Родитель может управлять детьми, уроками и назначениями без обращения к backend напрямую.
+## Epic 3. Parent Dashboard
+- Overview: stats cards (children, lessons, completion rate, overdue), recent lessons/assigned/solved with click-to-view.
+- Per-child drill-down: ChildStatsPanel + missions waiting/done in 50/50 desktop grid, rows clickable.
+- Children: list, create, edit, reset code, delete.
+- Lessons: list, create (LessonFormModal with subject/difficulty dropdowns + story), edit, duplicate, delete; AI generate with story option.
+- Assignments: list, filter, create, review (LessonViewModal with question/result breakdown).
 
-## Эпик 4. AI-уроки
-- Экран генерации AI-урока.
-- Форма с параметрами: subject, grade, topic, difficulty, question count, language.
-- Экран редактирования AI-урока через команды.
-- Просмотр revision history и результата генерации.
-- Валидация и отображение ошибок schema/422.
+Done criteria: parent manages all content from one area without direct API access.
 
-Критерий готовности:
-- Родитель может сгенерировать и отредактировать AI-урок, а UI корректно показывает ошибки и revisions.
+## Epic 4. Child Workspace
+- Assignments list: pending and completed with status pills.
+- Solving: questions with radio/text answers, instant check, story shown above questions, completion summary.
+- Results: history list + detail breakdown.
 
-## Эпик 5. Детский кабинет
-- Список назначенных заданий.
-- Экран решения задания с instant check.
-- Экран завершения задания и просмотра результата.
-- История результатов и прогресса.
-- Mobile-first UX для телефона и планшета.
+Done criteria: child opens, solves, and reviews a lesson end-to-end.
 
-Критерий готовности:
-- Ребенок может открыть задание, решить его и увидеть результат без лишних шагов.
+## Epic 5. Reports
+- Per-child summary: completion rate, average score, streak, best subject.
+- ChildStatsPanel: weekly bar chart, subject performance table.
+- CSV export with date filter.
 
-## Эпик 6. Отчеты и аналитика
-- Карточки прогресса по ребенку.
-- Табличный и карточный просмотр отчетов.
-- Экспорт CSV из UI.
-- Фильтры по датам.
-- Простые визуализации прогресса и streak.
+Done criteria: parent sees child progress and can export.
 
-Критерий готовности:
-- Родитель видит прогресс ребенка и может выгрузить отчет.
+## Epic 6. AI Lessons
+- Generate form: subject, grade, topic, difficulty, language, question count, optional story.
+- AI edit commands.
+- Revision history viewer.
 
-## Эпик 7. Интеграция и качество
-- Типизированный API client для всех backend endpoints.
-- Глобальная обработка ошибок API.
-- Лоадеры, skeletons, retry states.
-- Набор UI и интеграционных тестов на ключевые сценарии.
-- Проверка адаптивности и доступности.
+Done criteria: parent generates and edits AI lesson; UI shows all states clearly.
 
-Критерий готовности:
-- Frontend стабильно работает с backend API и имеет базовую защиту от регрессий.
+## Epic 7. Social — Friends
+- Friends list with status.
+- Invite by email, invite accept page.
+- Friend page: stats, missions list, self-assign ("Solve by myself") with toast.
+- Friend notes.
+- SignalR real-time notifications.
 
-## Приоритет реализации
-1. Расширение строгой типизации API-клиента на все endpoint contracts.
-2. Дополнительные UI/regression-тесты на новые сценарии.
-3. Поддержка и полировка UX/a11y по мере обратной связи.
+Done criteria: child can connect with a friend and self-assign their lessons.
+
+## Epic 8. Linked Parent Accounts
+- Manage page: list linked parents, link by email, unlink.
+
+Done criteria: two parents can share the same workspace.
+
+## Epic 9. Lesson Story
+- Story textarea in LessonFormModal.
+- "Include story" checkbox in AI generate form.
+- Story shown in LessonViewModal and SolveMissionModal.
+
+Done criteria: story is visible everywhere a lesson is viewed or solved.
+
+## Epic 10. Email Notifications
+- Parent notified on child assignment completion (all linked parents get the email).
+- Child notified on assignment creation.
+- No frontend-specific UI — handled transparently by backend.
+
+Done criteria: emails sent on relevant events; app works without SMTP configured.
+
+## Epic 11. Hardening
+- Typed API client (`api.ts`) covers all endpoints.
+- Global error boundary.
+- Frontend tests in CI.
+- Accessibility pass on key flows.
+
+Done criteria: stable API integration, regression coverage, accessible core flows.
+
+## Priority for next iteration
+1. UX/a11y improvements from usage feedback.
+2. New features as product requirements arise.
+3. Expand typed API and test coverage for new endpoints.
