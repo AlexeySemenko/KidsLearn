@@ -27,7 +27,7 @@ public interface IAssignmentSolvingService
     Task<List<ResultListItemResponse>> GetChildResultsForParentAsync(Guid parentId, Guid childId);
 }
 
-public class AssignmentSolvingService(AppDbContext db) : IAssignmentSolvingService
+public class AssignmentSolvingService(AppDbContext db, IEmailService emailService) : IAssignmentSolvingService
 {
     public async Task<ServiceResult<AssignmentForSolvingResponse>> GetForSolvingAsync(AssignmentAccessScope scope, Guid scopeId, Guid assignmentId)
     {
@@ -218,6 +218,47 @@ public class AssignmentSolvingService(AppDbContext db) : IAssignmentSolvingServi
 
         assignment.Status = "Completed";
         await db.SaveChangesAsync();
+
+        // Pre-fetch email data while the DbContext scope is still valid.
+        var childForEmail = await db.Children
+            .AsNoTracking()
+            .Include(c => c.Parent)
+            .FirstOrDefaultAsync(c => c.Id == assignment.ChildId);
+
+        if (childForEmail?.Parent?.Email is not null)
+        {
+            var recentResults = await db.Results
+                .AsNoTracking()
+                .Include(r => r.Assignment).ThenInclude(a => a.Lesson)
+                .Where(r => r.Assignment.ChildId == assignment.ChildId && r.AssignmentId != assignment.Id)
+                .OrderByDescending(r => r.CompletedAt)
+                .Take(5)
+                .Select(r => new { r.Assignment.Lesson.Title, r.Score })
+                .ToListAsync();
+
+            var parentEmail = childForEmail.Parent.Email;
+            var parentName = childForEmail.Parent.DisplayName ?? childForEmail.Parent.Email;
+            var childName = childForEmail.Name;
+            var lessonTitle = assignment.Lesson.Title;
+            var emailScore = score;
+            var emailCorrect = correctCount;
+            var emailTotal = totalQuestions;
+            var emailRecent = recentResults.Select(r => (r.Title, r.Score)).ToList();
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await emailService.SendAssignmentCompletedToParentAsync(
+                        parentEmail, parentName, childName, lessonTitle,
+                        emailScore, emailCorrect, emailTotal, emailRecent);
+                }
+                catch (Exception)
+                {
+                    // fire-and-forget — swallow
+                }
+            });
+        }
 
         return ServiceResult<CompleteAssignmentResponse>.Success(new CompleteAssignmentResponse(
             result.Id,

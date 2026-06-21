@@ -20,10 +20,12 @@ public sealed record CreateParentAssignmentResult(AssignmentResponse? Assignment
 public sealed class CreateParentAssignmentCommandHandler : IRequestHandler<CreateParentAssignmentCommand, CreateParentAssignmentResult>
 {
     private readonly AppDbContext _db;
+    private readonly IEmailService _emailService;
 
-    public CreateParentAssignmentCommandHandler(AppDbContext db)
+    public CreateParentAssignmentCommandHandler(AppDbContext db, IEmailService emailService)
     {
         _db = db;
+        _emailService = emailService;
     }
 
     public async Task<CreateParentAssignmentResult> Handle(CreateParentAssignmentCommand command, CancellationToken cancellationToken)
@@ -61,6 +63,35 @@ public sealed class CreateParentAssignmentCommandHandler : IRequestHandler<Creat
 
         _db.Assignments.Add(assignment);
         await _db.SaveChangesAsync(cancellationToken);
+
+        // Pre-fetch child's user email while DbContext scope is still valid.
+        var childUser = await _db.Children
+            .AsNoTracking()
+            .Include(c => c.User)
+            .Where(c => c.Id == request.ChildId)
+            .Select(c => new { c.Name, Email = c.User != null ? c.User.Email : null })
+            .FirstOrDefaultAsync(CancellationToken.None);
+
+        if (childUser?.Email is not null)
+        {
+            var childEmail = childUser.Email;
+            var lessonTitle = lesson.Title;
+            var lessonSubject = lesson.Subject;
+            var dueDate = request.DueDate;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _emailService.SendAssignmentCreatedToChildAsync(
+                        childEmail, childName, lessonTitle, lessonSubject, dueDate);
+                }
+                catch (Exception)
+                {
+                    // fire-and-forget — swallow
+                }
+            });
+        }
 
         var response = new AssignmentResponse(
             assignment.Id,

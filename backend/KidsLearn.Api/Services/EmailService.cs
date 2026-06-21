@@ -6,6 +6,8 @@ public interface IEmailService
     Task<bool> SendInvitationAsync(string toEmail, string? displayName, string inviterName);
     Task<bool> SendParentLinkedAsync(string toEmail, string? displayName, string linkedByEmail);
     Task<bool> SendFriendInviteAsync(string toEmail, string inviterName, string inviteUrl);
+    Task<bool> SendAssignmentCompletedToParentAsync(string toEmail, string parentName, string childName, string lessonTitle, decimal score, int correctAnswers, int totalQuestions, IList<(string LessonTitle, decimal Score)> recentResults);
+    Task<bool> SendAssignmentCreatedToChildAsync(string toEmail, string childName, string lessonTitle, string subject, DateTime? dueDate);
 }
 
 public class EmailService(IConfiguration config, ILogger<EmailService> logger) : IEmailService
@@ -188,6 +190,155 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to send friend invite to {Email}", toEmail);
+            return false;
+        }
+    }
+
+    public async Task<bool> SendAssignmentCompletedToParentAsync(string toEmail, string parentName, string childName, string lessonTitle, decimal score, int correctAnswers, int totalQuestions, IList<(string LessonTitle, decimal Score)> recentResults)
+    {
+        var host = config["Email:SmtpHost"];
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            logger.LogInformation(
+                "Email not configured — assignment completion would be sent to parent {Email} for child {Child}, lesson {Lesson}, score {Score}",
+                toEmail, childName, lessonTitle, score);
+            return false;
+        }
+
+        var port = int.TryParse(config["Email:SmtpPort"], out var p) ? p : 587;
+        var username = config["Email:SmtpUsername"] ?? string.Empty;
+        var password = config["Email:SmtpPassword"] ?? string.Empty;
+        var fromAddress = config["Email:FromAddress"] ?? username;
+        var fromName = config["Email:FromName"] ?? "KidsLearnAI";
+
+        var scoreColor = score >= 80 ? "#10b981" : score >= 50 ? "#f59e0b" : "#ef4444";
+        var emoji = score >= 80 ? "🌟" : score >= 50 ? "👍" : "💪";
+
+        var recentRowsHtml = recentResults.Count > 0
+            ? string.Join("", recentResults.Select(r =>
+            {
+                var c = r.Score >= 80 ? "#10b981" : r.Score >= 50 ? "#f59e0b" : "#ef4444";
+                return $"<tr><td style=\"padding:6px 8px;border-bottom:1px solid #e5e7eb;\">{System.Net.WebUtility.HtmlEncode(r.LessonTitle)}</td><td style=\"padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:center;font-weight:700;color:{c};\">{r.Score}%</td></tr>";
+            }))
+            : "<tr><td colspan=\"2\" style=\"padding:6px 8px;color:#888;\">No previous results yet.</td></tr>";
+
+        var body = $"""
+            <html><body style="font-family:sans-serif;color:#0f2745;max-width:520px;margin:0 auto;">
+              <h2 style="color:#0f2745;">{emoji} {childName} completed a lesson!</h2>
+              <p>Hi {System.Net.WebUtility.HtmlEncode(parentName)},</p>
+              <p><strong>{System.Net.WebUtility.HtmlEncode(childName)}</strong> just finished <strong>{System.Net.WebUtility.HtmlEncode(lessonTitle)}</strong>.</p>
+              <div style="background:#f8fafc;border-radius:10px;padding:16px 20px;margin:20px 0;text-align:center;">
+                <div style="font-size:2.5rem;font-weight:800;color:{scoreColor};">{score}%</div>
+                <div style="color:#64748b;font-size:0.95rem;">{correctAnswers} out of {totalQuestions} correct</div>
+              </div>
+              {(recentResults.Count > 0 ? $"""
+              <h3 style="color:#0f2745;margin-top:1.5rem;">Recent results</h3>
+              <table style="width:100%;border-collapse:collapse;font-size:0.9rem;">
+                <thead><tr style="background:#f1f5f9;"><th style="padding:6px 8px;text-align:left;">Lesson</th><th style="padding:6px 8px;">Score</th></tr></thead>
+                <tbody>{recentRowsHtml}</tbody>
+              </table>
+              """ : "")}
+              <p style="margin-top:1.5rem;">
+                <a href="https://kidslearn.fly.dev/" style="background:#f4d35e;color:#0f2745;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;">
+                  View full report
+                </a>
+              </p>
+              <p style="color:#888;font-size:0.85rem;margin-top:2rem;">You're receiving this because you're a parent on KidsLearnAI.</p>
+            </body></html>
+            """;
+
+        try
+        {
+            using var client = new SmtpClient(host, port)
+            {
+                Credentials = new NetworkCredential(username, password),
+                EnableSsl = true,
+            };
+
+            var message = new MailMessage
+            {
+                From = new MailAddress(fromAddress, fromName),
+                Subject = $"{childName} completed \"{lessonTitle}\" — {score}% {emoji}",
+                Body = body,
+                IsBodyHtml = true,
+            };
+            message.To.Add(new MailAddress(toEmail, parentName));
+
+            await client.SendMailAsync(message);
+            logger.LogInformation("Assignment completion email sent to parent {Email} for child {Child}", toEmail, childName);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to send assignment completion email to parent {Email}", toEmail);
+            return false;
+        }
+    }
+
+    public async Task<bool> SendAssignmentCreatedToChildAsync(string toEmail, string childName, string lessonTitle, string subject, DateTime? dueDate)
+    {
+        var host = config["Email:SmtpHost"];
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            logger.LogInformation(
+                "Email not configured — assignment notification would be sent to child {Email}, lesson {Lesson}",
+                toEmail, lessonTitle);
+            return false;
+        }
+
+        var port = int.TryParse(config["Email:SmtpPort"], out var p) ? p : 587;
+        var username = config["Email:SmtpUsername"] ?? string.Empty;
+        var password = config["Email:SmtpPassword"] ?? string.Empty;
+        var fromAddress = config["Email:FromAddress"] ?? username;
+        var fromName = config["Email:FromName"] ?? "KidsLearnAI";
+
+        var dueDateHtml = dueDate.HasValue
+            ? $"<p>📅 <strong>Due date:</strong> {dueDate.Value.ToLocalTime():MMMM d, yyyy}</p>"
+            : "";
+
+        var body = $"""
+            <html><body style="font-family:sans-serif;color:#0f2745;max-width:520px;margin:0 auto;">
+              <h2 style="color:#0f2745;">📚 You have a new lesson!</h2>
+              <p>Hi {System.Net.WebUtility.HtmlEncode(childName)},</p>
+              <p>Your parent has assigned you a new lesson on <strong>KidsLearnAI</strong>:</p>
+              <div style="background:#f8fafc;border-radius:10px;padding:16px 20px;margin:20px 0;">
+                <div style="font-size:1.2rem;font-weight:700;color:#0f2745;">{System.Net.WebUtility.HtmlEncode(lessonTitle)}</div>
+                <div style="color:#64748b;font-size:0.9rem;margin-top:4px;">Subject: {System.Net.WebUtility.HtmlEncode(subject)}</div>
+              </div>
+              {dueDateHtml}
+              <p style="margin-top:1.5rem;">
+                <a href="https://kidslearn.fly.dev/" style="background:#f4d35e;color:#0f2745;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;">
+                  Start lesson 🚀
+                </a>
+              </p>
+              <p style="color:#888;font-size:0.85rem;margin-top:2rem;">You're receiving this because your parent assigned a lesson to you on KidsLearnAI.</p>
+            </body></html>
+            """;
+
+        try
+        {
+            using var client = new SmtpClient(host, port)
+            {
+                Credentials = new NetworkCredential(username, password),
+                EnableSsl = true,
+            };
+
+            var message = new MailMessage
+            {
+                From = new MailAddress(fromAddress, fromName),
+                Subject = $"New lesson assigned: {lessonTitle} 📚",
+                Body = body,
+                IsBodyHtml = true,
+            };
+            message.To.Add(new MailAddress(toEmail, childName));
+
+            await client.SendMailAsync(message);
+            logger.LogInformation("Assignment notification sent to child {Email}, lesson {Lesson}", toEmail, lessonTitle);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to send assignment notification to child {Email}", toEmail);
             return false;
         }
     }
