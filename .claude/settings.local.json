@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(docker compose:*)"
+      "Bash(docker compose:*)",
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(docker exec:*)",
+      "Bash(dotnet build:*)"
     ]
   }
 }

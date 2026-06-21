@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
-import { getChildResultDetail, getChildResults } from '../lib/api'
+import { getChildAssignments, getChildResultDetail, getChildResults } from '../lib/api'
 import LessonViewModal from '../components/LessonViewModal'
-import { scoreEmoji, scoreVariant } from '../components/ChildStatsPanel'
+import SolveMissionModal from '../components/SolveMissionModal'
+import { SUBJECT_EMOJI, scoreEmoji, scoreVariant } from '../components/ChildStatsPanel'
 
 function formatDate(value) {
   if (!value) return 'Unknown date'
@@ -11,11 +12,13 @@ function formatDate(value) {
 
 export default function ChildResultsPage() {
   const { session } = useAuth()
+  const [assignments, setAssignments] = useState([])
   const [results, setResults] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [viewingResult, setViewingResult] = useState(null)
   const [isLoadingDetail, setIsLoadingDetail] = useState(false)
+  const [solvingAssignmentId, setSolvingAssignmentId] = useState(null)
 
   useEffect(() => {
     let isMounted = true
@@ -27,8 +30,14 @@ export default function ChildResultsPage() {
       }
 
       try {
-        const data = await getChildResults(session.accessToken)
-        if (isMounted) setResults(data)
+        const [a, r] = await Promise.all([
+          getChildAssignments(session.accessToken),
+          getChildResults(session.accessToken),
+        ])
+        if (isMounted) {
+          setAssignments(a)
+          setResults(r)
+        }
       } catch (err) {
         if (isMounted) setError(err.message)
       } finally {
@@ -39,6 +48,13 @@ export default function ChildResultsPage() {
     load()
     return () => { isMounted = false }
   }, [session?.accessToken])
+
+  function handleAssignmentStatusChange(assignmentId, status) {
+    setAssignments((cur) => cur.map((a) => a.id === assignmentId ? { ...a, status } : a))
+    if (status === 'Completed') {
+      getChildResults(session.accessToken).then(setResults).catch(() => {})
+    }
+  }
 
   async function handleView(resultId) {
     if (!session?.accessToken) return
@@ -54,8 +70,70 @@ export default function ChildResultsPage() {
     }
   }
 
+  const pendingAssignments = assignments.filter((a) => a.status !== 'Completed')
+
   return (
     <section className="panel-grid child-panel-grid">
+
+      {/* ── Waiting lessons ── */}
+      <article className="assignments-list-card">
+        <div className="children-list-header">
+          <div>
+            <h3>⏳ Waiting lessons</h3>
+            <p>Assigned — ready to start.</p>
+          </div>
+          <span className="badge">{isLoading ? '…' : pendingAssignments.length} waiting</span>
+        </div>
+
+        {isLoading ? <p className="children-empty child-empty">Loading...</p> : null}
+        {!isLoading && pendingAssignments.length === 0 ? (
+          <p className="children-empty child-empty">No missions waiting. All caught up! 🎉</p>
+        ) : null}
+
+        {!isLoading && pendingAssignments.length > 0 ? (
+          <div className="children-list">
+            {pendingAssignments.map((assignment) => {
+              const isInProgress = assignment.status === 'InProgress'
+              const pillClass = isInProgress ? '' : 'status-new'
+              const pillLabel = isInProgress ? '⚡ In progress' : '✨ New'
+              const subjectIcon = SUBJECT_EMOJI[assignment.lessonSubject] || '📚'
+              return (
+                <article key={assignment.id} className="assignment-row">
+                  <div className="assignment-copy">
+                    <div className="assignment-topline">
+                      <div className="child-name">
+                        <span style={{ marginRight: '0.35em' }}>{subjectIcon}</span>
+                        {assignment.lessonTitle}
+                      </div>
+                      <span className={`assignment-status-pill ${pillClass}`}>{pillLabel}</span>
+                    </div>
+                    <div className="assignment-timeline">
+                      <span className="assignment-meta-chip">Assigned {formatDate(assignment.assignedAt)}</span>
+                      {assignment.dueDate ? (
+                        <span className="assignment-meta-chip">Due {formatDate(assignment.dueDate)}</span>
+                      ) : null}
+                      {assignment.assignedByName ? (
+                        <span className="assignment-meta-chip">By {assignment.assignedByName}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="button-row child-actions">
+                    <button
+                      type="button"
+                      className="button-secondary child-start-button"
+                      onClick={() => setSolvingAssignmentId(assignment.id)}
+                    >
+                      🚀 Start mission
+                    </button>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        ) : null}
+      </article>
+
+      {/* ── Completed lessons ── */}
       <article className="assignments-list-card">
         <div className="children-list-header">
           <div>
@@ -102,6 +180,13 @@ export default function ChildResultsPage() {
           </div>
         ) : null}
       </article>
+
+      <SolveMissionModal
+        assignmentId={solvingAssignmentId}
+        accessToken={session?.accessToken}
+        onClose={() => setSolvingAssignmentId(null)}
+        onAssignmentStatusChange={handleAssignmentStatusChange}
+      />
 
       {viewingResult ? (
         <LessonViewModal
