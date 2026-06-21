@@ -4072,6 +4072,25 @@ select.input:invalid {
   padding-top: 0;
 }
 
+.parent-dash-recent-item--clickable {
+  width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.parent-dash-recent-item--clickable:hover:not(:disabled) {
+  background: var(--hover-bg, rgba(0,0,0,0.04));
+}
+
+.parent-dash-recent-item--clickable:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 .parent-dash-recent-main {
   display: flex;
   flex-direction: column;

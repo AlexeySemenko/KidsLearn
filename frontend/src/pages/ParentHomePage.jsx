@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
-import { getAssignments, getChildren, getLessons, getParentChildResults } from '../lib/api'
+import { getAssignments, getChildren, getLessons, getParentChildResults, getParentAssignmentForSolving, getParentResultDetail } from '../lib/api'
 import ChildStatsPanel, { SUBJECT_EMOJI, scoreEmoji, scoreVariant } from '../components/ChildStatsPanel'
+import LessonViewModal from '../components/LessonViewModal'
 
 const PILLAR_COLORS = ['#60a5fa', '#34d399', '#a78bfa', '#f87171', '#fbbf24', '#fb923c']
 const PILLAR_EMOJIS = ['🦊', '🐻', '🐼', '🦁', '🐸', '🦋']
@@ -37,6 +38,10 @@ export default function ParentHomePage() {
   const [selectedChildId, setSelectedChildId] = useState(null)
   const [childResults, setChildResults] = useState([])
   const [childResultsLoading, setChildResultsLoading] = useState(false)
+
+  const [reviewAssignment, setReviewAssignment] = useState(null)
+  const [reviewResult, setReviewResult] = useState(null)
+  const [isLoadingReview, setIsLoadingReview] = useState(false)
 
   useEffect(() => {
     let isMounted = true
@@ -88,6 +93,24 @@ export default function ParentHomePage() {
       setChildResults([])
     } finally {
       setChildResultsLoading(false)
+    }
+  }
+
+  async function handleReview(assignment) {
+    if (!session?.accessToken) return
+    setIsLoadingReview(true)
+    try {
+      if (assignment.resultId) {
+        const result = await getParentResultDetail(session.accessToken, assignment.resultId)
+        setReviewResult(result)
+      } else {
+        const detail = await getParentAssignmentForSolving(session.accessToken, assignment.id)
+        setReviewAssignment(detail)
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoadingReview(false)
     }
   }
 
@@ -175,7 +198,13 @@ export default function ParentHomePage() {
               {childPendingAssignments.length === 0 ? (
                 <p className="parent-dash-recent-empty">No pending lessons.</p>
               ) : childPendingAssignments.map((a) => (
-                <div key={a.id} className="parent-dash-recent-item">
+                <button
+                  key={a.id}
+                  type="button"
+                  className="parent-dash-recent-item parent-dash-recent-item--clickable"
+                  disabled={isLoadingReview}
+                  onClick={() => handleReview(a)}
+                >
                   <div className="parent-dash-recent-main">
                     <span className="parent-dash-recent-title">
                       {SUBJECT_EMOJI[a.lessonSubject] || '📚'} {a.lessonTitle}
@@ -185,7 +214,7 @@ export default function ParentHomePage() {
                   <span className={`assignment-status-pill ${STATUS_PILL[a.status]?.cls ?? ''}`} style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem' }}>
                     {STATUS_PILL[a.status]?.label ?? a.status}
                   </span>
-                </div>
+                </button>
               ))}
             </div>
 
@@ -196,7 +225,13 @@ export default function ParentHomePage() {
               {childDoneAssignments.length === 0 ? (
                 <p className="parent-dash-recent-empty">No completed lessons yet.</p>
               ) : childDoneAssignments.map((a) => (
-                <div key={a.id} className="parent-dash-recent-item">
+                <button
+                  key={a.id}
+                  type="button"
+                  className="parent-dash-recent-item parent-dash-recent-item--clickable"
+                  disabled={isLoadingReview}
+                  onClick={() => handleReview(a)}
+                >
                   <div className="parent-dash-recent-main">
                     <span className="parent-dash-recent-title">
                       {SUBJECT_EMOJI[a.lessonSubject] || '📚'} {a.lessonTitle}
@@ -208,7 +243,7 @@ export default function ParentHomePage() {
                       {scoreEmoji(a.score)} {a.score}%
                     </span>
                   ) : null}
-                </div>
+                </button>
               ))}
             </div>
           </div>
@@ -318,6 +353,102 @@ export default function ParentHomePage() {
           )}
         </>
       )}
+      {reviewAssignment ? (
+        <LessonViewModal
+          title={`Review: ${reviewAssignment.lessonTitle}`}
+          subtitle={`${reviewAssignment.questions.length} question${reviewAssignment.questions.length !== 1 ? 's' : ''}`}
+          story={reviewAssignment.lessonStory}
+          questions={reviewAssignment.questions}
+          onClose={() => setReviewAssignment(null)}
+          renderQuestion={(question, index) => (
+            <article key={question.questionId} className="assignment-row question-card">
+              <div className="assignment-copy">
+                <div className="assignment-topline">
+                  <div className="child-name">Question {index + 1}</div>
+                </div>
+                <div>{question.questionText}</div>
+                {question.explanation ? (
+                  <div className="child-meta">Explanation: {question.explanation}</div>
+                ) : null}
+                <div className="question-options">
+                  {question.answers.map((answer) => (
+                    <div
+                      key={answer.answerId}
+                      className={`question-option${answer.isCorrect ? ' correct-answer' : ''}`}
+                    >
+                      <span>{answer.answerText}</span>
+                      {answer.isCorrect ? <span className="answer-correct-badge">✓ Correct</span> : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </article>
+          )}
+          footer={(
+            <div className="button-row modal-actions">
+              <button type="button" className="button-secondary" onClick={() => setReviewAssignment(null)}>Close</button>
+            </div>
+          )}
+        />
+      ) : null}
+
+      {reviewResult ? (
+        <LessonViewModal
+          title={reviewResult.lessonTitle}
+          subtitle={`${scoreEmoji(reviewResult.score)} ${reviewResult.score}% · ${reviewResult.correctAnswers}/${reviewResult.totalQuestions} correct`}
+          questions={reviewResult.breakdown}
+          onClose={() => setReviewResult(null)}
+          renderQuestion={(item, index) => (
+            <article key={item.questionId} className="assignment-row question-card">
+              <div className="assignment-copy">
+                <div className="assignment-topline">
+                  <div className="child-name">Question {index + 1}</div>
+                  <span className={`assignment-status-pill ${item.correct ? 'status-success' : 'status-danger'}`}>
+                    {item.correct ? '✅ Correct' : '❌ Incorrect'}
+                  </span>
+                </div>
+                <div>{item.questionText}</div>
+                <div className="question-options">
+                  {item.answers.map((answer) => {
+                    const wasSelected = answer.answerId === item.selectedAnswerOptionId
+                    const isCorrect = answer.isCorrect
+                    let cls = 'question-option'
+                    if (isCorrect) cls += ' correct-answer'
+                    if (wasSelected && !isCorrect) cls += ' wrong-selected'
+                    return (
+                      <div key={answer.answerId} className={cls}>
+                        <span>{answer.answerText}</span>
+                        {isCorrect ? <span className="answer-correct-badge">✓ Correct</span> : null}
+                        {wasSelected && !isCorrect ? <span className="answer-wrong-badge">✗ Child's answer</span> : null}
+                        {wasSelected && isCorrect ? <span className="answer-correct-badge">✓ Child's answer</span> : null}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </article>
+          )}
+          footer={(
+            <div className="result-summary-footer">
+              <div className={`mission-complete ${reviewResult.score >= 90 ? 'grade-perfect' : reviewResult.score >= 70 ? 'grade-great' : reviewResult.score >= 50 ? 'grade-good' : 'grade-ok'}`}
+                style={{ paddingTop: '1rem', paddingBottom: '0.5rem' }}>
+                <div className="mission-complete-emoji" aria-hidden="true">
+                  {reviewResult.score >= 90 ? '🌟' : reviewResult.score >= 70 ? '🎊' : reviewResult.score >= 50 ? '👍' : '😊'}
+                </div>
+                <div className="mission-complete-title">
+                  {reviewResult.score >= 90 ? 'Perfect!' : reviewResult.score >= 70 ? 'Great job!' : reviewResult.score >= 50 ? 'Good job!' : 'Keep trying!'}
+                </div>
+                <div className="mission-complete-score">
+                  {reviewResult.score}% &nbsp;·&nbsp; {reviewResult.correctAnswers}/{reviewResult.totalQuestions} correct
+                </div>
+              </div>
+              <div className="button-row modal-actions">
+                <button type="button" className="button-secondary" onClick={() => setReviewResult(null)}>Close</button>
+              </div>
+            </div>
+          )}
+        />
+      ) : null}
     </section>
   )
 }
