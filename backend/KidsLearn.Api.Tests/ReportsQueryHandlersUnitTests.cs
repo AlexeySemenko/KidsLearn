@@ -48,7 +48,7 @@ public class ReportsQueryHandlersUnitTests
                 Score = 80m,
                 CorrectAnswers = 8,
                 TotalQuestions = 10,
-                CompletedAt = DateTime.UtcNow.AddDays(-1)
+                CompletedAt = DateTime.UtcNow.AddDays(-2)
             }
         };
 
@@ -63,7 +63,7 @@ public class ReportsQueryHandlersUnitTests
                 Score = 60m,
                 CorrectAnswers = 6,
                 TotalQuestions = 10,
-                CompletedAt = DateTime.UtcNow
+                CompletedAt = DateTime.UtcNow.AddDays(-1)
             }
         };
 

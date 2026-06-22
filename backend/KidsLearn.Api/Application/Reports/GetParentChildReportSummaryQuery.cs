@@ -61,8 +61,12 @@ public sealed class GetParentChildReportSummaryQueryHandler
             ? 0m
             : Math.Round(solvedAssignments.Average(x => x.Result!.Score), 2);
 
+        // Exclude today so the streak doesn't reset to 0 mid-day before the child
+        // has had a chance to complete today's lesson.
+        var today = DateTime.UtcNow.Date;
         var completionDays = solvedAssignments
             .Select(x => x.Result!.CompletedAt.Date)
+            .Where(x => x < today)
             .Distinct()
             .OrderByDescending(x => x)
             .ToList();

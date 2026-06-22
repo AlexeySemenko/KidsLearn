@@ -67,7 +67,10 @@ export function computeStats(results) {
 
   const completedDaySet = new Set(results.map((r) => localDate(r.completedAt)))
   let streak = 0
+  // Start from yesterday — today is excluded so the streak doesn't reset to 0
+  // mid-day before the child has had a chance to complete today's lesson.
   const cursor = new Date()
+  cursor.setDate(cursor.getDate() - 1)
   while (completedDaySet.has(localDate(cursor.toISOString()))) {
     streak++
     cursor.setDate(cursor.getDate() - 1)
