@@ -1240,6 +1240,8 @@ select.admin-filter-input option {
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
+  text-decoration: none;
+  color: inherit;
   position: relative;
   z-index: 1;
 }
@@ -4445,25 +4447,15 @@ select.input:invalid {
 /* Hero */
 
 .lp-hero {
-  position: relative;
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 9rem 1.5rem 6rem;
-  overflow: hidden;
+  padding: 4rem 1.5rem 6rem;
   background:
     radial-gradient(ellipse at 20% 10%, rgba(96, 165, 250, 0.13), transparent 50%),
     radial-gradient(ellipse at 80% 85%, rgba(167, 139, 250, 0.13), transparent 50%);
-}
-
-.lp-hero-bubbles {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
 }
 
 .lp-hero-content {
@@ -4530,6 +4522,14 @@ select.input:invalid {
   color: var(--muted);
   font-size: 0.82rem;
   opacity: 0.75;
+}
+
+.lp-hero-img {
+  width: min(460px, 90%);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(244, 211, 94, 0.08);
+  display: block;
+  margin-bottom: 2rem;
 }
 
 /* Shared section layout */
@@ -4604,6 +4604,13 @@ select.input:invalid {
   box-shadow: 0 36px 90px rgba(0, 0, 0, 0.3);
 }
 
+.lp-step-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
 .lp-step-number {
   display: inline-flex;
   align-items: center;
@@ -4616,14 +4623,12 @@ select.input:invalid {
   font-family: var(--font-display);
   font-size: 0.82rem;
   font-weight: 800;
-  margin-bottom: 1.25rem;
+  flex-shrink: 0;
 }
 
 .lp-step-icon {
-  font-size: 2.8rem;
+  font-size: 2.4rem;
   line-height: 1;
-  display: block;
-  margin-bottom: 0.9rem;
 }
 
 .lp-step-title {

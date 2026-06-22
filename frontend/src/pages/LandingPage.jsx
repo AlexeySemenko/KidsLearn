@@ -14,8 +14,6 @@ const SUBJECTS = [
   { emoji: '🎵', label: 'Music',     example: 'Rhythm & Notes' },
 ]
 
-const HERO_BUBBLES = ['📐', '🔬', '📖', '🌍', '🎵', '🧬', '✏️', '🔢']
-
 function LpNav() {
   return (
     <nav className="lp-nav" aria-label="Main navigation">
@@ -33,12 +31,12 @@ function LpNav() {
 function LpHero() {
   return (
     <section className="lp-hero" aria-label="Hero">
-      <div className="lp-hero-bubbles" aria-hidden="true">
-        {HERO_BUBBLES.map((emoji, i) => (
-          <span key={i} className={`b${i + 1}`}>{emoji}</span>
-        ))}
-      </div>
       <div className="lp-hero-content">
+        <img
+          src="/hero.jpg"
+          alt="Magical family learning together with KidsLearnAI"
+          className="lp-hero-img"
+        />
         <p className="lp-hero-kicker">AI-Powered Learning Platform</p>
         <h1 className="lp-hero-headline">
           Learning that <span className="lp-headline-hl">adapts</span>
@@ -88,8 +86,10 @@ function LpHowItWorks() {
         <div className="lp-steps">
           {steps.map((step) => (
             <div key={step.number} className="lp-step-card">
-              <span className="lp-step-number">{step.number}</span>
-              <span className="lp-step-icon" aria-hidden="true">{step.icon}</span>
+              <div className="lp-step-header">
+                <span className="lp-step-number">{step.number}</span>
+                <span className="lp-step-icon" aria-hidden="true">{step.icon}</span>
+              </div>
               <h3 className="lp-step-title">{step.title}</h3>
               <p className="lp-step-desc">{step.desc}</p>
             </div>

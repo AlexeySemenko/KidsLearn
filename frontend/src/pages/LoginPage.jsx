@@ -1,4 +1,4 @@
-import { Navigate, useLocation } from 'react-router-dom'
+import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { getChildGoogleStartUrl, getParentGoogleStartUrl } from '../lib/api'
 
@@ -31,13 +31,13 @@ export default function LoginPage() {
       </div>
 
       {/* Logo */}
-      <div className="kl-logo" aria-label="KidsLearnAI">
+      <Link to="/" className="kl-logo" aria-label="KidsLearnAI home">
         <div className="kl-logo-rocket" aria-hidden="true">🚀</div>
         <div className="kl-logo-wordmark">
           <span className="kl-wm-kids">Kids</span><span className="kl-wm-learn">Learn</span><span className="kl-wm-ai">AI</span>
         </div>
         <p className="kl-logo-tagline">Learn smart. Grow fast. Have fun.</p>
-      </div>
+      </Link>
 
       {/* Role cards */}
       <div className="kl-role-row">
