@@ -101,6 +101,15 @@ public class AssignmentSolvingService(AppDbContext db, IEmailService emailServic
         var questionsById = assignment.Lesson.Questions.ToDictionary(q => q.Id);
         var instantCheck = new List<InstantCheckItemResponse>();
 
+        // Load all existing answers for this assignment in one query to avoid N+1.
+        var existingAnswers = await db.AssignmentAnswers
+            .Where(x => x.AssignmentId == assignment.Id)
+            .ToListAsync();
+        var existingByQuestion = existingAnswers.ToDictionary(x => x.QuestionId);
+
+        // Track the latest correctness per question across all answers (existing + submitted).
+        var correctnessByQuestion = existingByQuestion.ToDictionary(kv => kv.Key, kv => kv.Value.IsCorrect);
+
         foreach (var answer in request.Answers)
         {
             if (!questionsById.TryGetValue(answer.QuestionId, out var question))
@@ -132,10 +141,14 @@ public class AssignmentSolvingService(AppDbContext db, IEmailService emailServic
                 return ServiceResult<SubmitAssignmentAnswersResponse>.Fail(400, "Either SelectedAnswerOptionId or TextAnswer is required for each answer.");
             }
 
-            var existing = await db.AssignmentAnswers
-                .FirstOrDefaultAsync(x => x.AssignmentId == assignment.Id && x.QuestionId == answer.QuestionId);
-
-            if (existing is null)
+            if (existingByQuestion.TryGetValue(answer.QuestionId, out var existing))
+            {
+                existing.SelectedAnswerOptionId = answer.SelectedAnswerOptionId;
+                existing.TextAnswer = normalizedTextAnswer;
+                existing.IsCorrect = isCorrect;
+                existing.SubmittedAt = DateTime.UtcNow;
+            }
+            else
             {
                 db.AssignmentAnswers.Add(new AssignmentAnswer
                 {
@@ -147,14 +160,8 @@ public class AssignmentSolvingService(AppDbContext db, IEmailService emailServic
                     SubmittedAt = DateTime.UtcNow
                 });
             }
-            else
-            {
-                existing.SelectedAnswerOptionId = answer.SelectedAnswerOptionId;
-                existing.TextAnswer = normalizedTextAnswer;
-                existing.IsCorrect = isCorrect;
-                existing.SubmittedAt = DateTime.UtcNow;
-            }
 
+            correctnessByQuestion[answer.QuestionId] = isCorrect;
             instantCheck.Add(new InstantCheckItemResponse(question.Id, isCorrect, question.Explanation));
         }
 
@@ -166,7 +173,7 @@ public class AssignmentSolvingService(AppDbContext db, IEmailService emailServic
         await db.SaveChangesAsync();
 
         var totalQuestions = assignment.Lesson.Questions.Count;
-        var correctCount = await db.AssignmentAnswers.CountAsync(x => x.AssignmentId == assignment.Id && x.IsCorrect);
+        var correctCount = correctnessByQuestion.Values.Count(x => x);
         var partialScore = totalQuestions == 0 ? 0 : Math.Round(100m * correctCount / totalQuestions, 2);
 
         return ServiceResult<SubmitAssignmentAnswersResponse>.Success(new SubmitAssignmentAnswersResponse(instantCheck, partialScore));
