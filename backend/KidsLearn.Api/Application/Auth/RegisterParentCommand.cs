@@ -63,6 +63,6 @@ public sealed class RegisterParentCommandHandler : IRequestHandler<RegisterParen
         _db.Users.Add(user);
         await _db.SaveChangesAsync(cancellationToken);
 
-        return RegisterParentResult.Created(new AuthUserResponse(user.Id, user.Email, user.Role.ToString(), user.Email));
+        return RegisterParentResult.Created(new AuthUserResponse(user.Id, user.Email, user.Role.ToString(), user.Email, null));
     }
 }

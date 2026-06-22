@@ -8,6 +8,7 @@ public class AppUser
     public bool EmailVerified { get; set; }
     public UserRole Role { get; set; } = UserRole.Parent;
     public string? DisplayName { get; set; }
+    public string? AvatarUrl { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? LastAccessAt { get; set; }
 

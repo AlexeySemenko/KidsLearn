@@ -75,7 +75,10 @@ function UserMenu({ displayName, userInitial, role, user, isOpen, onToggle, onLo
         aria-expanded={isOpen}
         aria-haspopup="true"
       >
-        <span className="user-avatar-initial" aria-hidden="true">{userInitial}</span>
+        {user?.avatarUrl
+          ? <img className="user-avatar-img" src={user.avatarUrl} alt="" aria-hidden="true" referrerPolicy="no-referrer" />
+          : <span className="user-avatar-initial" aria-hidden="true">{userInitial}</span>
+        }
         <span className="user-avatar-name">{displayName || user?.email}</span>
         {showRole ? <span className={`user-avatar-role${role === 'Admin' ? ' user-avatar-role--admin' : ''}`}>{role}</span> : null}
       </button>

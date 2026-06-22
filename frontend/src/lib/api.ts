@@ -21,6 +21,7 @@ export interface AuthUser {
   role: 'Parent' | 'Child' | 'Admin'
   email: string
   displayName?: string | null
+  avatarUrl?: string | null
 }
 
 export interface AdminUser {

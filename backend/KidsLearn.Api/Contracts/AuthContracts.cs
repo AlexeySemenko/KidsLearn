@@ -12,6 +12,6 @@ public sealed record GoogleFinalizeRequest(string AuthCode);
 
 public sealed record ChildGoogleFinalizeRequest(string AuthCode);
 
-public sealed record AuthUserResponse(Guid Id, string Email, string Role, string? DisplayName);
+public sealed record AuthUserResponse(Guid Id, string Email, string Role, string? DisplayName, string? AvatarUrl);
 
 public sealed record AuthTokenResponse(string AccessToken, string RefreshToken, int ExpiresInSeconds, AuthUserResponse User);

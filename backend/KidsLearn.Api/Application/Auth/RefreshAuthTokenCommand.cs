@@ -86,6 +86,6 @@ public sealed class RefreshAuthTokenCommandHandler : IRequestHandler<RefreshAuth
             accessToken,
             newRefreshToken,
             expiresIn,
-            new AuthUserResponse(existing.User.Id, existing.User.Email, existing.User.Role.ToString(), displayName)));
+            new AuthUserResponse(existing.User.Id, existing.User.Email, existing.User.Role.ToString(), displayName, existing.User.AvatarUrl)));
     }
 }

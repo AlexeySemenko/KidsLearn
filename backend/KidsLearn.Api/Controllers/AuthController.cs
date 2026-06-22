@@ -241,6 +241,7 @@ public static class AuthController
                     userByEmail.ExternalSubject = profile.Sub;
                     userByEmail.EmailVerified = true;
                     if (!string.IsNullOrWhiteSpace(profile.Name)) userByEmail.DisplayName = profile.Name;
+                    if (!string.IsNullOrWhiteSpace(profile.Picture)) userByEmail.AvatarUrl = profile.Picture;
                     if (isAdminEmail) userByEmail.Role = UserRole.Admin;
                     user = userByEmail;
                 }
@@ -250,6 +251,7 @@ public static class AuthController
                     {
                         Email = normalizedEmail,
                         DisplayName = string.IsNullOrWhiteSpace(profile.Name) ? null : profile.Name,
+                        AvatarUrl = string.IsNullOrWhiteSpace(profile.Picture) ? null : profile.Picture,
                         PasswordHash = string.Empty,
                         Role = isAdminEmail ? UserRole.Admin : UserRole.Parent,
                         CreatedAt = DateTime.UtcNow,
@@ -264,6 +266,7 @@ public static class AuthController
             else
             {
                 if (!string.IsNullOrWhiteSpace(profile.Name)) user.DisplayName = profile.Name;
+                if (!string.IsNullOrWhiteSpace(profile.Picture)) user.AvatarUrl = profile.Picture;
                 if (isAdminEmail) user.Role = UserRole.Admin;
             }
 
@@ -293,7 +296,7 @@ public static class AuthController
                 accessToken,
                 refreshToken,
                 expiresIn,
-                new AuthUserResponse(user.Id, user.Email, user.Role.ToString(), user.DisplayName ?? user.Email));
+                new AuthUserResponse(user.Id, user.Email, user.Role.ToString(), user.DisplayName ?? user.Email, user.AvatarUrl));
 
                 if (string.IsNullOrWhiteSpace(jwtSigningKey))
                 {
@@ -514,11 +517,13 @@ public static class AuthController
                 return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "child_not_registered", null, returnPath));
             }
 
-            if (childUser.ExternalProvider != GoogleProviderName || childUser.ExternalSubject != profile.Sub)
+            if (childUser.ExternalProvider != GoogleProviderName || childUser.ExternalSubject != profile.Sub
+                || (!string.IsNullOrWhiteSpace(profile.Picture) && childUser.AvatarUrl != profile.Picture))
             {
                 childUser.ExternalProvider = GoogleProviderName;
                 childUser.ExternalSubject = profile.Sub;
                 childUser.EmailVerified = true;
+                if (!string.IsNullOrWhiteSpace(profile.Picture)) childUser.AvatarUrl = profile.Picture;
                 db.Users.Update(childUser);
                 await db.SaveChangesAsync(cancellationToken);
             }
@@ -547,7 +552,7 @@ public static class AuthController
                 accessToken,
                 refreshToken,
                 expiresIn,
-                new AuthUserResponse(childUser.Id, childUser.Email, childUser.Role.ToString(), child.Name));
+                new AuthUserResponse(childUser.Id, childUser.Email, childUser.Role.ToString(), child.Name, childUser.AvatarUrl));
 
                 if (string.IsNullOrWhiteSpace(jwtSigningKey))
                 {
@@ -829,5 +834,6 @@ public static class AuthController
         [property: JsonPropertyName("sub")] string Sub,
         [property: JsonPropertyName("email")] string Email,
         [property: JsonPropertyName("email_verified")] bool EmailVerified,
-        [property: JsonPropertyName("name")] string? Name);
+        [property: JsonPropertyName("name")] string? Name,
+        [property: JsonPropertyName("picture")] string? Picture);
 }

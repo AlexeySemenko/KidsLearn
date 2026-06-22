@@ -73,6 +73,6 @@ public sealed class LoginParentCommandHandler : IRequestHandler<LoginParentComma
             accessToken,
             refreshToken,
             expiresIn,
-            new AuthUserResponse(user.Id, user.Email, user.Role.ToString(), user.Email)));
+            new AuthUserResponse(user.Id, user.Email, user.Role.ToString(), user.Email, user.AvatarUrl)));
     }
 }
