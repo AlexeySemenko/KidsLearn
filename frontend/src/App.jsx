@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
-import { AuthProvider, useAuth } from './auth/AuthProvider'
+import { AuthProvider } from './auth/AuthProvider'
 import AppShell from './components/AppShell'
 import AuthBootstrap from './components/AuthBootstrap'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -17,18 +17,7 @@ import ChildFriendsPage from './pages/ChildFriendsPage'
 import ChildFriendInvitePage from './pages/ChildFriendInvitePage'
 import ParentReportsPage from './pages/ParentReportsPage'
 import ParentManagePage from './pages/ParentManagePage'
-
-function LandingPage() {
-  const { isAuthenticated, role } = useAuth()
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
-  }
-
-  if (role === 'Child') return <Navigate to="/child" replace />
-  if (role === 'Admin') return <Navigate to="/admin/users" replace />
-  return <Navigate to="/parent" replace />
-}
+import LandingPage from './pages/LandingPage'
 
 export default function App() {
   return (
