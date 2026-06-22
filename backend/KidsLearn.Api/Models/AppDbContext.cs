@@ -27,7 +27,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(x => x.ExternalProvider).HasMaxLength(50);
             entity.Property(x => x.ExternalSubject).HasMaxLength(255);
             entity.Property(x => x.DisplayName).HasMaxLength(200);
-            entity.Property(x => x.AvatarUrl).HasMaxLength(500);
+            entity.Property(x => x.AvatarUrl).HasColumnType("text");
         });
 
         modelBuilder.Entity<RefreshToken>(entity =>
