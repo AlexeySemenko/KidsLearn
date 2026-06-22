@@ -56,7 +56,7 @@ public class ReportsIntegrationTests
         Assert.Equal(1, report.SolvedCount);
         Assert.Equal(100m, report.CompletionRate);
         Assert.Equal(100m, report.AverageScore);
-        Assert.True(report.StreakDays >= 1);
+        Assert.Equal(0, report.StreakDays); // completed today — today is excluded from streak by design
     }
 
     [Fact]
