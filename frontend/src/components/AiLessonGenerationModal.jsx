@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { generateParentAiLesson } from '../lib/api'
 
-const SUBJECTS = ['Math', 'English', 'Hebrew']
+const SUBJECTS = ['Math', 'English', 'Hebrew', 'Science', 'History', 'Biology', 'Art', 'Coding', 'Geography', 'Music']
 const DIFFICULTIES = ['Easy', 'Medium', 'Hard']
 const LANGUAGES = ['English', 'Hebrew', 'Russian']
 const QUESTION_TYPE_OPTIONS = [

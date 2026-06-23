@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import QuestionEditor from './QuestionEditor'
 
-const SUBJECTS = ['Math', 'English', 'Hebrew', 'Science', 'History']
+const SUBJECTS = ['Math', 'English', 'Hebrew', 'Science', 'History', 'Biology', 'Art', 'Coding', 'Geography', 'Music']
 const DIFFICULTIES = ['Easy', 'Medium', 'Hard']
 
 export default function LessonFormModal({
