@@ -116,5 +116,8 @@ public class AiLessonGenerationIntegrationTests
 
         public Task<DraftValidationResult?> ValidateDraftAsync(GenerateAiLessonRequest request, GeneratedLessonDraft draft, CancellationToken cancellationToken = default)
             => Task.FromResult<DraftValidationResult?>(null);
+
+        public Task<List<GeneratedQuestionDraft>?> RegenerateQuestionsAsync(GenerateAiLessonRequest request, GeneratedLessonDraft existingDraft, int[] questionIndices, string feedback, CancellationToken cancellationToken = default)
+            => Task.FromResult<List<GeneratedQuestionDraft>?>(null);
     }
 }

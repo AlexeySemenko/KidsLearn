@@ -5,6 +5,7 @@ public interface IAIProvider
 {
     Task<GeneratedLessonDraft> GenerateLessonDraftAsync(GenerateAiLessonRequest request, string? validatorFeedback = null, CancellationToken cancellationToken = default);
     Task<DraftValidationResult?> ValidateDraftAsync(GenerateAiLessonRequest request, GeneratedLessonDraft draft, CancellationToken cancellationToken = default);
+    Task<List<GeneratedQuestionDraft>?> RegenerateQuestionsAsync(GenerateAiLessonRequest request, GeneratedLessonDraft existingDraft, int[] questionIndices, string feedback, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -139,6 +140,137 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
         catch
         {
             return null; // validation agent failure — skip, don't block generation
+        }
+    }
+
+    public async Task<List<GeneratedQuestionDraft>?> RegenerateQuestionsAsync(GenerateAiLessonRequest request, GeneratedLessonDraft existingDraft, int[] questionIndices, string feedback, CancellationToken cancellationToken = default)
+    {
+        var apiKey = configuration["OpenAI:ApiKey"];
+        var model = configuration["OpenAI:Model"] ?? "gpt-4o-mini";
+
+        if (string.IsNullOrWhiteSpace(apiKey)) return null;
+
+        try
+        {
+            var prompt = BuildPartialRegenerationPrompt(request, existingDraft, questionIndices, feedback);
+            var payload = JsonSerializer.Serialize(new { model, input = prompt });
+
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/responses");
+            requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+            requestMessage.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+            using var response = await httpClient.SendAsync(requestMessage, cancellationToken);
+            if (!response.IsSuccessStatusCode) return null;
+
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            return TryParseQuestionsArray(body, questionIndices);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string BuildPartialRegenerationPrompt(GenerateAiLessonRequest request, GeneratedLessonDraft draft, int[] questionIndices, string feedback)
+    {
+        var indicesList = string.Join(", ", questionIndices);
+        var story = draft.Story is not null ? $"\nStory (FIXED — do not change): {draft.Story}" : "";
+
+        var allQuestionsJson = JsonSerializer.Serialize(draft.Questions.Select((q, i) => new
+        {
+            question_number = i + 1,
+            q.QuestionText,
+            answers = q.Answers.Select(a => new { a.AnswerText, a.IsCorrect })
+        }));
+
+        return
+            $"You are regenerating ONLY specific questions from a lesson. Do not change the story or any other questions.\n\n" +
+            $"LESSON CONTEXT:\n" +
+            $"Subject: {request.Subject}; Grade: {request.Grade}; Topic: {request.Topic}; Language: {request.Language ?? "en"}{story}\n\n" +
+            $"ALL CURRENT QUESTIONS (for context):\n{allQuestionsJson}\n\n" +
+            $"INSTRUCTIONS:\n" +
+            $"Regenerate ONLY question(s) {indicesList}. All other questions remain unchanged.\n" +
+            $"Feedback to address: {feedback}\n\n" +
+            $"OUTPUT: Return a JSON array containing EXACTLY {questionIndices.Length} question object(s) in the order of indices {indicesList}.\n" +
+            $"Each object: {{\"questionText\": \"...\", \"explanation\": \"...\", \"order\": <number>, \"answers\": [{{\"answerText\": \"...\", \"isCorrect\": true/false, \"order\": <number>}}, ...]}}\n" +
+            $"Output only the JSON array — no markdown, no code fences, no comments.";
+    }
+
+    private static List<GeneratedQuestionDraft>? TryParseQuestionsArray(string body, int[] questionIndices)
+    {
+        try
+        {
+            string? jsonText = null;
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("output_text", out var otEl) && otEl.ValueKind == JsonValueKind.String)
+            {
+                jsonText = otEl.GetString();
+            }
+            else if (root.TryGetProperty("output", out var outputEl) && outputEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in outputEl.EnumerateArray())
+                {
+                    if (item.TryGetProperty("content", out var contentEl) && contentEl.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var c in contentEl.EnumerateArray())
+                        {
+                            if (c.TryGetProperty("text", out var textEl) && textEl.ValueKind == JsonValueKind.String)
+                            {
+                                jsonText = textEl.GetString();
+                                break;
+                            }
+                        }
+                    }
+                    if (jsonText is not null) break;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(jsonText)) return null;
+
+            var trimmed = jsonText.Trim();
+            if (trimmed.StartsWith("```")) trimmed = System.Text.RegularExpressions.Regex.Replace(trimmed, @"^```[a-z]*\n?", "").TrimEnd('`').Trim();
+
+            using var arrDoc = JsonDocument.Parse(trimmed);
+            var arr = arrDoc.RootElement;
+            if (arr.ValueKind != JsonValueKind.Array) return null;
+
+            var questions = new List<GeneratedQuestionDraft>();
+            var slot = 0;
+            foreach (var q in arr.EnumerateArray())
+            {
+                if (!q.TryGetProperty("questionText", out var textProp)
+                    || !q.TryGetProperty("answers", out var answersProp)
+                    || answersProp.ValueKind != JsonValueKind.Array)
+                {
+                    continue;
+                }
+
+                var answers = new List<GeneratedAnswerDraft>();
+                var aIdx = 1;
+                foreach (var a in answersProp.EnumerateArray())
+                {
+                    if (!a.TryGetProperty("answerText", out var atProp) || !a.TryGetProperty("isCorrect", out var icProp)) continue;
+                    answers.Add(new GeneratedAnswerDraft(atProp.GetString() ?? string.Empty, icProp.GetBoolean(), aIdx++));
+                }
+
+                if (answers.Count < 2 || !answers.Any(a => a.IsCorrect)) continue;
+
+                var order = slot < questionIndices.Length ? questionIndices[slot] : slot + 1;
+                questions.Add(new GeneratedQuestionDraft(
+                    textProp.GetString() ?? string.Empty,
+                    q.TryGetProperty("explanation", out var expProp) ? expProp.GetString() ?? string.Empty : string.Empty,
+                    order,
+                    answers));
+                slot++;
+            }
+
+            return questions.Count > 0 ? questions : null;
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -278,15 +410,15 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
         }
         else if (types.Contains("mixed"))
         {
-            answerInstruction = "Mix question formats: roughly half the questions should be multiple-choice with exactly 4 answer options (exactly 1 marked isCorrect=true), and the other half true/false with exactly 2 answer options (True and False, exactly 1 marked isCorrect=true).";
+            answerInstruction = "Mix question formats: roughly half the questions should be multiple-choice with exactly 2-4 answer options (exactly 1 marked isCorrect=true), and the other half true/false with exactly 2 answer options (True and False, exactly 1 marked isCorrect=true).";
         }
         else
         {
-            answerInstruction = "Every question must have exactly 4 answer options, with exactly 1 marked isCorrect=true and the remaining 3 marked isCorrect=false.";
+            answerInstruction = "Every question must have exactly 2-4 answer options, with exactly 1 marked isCorrect=true and the remaining 3 marked isCorrect=false.";
         }
 
         var storyInstruction = request.IncludeStory == true
-            ? $"Also include a 'story' field: a short engaging narrative paragraph (number of sentences {request.Grade + 3} to  {request.Grade + 5}) that sets the scene for the lesson topic. Take into consideration the grade = {request.Grade} of the child, make a story difficulty according to grade. Add a twist of humor or surprise to make it engaging. All questions must be strictly related to facts in this story. An answer to each question MUST be present in or inferable from the story. If a question's answer cannot be found in or inferred from the story, it must be listed in 'questions_to_regenerate' (1-based index)."
+            ? $"Also include a 'story' field: a short engaging narrative paragraph (number of sentences {request.Grade + 3} to  {request.Grade + 5}) that sets the scene for the lesson topic. Take into consideration the grade = {request.Grade} of the child, make a story difficulty according to grade. Add a twist of humor or surprise to make it engaging. All questions must be strictly related to facts in this story. An answer to each question MUST be present in or inferable from the story."
             : "";
 
         var feedbackSection = !string.IsNullOrWhiteSpace(validatorFeedback)
@@ -526,78 +658,47 @@ public sealed class AiLessonGenerationService(AppDbContext db, IAIProvider aiPro
         GeneratedLessonDraft draft;
         try
         {
-            // --- Initial generation ---
+            // 1. Generate
             draft = await aiProvider.GenerateLessonDraftAsync(request, null, cancellationToken);
 
-            // --- Validation + regeneration loop (max 3 cycles) ---
+            // 2. Validate once, then patch only rejected questions if any
             if (!draft.ProviderMeta.FallbackUsed)
             {
-                for (var cycle = 1; cycle <= 3; cycle++)
+                var validation = await aiProvider.ValidateDraftAsync(request, draft, cancellationToken);
+
+                if (validation is null)
                 {
-                    var validation = await aiProvider.ValidateDraftAsync(request, draft, cancellationToken);
-
-                    if (validation is null)
-                    {
-                        logger.LogInformation(
-                            "AI validation agent unavailable or skipped (cycle {Cycle}) for Subject: {Subject}, Topic: {Topic}.",
-                            cycle, request.Subject, request.Topic);
-                        break;
-                    }
-
+                    logger.LogInformation("AI validation skipped (unavailable) for Subject: {Subject}, Topic: {Topic}.", request.Subject, request.Topic);
+                }
+                else
+                {
                     logger.LogInformation(
-                        "AI validation cycle {Cycle} — Subject: {Subject}, Topic: {Topic}, Grade: {Grade} | " +
+                        "AI validation — Subject: {Subject}, Topic: {Topic}, Grade: {Grade} | " +
                         "Accepted: {Accepted}, Score: {Score}%, QuestionsToRegenerate: [{QTR}], Issues: [{Issues}], Feedback: {Feedback}",
-                        cycle, request.Subject, request.Topic, request.Grade,
+                        request.Subject, request.Topic, request.Grade,
                         validation.Accepted, validation.Score,
                         string.Join(", ", validation.QuestionsToRegenerate),
                         string.Join("; ", validation.Issues),
                         validation.Feedback);
 
-                    if (validation.Accepted)
-                    {
-                        // Validator approved — stop regardless of QuestionsToRegenerate.
-                        logger.LogInformation("AI validation cycle {Cycle}: accepted. Using draft.", cycle);
-                        break;
-                    }
-
-                    // Not accepted — build targeted or general feedback.
-                    string? feedback;
-
-                    if (validation.QuestionsToRegenerate.Length > 0)
+                    // 3. If specific questions were rejected, regenerate only those — story and other questions stay unchanged
+                    if (!validation.Accepted && validation.QuestionsToRegenerate.Length > 0)
                     {
                         var badList = string.Join(", ", validation.QuestionsToRegenerate);
-                        var storyRef = draft.Story is not null
-                            ? $" The story is: \"{draft.Story}\""
-                            : "";
+                        var storyRef = draft.Story is not null ? $" The story is: \"{draft.Story}\"." : "";
                         var extra = !string.IsNullOrWhiteSpace(validation.Feedback) ? $" Additionally: {validation.Feedback}" : "";
+                        var feedback = $"Questions {badList} have answers not present in or inferable from the story.{storyRef} Regenerate ONLY questions {badList} so every answer option is derivable from the story.{extra}";
 
-                        feedback =
-                            $"Questions {badList} have more than 2 answer options that are not present in or inferable from the story." +
-                            $"{storyRef} Regenerate ONLY questions {badList} so that every answer option can be found in or clearly inferred from the story.{extra}";
-
-                        logger.LogInformation(
-                            "AI validation cycle {Cycle}: regenerating questions [{BadQ}] for story-answer mismatch.",
-                            cycle, badList);
-                    }
-                    else if (!string.IsNullOrWhiteSpace(validation.Feedback))
-                    {
-                        feedback = validation.Feedback;
-                        logger.LogInformation(
-                            "AI validation cycle {Cycle}: full regeneration (score {Score}%).",
-                            cycle, validation.Score);
-                    }
-                    else
-                    {
-                        // Not accepted but no actionable feedback — cannot improve, stop.
-                        logger.LogInformation("AI validation cycle {Cycle}: not accepted but no actionable feedback. Using draft.", cycle);
-                        break;
-                    }
-
-                    draft = await aiProvider.GenerateLessonDraftAsync(request, feedback, cancellationToken);
-
-                    if (cycle == 3)
-                    {
-                        logger.LogInformation("AI validation: max cycles (3) reached. Using last generated draft.");
+                        var patched = await aiProvider.RegenerateQuestionsAsync(request, draft, validation.QuestionsToRegenerate, feedback, cancellationToken);
+                        if (patched is { Count: > 0 })
+                        {
+                            draft = draft with { Questions = MergeQuestions(draft.Questions, patched, validation.QuestionsToRegenerate) };
+                            logger.LogInformation("Patched {Count} question(s) [{Indices}] after validation.", patched.Count, badList);
+                        }
+                        else
+                        {
+                            logger.LogInformation("Question patch returned no results for [{Indices}] — keeping original questions.", badList);
+                        }
                     }
                 }
             }
@@ -683,5 +784,21 @@ public sealed class AiLessonGenerationService(AppDbContext db, IAIProvider aiPro
             draft.ProviderMeta);
 
         return ServiceResult<GenerateAiLessonResponse>.Success(response);
+    }
+
+    private static List<GeneratedQuestionDraft> MergeQuestions(List<GeneratedQuestionDraft> original, List<GeneratedQuestionDraft> patched, int[] indices)
+    {
+        var result = original.ToList();
+        var queue = new Queue<GeneratedQuestionDraft>(patched);
+        foreach (var idx in indices.OrderBy(i => i))
+        {
+            var i = idx - 1;
+            if (i >= 0 && i < result.Count && queue.Count > 0)
+            {
+                var replacement = queue.Dequeue();
+                result[i] = replacement with { Order = result[i].Order };
+            }
+        }
+        return result;
     }
 }
