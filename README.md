@@ -178,6 +178,9 @@ fly secrets set \
   -a <your-app>
 ```
 
+To run fly postger proxy - for db access on prod:
+flyctl proxy 15433:5432 -a alexey-postgres
+
 ### 2.1 — Deploy from repository root
 
 ```bash
