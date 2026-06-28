@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom'
 import { useEffect, useMemo, useState } from 'react'
 import { createChildWithGmail, deleteChild, getChildren, updateChild } from '../lib/api'
 import { useAuth } from '../auth/AuthProvider'
+import Toast from '../components/Toast'
 
 const SORT_OPTIONS = [
   { value: 'name-asc',   label: 'Name A → Z' },
@@ -167,6 +168,12 @@ export default function ParentChildrenPage() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [isDeleting, setIsDeleting]     = useState(false)
 
+  const [toast, setToast] = useState(null)
+
+  function showToast(message, type = 'success') {
+    setToast({ message, type })
+  }
+
   useEffect(() => {
     let mounted = true
     async function load() {
@@ -191,6 +198,7 @@ export default function ParentChildrenPage() {
       const result = await createChildWithGmail(session.accessToken, payload)
       setChildren((cur) => [...cur, result.child])
       setShowCreate(false)
+      showToast(`${result.child.name} added. Invitation emails sent to you and ${result.child.email}.`)
     } catch (err) {
       setCreateError(err.message)
     } finally {
@@ -377,6 +385,7 @@ export default function ParentChildrenPage() {
           </div>
         </div>
       ) : null}
+      {toast ? <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} /> : null}
     </section>
   )
 }
