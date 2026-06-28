@@ -35,7 +35,7 @@ public class ChildrenCommandHandlersUnitTests
         db.Users.Add(parent);
         await db.SaveChangesAsync();
 
-        var handler = new CreateParentChildCommandHandler(db, hasher);
+        var handler = new CreateParentChildCommandHandler(db, hasher, new NullEmailService());
         var result = await handler.Handle(
             new CreateParentChildCommand(parent.Id, new CreateChildRequest("Kid", 5, "1234")),
             CancellationToken.None);
@@ -195,5 +195,17 @@ public class ChildrenCommandHandlersUnitTests
             Role = role,
             CreatedAt = DateTime.UtcNow
         };
+    }
+
+    private sealed class NullEmailService : IEmailService
+    {
+        public Task<bool> SendInvitationAsync(string toEmail, string? displayName, string inviterName) => Task.FromResult(true);
+        public Task<bool> SendParentLinkedAsync(string toEmail, string? displayName, string linkedByEmail) => Task.FromResult(true);
+        public Task<bool> SendFriendInviteAsync(string toEmail, string inviterName, string inviteUrl) => Task.FromResult(true);
+        public Task<bool> SendAssignmentCompletedToParentAsync(string toEmail, string parentName, string childName, string lessonTitle, decimal score, int correctAnswers, int totalQuestions, IList<(string LessonTitle, decimal Score)> recentResults) => Task.FromResult(true);
+        public Task<bool> SendAssignmentCreatedToChildAsync(string toEmail, string childName, string lessonTitle, string subject, DateTime? dueDate) => Task.FromResult(true);
+        public Task<bool> SendWelcomeToParentAsync(string toEmail, string? displayName) => Task.FromResult(true);
+        public Task<bool> SendChildAddedToParentAsync(string toEmail, string? parentName, string childName, int grade) => Task.FromResult(true);
+        public Task<bool> SendChildWelcomeAsync(string toEmail, string childName, string parentEmail, string registerUrl) => Task.FromResult(true);
     }
 }
