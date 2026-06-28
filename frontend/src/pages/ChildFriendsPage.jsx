@@ -1,7 +1,7 @@
 import { HubConnectionBuilder, LogLevel } from '@microsoft/signalr'
 import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useAuth } from '../auth/AuthProvider'
+import Toast from '../components/Toast'
 import ChildStatsPanel from '../components/ChildStatsPanel'
 import SolveMissionModal from '../components/SolveMissionModal'
 import { SUBJECT_EMOJI, scoreVariant, scoreEmoji } from '../components/ChildStatsPanel'
@@ -215,7 +215,6 @@ export default function ChildFriendsPage() {
     try {
       const assignment = await selfAssignLesson(session.accessToken, lessonId)
       setToast({ message: '🎯 Mission added! Let\'s go!', type: 'success' })
-      setTimeout(() => setToast(null), 3000)
       setSolvingAssignmentId(assignment.id)
     } catch (err) {
       setSelfAssignError(err.message)
@@ -479,13 +478,7 @@ export default function ChildFriendsPage() {
         </div>
       ) : null}
 
-      {toast ? createPortal(
-        <div className={`admin-toast admin-toast--${toast.type}`} role="status">
-          {toast.message}
-          <button type="button" className="admin-toast-close" onClick={() => setToast(null)} aria-label="Dismiss">✕</button>
-        </div>,
-        document.body
-      ) : null}
+      {toast ? <Toast message={toast.message} type={toast.type} duration={3000} onDismiss={() => setToast(null)} /> : null}
 
       <SolveMissionModal
         assignmentId={solvingAssignmentId}

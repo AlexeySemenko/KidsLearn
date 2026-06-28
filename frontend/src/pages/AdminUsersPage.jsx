@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { createAdminUser, deleteAdminUser, getAdminUsers, updateAdminUser } from '../lib/api'
 import UserFormModal from '../components/UserFormModal'
+import Toast from '../components/Toast'
 
 const ROLE_COLOR = { Admin: 'status-danger', Parent: 'status-success', Child: '' }
 const ROLES = ['', 'Admin', 'Parent', 'Child']
@@ -58,7 +59,6 @@ export default function AdminUsersPage() {
 
   function showToast(message, type = 'success') {
     setToast({ message, type })
-    setTimeout(() => setToast(null), 5000)
   }
 
   useEffect(() => {
@@ -294,12 +294,7 @@ export default function AdminUsersPage() {
           </div>
         </div>
       ) : null}
-      {toast ? (
-        <div className={`admin-toast admin-toast--${toast.type}`} role="status">
-          {toast.message}
-          <button type="button" className="admin-toast-close" onClick={() => setToast(null)} aria-label="Dismiss">✕</button>
-        </div>
-      ) : null}
+      {toast ? <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} /> : null}
     </section>
   )
 }

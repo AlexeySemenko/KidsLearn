@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { getLinkedParents, linkParentAccount, unlinkParentAccount } from '../lib/api'
+import Toast from '../components/Toast'
 
 function formatLinkedAt(value) {
   if (!value) return 'Unknown'
@@ -73,7 +74,6 @@ export default function ParentManagePage() {
 
   function showToast(message, type = 'success') {
     setToast({ message, type })
-    setTimeout(() => setToast(null), 5000)
   }
 
   useEffect(() => {
@@ -179,12 +179,7 @@ export default function ParentManagePage() {
         </div>
       )}
 
-      {toast ? (
-        <div className={`admin-toast admin-toast--${toast.type}`} role="status">
-          {toast.message}
-          <button type="button" className="admin-toast-close" onClick={() => setToast(null)} aria-label="Dismiss">✕</button>
-        </div>
-      ) : null}
+      {toast ? <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} /> : null}
 
       {isModalOpen ? (
         <LinkParentModal

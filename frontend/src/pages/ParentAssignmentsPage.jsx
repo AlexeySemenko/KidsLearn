@@ -11,6 +11,7 @@ import { useAuth } from '../auth/AuthProvider'
 import LessonViewModal from '../components/LessonViewModal'
 import CreateAssignmentModal from '../components/CreateAssignmentModal'
 import { SUBJECT_EMOJI, scoreEmoji, scoreVariant } from '../components/ChildStatsPanel'
+import Toast from '../components/Toast'
 
 const STATUS_FILTER_OPTIONS = [
   { value: '',           label: 'All statuses' },
@@ -44,6 +45,11 @@ export default function ParentAssignmentsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [isCreating, setIsCreating]           = useState(false)
   const [createError, setCreateError]         = useState('')
+  const [toast, setToast] = useState(null)
+
+  function showToast(message, type = 'success') {
+    setToast({ message, type })
+  }
 
   const [reviewAssignment, setReviewAssignment] = useState(null)
   const [reviewResult, setReviewResult]         = useState(null)
@@ -86,6 +92,7 @@ export default function ParentAssignmentsPage() {
       const result = await createAssignment(session.accessToken, payload)
       setAssignments((cur) => [result, ...cur])
       setShowCreateModal(false)
+      showToast('Assignment created.')
     } catch (err) {
       setCreateError(err.message)
     } finally {
@@ -333,6 +340,7 @@ export default function ParentAssignmentsPage() {
           )}
         />
       ) : null}
+      {toast ? <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} /> : null}
     </section>
   )
 }

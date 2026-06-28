@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createAssignment, createLesson, deleteLesson, duplicateLesson, getChildren, getLesson, getLessons, updateLesson, updateLessonQuestions } from '../lib/api'
 import { useAuth } from '../auth/AuthProvider'
+import Toast from '../components/Toast'
 import AiLessonGenerationModal from '../components/AiLessonGenerationModal'
 import LessonViewModal from '../components/LessonViewModal'
 import LessonFormModal from '../components/LessonFormModal'
@@ -68,7 +69,11 @@ export default function ParentLessonsPage() {
   const [lessons, setLessons] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
-  const [statusMessage, setStatusMessage] = useState('')
+  const [toast, setToast] = useState(null)
+
+  function showToast(message, type = 'success') {
+    setToast({ message, type })
+  }
   const [editingLessonId, setEditingLessonId] = useState(null)
   const [editForm, setEditForm] = useState({ title: '', subject: '', grade: '1', topic: '', difficulty: 'Medium', questions: [] })
   const [isLoadingEditDetail, setIsLoadingEditDetail] = useState(false)
@@ -159,7 +164,6 @@ export default function ParentLessonsPage() {
 
       try {
         setError('')
-        setStatusMessage('')
         const [lessonsResponse, childrenData] = await Promise.all([
           getLessons(session.accessToken),
           getChildren(session.accessToken),
@@ -188,7 +192,6 @@ export default function ParentLessonsPage() {
 
   async function startEditing(lesson) {
     setError('')
-    setStatusMessage('')
     setEditingLessonId(lesson.id)
     setEditForm({
       title: lesson.title,
@@ -219,14 +222,13 @@ export default function ParentLessonsPage() {
     if (!session?.accessToken) return
 
     const summaryError = validateEditLesson(formData)
-    if (summaryError) { setError(summaryError); setStatusMessage(''); return }
+    if (summaryError) { setError(summaryError); return }
 
     const questionsError = validateQuestions(formData.questions)
-    if (questionsError) { setError(questionsError); setStatusMessage(''); return }
+    if (questionsError) { setError(questionsError); return }
 
     setPendingActionId(lessonId)
     setError('')
-    setStatusMessage('')
 
     try {
       const response = await updateLesson(session.accessToken, lessonId, {
@@ -254,7 +256,7 @@ export default function ParentLessonsPage() {
 
       await updateLessonQuestions(session.accessToken, lessonId, questionsPayload)
 
-      setStatusMessage(`${response.title} was updated.`)
+      showToast(`${response.title} was updated.`)
       cancelEditing()
     } catch (requestError) {
       setError(requestError.message)
@@ -270,12 +272,11 @@ export default function ParentLessonsPage() {
 
     setPendingActionId(lessonId)
     setError('')
-    setStatusMessage('')
 
     try {
       const response = await duplicateLesson(session.accessToken, lessonId)
       setLessons((current) => [response, ...current])
-      setStatusMessage(`${response.title} was duplicated.`)
+      showToast(`${response.title} was duplicated.`)
     } catch (requestError) {
       setError(requestError.message)
     } finally {
@@ -299,12 +300,11 @@ export default function ParentLessonsPage() {
 
     setPendingActionId(lessonId)
     setError('')
-    setStatusMessage('')
 
     try {
       await deleteLesson(session.accessToken, lessonId)
       setLessons((current) => current.filter((lessonItem) => lessonItem.id !== lessonId))
-      setStatusMessage(`${lesson.title} was deleted.`)
+      showToast(`${lesson.title} was deleted.`)
     } catch (requestError) {
       setError(requestError.message)
     } finally {
@@ -376,7 +376,7 @@ export default function ParentLessonsPage() {
       }
 
       setLessons((current) => [newLesson, ...current])
-      setStatusMessage(`Lesson "${newLesson.title}" was created.`)
+      showToast(`Lesson "${newLesson.title}" was created.`)
       setIsCreateModalOpen(false)
     } catch (err) {
       setCreateError(err.message)
@@ -399,7 +399,7 @@ export default function ParentLessonsPage() {
     }
 
     setLessons((current) => [summary, ...current])
-    setStatusMessage(`AI lesson "${draft.title}" was generated.`)
+    showToast(`AI lesson "${draft.title}" was generated.`)
     setIsAiModalOpen(false)
     setPendingEditAfterAssign(summary)
     setAssignPreselectedLessonId(response.createdLessonId)
@@ -413,7 +413,7 @@ export default function ParentLessonsPage() {
     try {
       await createAssignment(session.accessToken, payload)
       setShowAssignModal(false)
-      setStatusMessage('Assignment created.')
+      showToast('Assignment created.')
       if (pendingEditAfterAssign) {
         const lessonToEdit = pendingEditAfterAssign
         setPendingEditAfterAssign(null)
@@ -444,12 +444,7 @@ export default function ParentLessonsPage() {
         </div>
       </div>
 
-      {statusMessage ? (
-        <div className="info-block success-block lessons-status-block" role="status" aria-live="polite">
-          <strong>Update</strong>
-          <span>{statusMessage}</span>
-        </div>
-      ) : null}
+      {toast ? <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} /> : null}
 
       {error ? <div className="alert lessons-alert" role="alert" aria-live="assertive">{error}</div> : null}
       {viewError ? <div className="alert lessons-alert" role="alert" aria-live="assertive">{viewError}</div> : null}
