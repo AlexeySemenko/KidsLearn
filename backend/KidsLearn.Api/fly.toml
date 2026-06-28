@@ -6,6 +6,9 @@ primary_region = "iad"
 
 [env]
   FrontendBaseUrl = "https://kidslearn.fly.dev"
+  GoogleAuth__ParentFrontendCallbackUrl = "https://kidslearn.fly.dev/login/parent/google/callback"
+  GoogleAuth__ChildFrontendCallbackUrl = "https://kidslearn.fly.dev/login/child/google/callback"
+  GoogleAuth__UnifiedFrontendCallbackUrl = "https://kidslearn.fly.dev/login/google/unified/callback"
 
 [http_service]
   internal_port = 8080
