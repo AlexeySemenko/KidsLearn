@@ -59,7 +59,7 @@ public class ChildrenCommandHandlersUnitTests
         db.Users.Add(parent);
         await db.SaveChangesAsync();
 
-        var handler = new CreateParentChildCommandHandler(db, new PasswordHasherService());
+        var handler = new CreateParentChildCommandHandler(db, new PasswordHasherService(), new NullEmailService());
         var result = await handler.Handle(
             new CreateParentChildCommand(parent.Id, new CreateChildRequest("Kid", 0, "1234")),
             CancellationToken.None);

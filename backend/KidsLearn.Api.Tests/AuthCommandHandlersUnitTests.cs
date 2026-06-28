@@ -9,7 +9,7 @@ public class AuthCommandHandlersUnitTests
     public async Task RegisterParentCommand_CreatesUser_WhenInputIsValid()
     {
         await using var db = CreateDbContext();
-        var handler = new RegisterParentCommandHandler(db, new PasswordHasherService(), new NullEmailService());
+        var handler = new RegisterParentCommandHandler(db, new PasswordHasherService(), new NullEmailService(), CreateAuthConfiguration());
 
         var result = await handler.Handle(
             new RegisterParentCommand(new RegisterRequest("new.parent@example.com", "Parent123!")),

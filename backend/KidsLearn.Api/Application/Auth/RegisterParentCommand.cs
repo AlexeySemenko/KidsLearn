@@ -20,12 +20,14 @@ public sealed class RegisterParentCommandHandler : IRequestHandler<RegisterParen
     private readonly AppDbContext _db;
     private readonly IPasswordHasherService _passwordHasher;
     private readonly IEmailService _emailService;
+    private readonly IConfiguration _configuration;
 
-    public RegisterParentCommandHandler(AppDbContext db, IPasswordHasherService passwordHasher, IEmailService emailService)
+    public RegisterParentCommandHandler(AppDbContext db, IPasswordHasherService passwordHasher, IEmailService emailService, IConfiguration configuration)
     {
         _db = db;
         _passwordHasher = passwordHasher;
         _emailService = emailService;
+        _configuration = configuration;
     }
 
     public async Task<RegisterParentResult> Handle(RegisterParentCommand command, CancellationToken cancellationToken)
@@ -46,6 +48,12 @@ public sealed class RegisterParentCommandHandler : IRequestHandler<RegisterParen
         if (request.Password.Length < 8)
         {
             return RegisterParentResult.BadRequest("Password must be at least 8 characters.");
+        }
+
+        var allowedEmails = _configuration.GetSection("AllowedRegistrationEmails").Get<string[]>() ?? Array.Empty<string>();
+        if (allowedEmails.Length > 0 && !allowedEmails.Any(e => string.Equals(e.Trim(), email, StringComparison.OrdinalIgnoreCase)))
+        {
+            return RegisterParentResult.BadRequest("Registration is not permitted for this email address.");
         }
 
         var exists = await _db.Users.AnyAsync(x => x.Email == email, cancellationToken);
