@@ -21,15 +21,15 @@ function sortChildren(list, sort) {
 }
 
 function CreateChildModal({ onSave, onClose, isSaving, error }) {
-  const [form, setForm] = useState({ gmailEmail: '', name: '', grade: '1' })
+  const [form, setForm] = useState({ email: '', name: '', grade: '1' })
 
   function handleSubmit(e) {
     e.preventDefault()
-    const email = form.gmailEmail.trim().toLowerCase()
+    const email = form.email.trim().toLowerCase()
     const name  = form.name.trim()
     const grade = Number(form.grade)
     if (!email || !name || grade < 1 || grade > 12) return
-    onSave({ gmailEmail: email, name, grade })
+    onSave({ email, name, grade })
   }
 
   return createPortal(
@@ -41,17 +41,17 @@ function CreateChildModal({ onSave, onClose, isSaving, error }) {
         </div>
         <form onSubmit={handleSubmit}>
           <div className="field">
-            <label htmlFor="create-gmail">Gmail address</label>
+            <label htmlFor="create-email">Email address</label>
             <input
-              id="create-gmail"
+              id="create-email"
               className="input"
               type="email"
-              placeholder="child@gmail.com"
-              value={form.gmailEmail}
-              onChange={(e) => setForm((f) => ({ ...f, gmailEmail: e.target.value }))}
+              placeholder="child@example.com"
+              value={form.email}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
               required
             />
-            <span className="field-hint">Child will sign in with Google using this account.</span>
+            <span className="field-hint">Child can sign in using this email address.</span>
           </div>
           <div className="field" style={{ marginTop: '0.75rem' }}>
             <label htmlFor="create-name">Name</label>
@@ -292,11 +292,18 @@ export default function ParentChildrenPage() {
           {displayed.map((child) => (
             <article key={child.id} className="child-row">
               <div>
-                <div className="child-name">{child.name}</div>
+                <div className="child-name" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {child.name}
+                  {child.isPending ? (
+                    <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#f4d35e', background: 'rgba(244,211,94,0.12)', border: '1px solid rgba(244,211,94,0.3)', borderRadius: '4px', padding: '1px 6px', letterSpacing: '0.03em' }}>
+                      Awaiting registration
+                    </span>
+                  ) : null}
+                </div>
                 <div className="child-meta">
                   Grade {child.grade}
-                  {child.gmailEmail ? (
-                    <span style={{ marginLeft: '0.5em' }}>· {child.gmailEmail}</span>
+                  {child.email ? (
+                    <span style={{ marginLeft: '0.5em' }}>· {child.email}</span>
                   ) : null}
                 </div>
               </div>

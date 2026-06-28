@@ -8,6 +8,7 @@ import ChildHomePage from './pages/ChildHomePage'
 import LoginPage from './pages/LoginPage'
 import ParentGoogleCallbackPage from './pages/ParentGoogleCallbackPage'
 import ChildGoogleCallbackPage from './pages/ChildGoogleCallbackPage'
+import UnifiedGoogleCallbackPage from './pages/UnifiedGoogleCallbackPage'
 import ParentChildrenPage from './pages/ParentChildrenPage'
 import ParentAssignmentsPage from './pages/ParentAssignmentsPage'
 import ParentHomePage from './pages/ParentHomePage'
@@ -18,6 +19,7 @@ import ChildFriendInvitePage from './pages/ChildFriendInvitePage'
 import ParentReportsPage from './pages/ParentReportsPage'
 import ParentManagePage from './pages/ParentManagePage'
 import LandingPage from './pages/LandingPage'
+import ChildRegisterPage from './pages/ChildRegisterPage'
 
 export default function App() {
   return (
@@ -31,6 +33,8 @@ export default function App() {
           <Route path="/login/child" element={<Navigate to="/login" replace />} />
           <Route path="/login/parent/google/callback" element={<ParentGoogleCallbackPage />} />
           <Route path="/login/child/google/callback" element={<ChildGoogleCallbackPage />} />
+          <Route path="/login/google/unified/callback" element={<UnifiedGoogleCallbackPage />} />
+          <Route path="/register/child" element={<ChildRegisterPage />} />
 
           <Route element={<ProtectedRoute allowedRoles={['Parent', 'Admin']} />}>
             <Route path="/parent" element={<AppShell />}>

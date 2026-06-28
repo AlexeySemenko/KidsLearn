@@ -1,9 +1,9 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-public sealed record CreateParentChildWithGmailCommand(Guid ParentId, CreateChildWithGmailRequest Request) : IRequest<CreateParentChildWithGmailResult>;
+public sealed record CreateParentChildWithGmailCommand(Guid ParentId, CreateChildWithEmailRequest Request) : IRequest<CreateParentChildWithGmailResult>;
 
-public sealed record CreateParentChildWithGmailResult(CreatedChildWithGmailResponse? Response, string? Error, int StatusCode)
+public sealed record CreateParentChildWithGmailResult(CreatedChildWithEmailResponse? Response, string? Error, int StatusCode)
 {
     public static CreateParentChildWithGmailResult BadRequest(string error)
         => new(null, error, StatusCodes.Status400BadRequest);
@@ -11,18 +11,21 @@ public sealed record CreateParentChildWithGmailResult(CreatedChildWithGmailRespo
     public static CreateParentChildWithGmailResult NotFound(string error)
         => new(null, error, StatusCodes.Status404NotFound);
 
-    public static CreateParentChildWithGmailResult Created(CreatedChildWithGmailResponse response)
+    public static CreateParentChildWithGmailResult Created(CreatedChildWithEmailResponse response)
         => new(response, null, StatusCodes.Status201Created);
 }
 
 public sealed class CreateParentChildWithGmailCommandHandler : IRequestHandler<CreateParentChildWithGmailCommand, CreateParentChildWithGmailResult>
 {
-    private const string GoogleProviderName = "Google";
     private readonly AppDbContext _db;
+    private readonly IEmailService _emailService;
+    private readonly IConfiguration _configuration;
 
-    public CreateParentChildWithGmailCommandHandler(AppDbContext db)
+    public CreateParentChildWithGmailCommandHandler(AppDbContext db, IEmailService emailService, IConfiguration configuration)
     {
         _db = db;
+        _emailService = emailService;
+        _configuration = configuration;
     }
 
     public async Task<CreateParentChildWithGmailResult> Handle(CreateParentChildWithGmailCommand command, CancellationToken cancellationToken)
@@ -31,99 +34,73 @@ public sealed class CreateParentChildWithGmailCommandHandler : IRequestHandler<C
         var scopedParentIds = await ApiEndpointHelpers.ResolveParentScopeIdsAsync(_db, command.ParentId);
 
         if (string.IsNullOrWhiteSpace(request.Name))
-        {
             return CreateParentChildWithGmailResult.BadRequest("Name is required.");
-        }
 
         if (!ApiEndpointHelpers.IsGradeInRange(request.Grade))
-        {
             return CreateParentChildWithGmailResult.BadRequest("Grade must be between 1 and 12.");
-        }
 
-        var gmailEmail = request.GmailEmail.Trim().ToLowerInvariant();
-        if (!gmailEmail.EndsWith("@gmail.com", StringComparison.OrdinalIgnoreCase))
-        {
-            return CreateParentChildWithGmailResult.BadRequest("Email must be a valid Gmail address.");
-        }
+        if (string.IsNullOrWhiteSpace(request.Email) || !request.Email.Contains('@'))
+            return CreateParentChildWithGmailResult.BadRequest("A valid email address is required.");
 
-        var parentExists = await _db.Users.AnyAsync(
+        var email = request.Email.Trim().ToLowerInvariant();
+
+        var parentUser = await _db.Users.FirstOrDefaultAsync(
             x => x.Id == command.ParentId && (x.Role == UserRole.Parent || x.Role == UserRole.Admin),
             cancellationToken);
 
-        if (!parentExists)
-        {
+        if (parentUser is null)
             return CreateParentChildWithGmailResult.NotFound("Parent was not found.");
-        }
 
-        // Check if parent is trying to add their own email as a child
-        var parentUser = await _db.Users.FirstOrDefaultAsync(
-            x => x.Id == command.ParentId,
-            cancellationToken);
-
-        if (parentUser is not null && parentUser.Email.Equals(gmailEmail, StringComparison.OrdinalIgnoreCase))
-        {
+        if (parentUser.Email.Equals(email, StringComparison.OrdinalIgnoreCase))
             return CreateParentChildWithGmailResult.BadRequest("Cannot add your own email as a child.");
+
+        // Check for an existing child record with this enrollment email
+        var existingChild = await _db.Children
+            .FirstOrDefaultAsync(x => x.EnrollmentEmail == email, cancellationToken);
+
+        if (existingChild is not null)
+        {
+            if (scopedParentIds.Contains(existingChild.ParentId))
+            {
+                // Already enrolled under this parent — idempotent
+                return CreateParentChildWithGmailResult.Created(new CreatedChildWithEmailResponse(
+                    new ChildResponse(existingChild.Id, existingChild.ParentId, existingChild.Name, existingChild.Grade, email, existingChild.UserId is null)));
+            }
+            return CreateParentChildWithGmailResult.BadRequest("This email is already linked to another child.");
         }
 
-        var existingUser = await _db.Users.FirstOrDefaultAsync(
-            x => x.Email == gmailEmail,
-            cancellationToken);
-
-        if (existingUser is not null)
-        {
-            if (existingUser.Role != UserRole.Child)
-            {
-                return CreateParentChildWithGmailResult.BadRequest("This Gmail is already used by a non-child account.");
-            }
-
-            var existingChild = await _db.Children.FirstOrDefaultAsync(
-                x => x.UserId == existingUser.Id,
-                cancellationToken);
-
-            if (existingChild is not null && !scopedParentIds.Contains(existingChild.ParentId))
-            {
-                return CreateParentChildWithGmailResult.BadRequest("This Gmail is already linked to another child.");
-            }
-
-            if (existingChild is not null && scopedParentIds.Contains(existingChild.ParentId))
-            {
-                return CreateParentChildWithGmailResult.Created(new CreatedChildWithGmailResponse(
-                    new ChildResponse(existingChild.Id, existingChild.ParentId, existingChild.Name, existingChild.Grade, gmailEmail)));
-            }
-
-            existingUser.ExternalProvider = GoogleProviderName;
-        }
-
-        var childUser = existingUser ?? new AppUser
-        {
-            Email = gmailEmail,
-            PasswordHash = string.Empty,
-            Role = UserRole.Child,
-            ExternalProvider = GoogleProviderName,
-            ExternalSubject = null,
-            EmailVerified = false,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        if (existingUser is null)
-        {
-            _db.Users.Add(childUser);
-        }
+        // Also guard against a registered AppUser with that email (e.g. a parent account)
+        var existingUser = await _db.Users.FirstOrDefaultAsync(x => x.Email == email, cancellationToken);
+        if (existingUser is not null && existingUser.Role != UserRole.Child)
+            return CreateParentChildWithGmailResult.BadRequest("This email is already used by a non-child account.");
 
         var child = new Child
         {
             ParentId = command.ParentId,
-            User = childUser,
+            UserId = null,
             Name = request.Name.Trim(),
-            Grade = request.Grade
+            Grade = request.Grade,
+            EnrollmentEmail = email,
         };
 
         _db.Children.Add(child);
         await _db.SaveChangesAsync(cancellationToken);
 
-        var response = new CreatedChildWithGmailResponse(
-            new ChildResponse(child.Id, child.ParentId, child.Name, child.Grade, gmailEmail));
+        var childName = child.Name;
+        var childGrade = child.Grade;
+        var parentEmail = parentUser.Email;
+        var parentName = parentUser.DisplayName ?? parentUser.Email;
+        var emailService = _emailService;
+        var frontendBase = _configuration["FrontendBaseUrl"]?.TrimEnd('/') ?? "http://localhost:8080";
+        var registerUrl = $"{frontendBase}/register/child?email={Uri.EscapeDataString(email)}";
 
-        return CreateParentChildWithGmailResult.Created(response);
+        _ = Task.Run(async () =>
+        {
+            try { await emailService.SendChildAddedToParentAsync(parentEmail, parentName, childName, childGrade); } catch { }
+            try { await emailService.SendChildWelcomeAsync(email, childName, parentEmail, registerUrl); } catch { }
+        });
+
+        return CreateParentChildWithGmailResult.Created(new CreatedChildWithEmailResponse(
+            new ChildResponse(child.Id, child.ParentId, child.Name, child.Grade, email, IsPending: true)));
     }
 }

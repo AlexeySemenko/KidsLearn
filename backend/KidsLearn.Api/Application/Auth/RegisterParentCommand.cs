@@ -19,11 +19,13 @@ public sealed class RegisterParentCommandHandler : IRequestHandler<RegisterParen
 {
     private readonly AppDbContext _db;
     private readonly IPasswordHasherService _passwordHasher;
+    private readonly IEmailService _emailService;
 
-    public RegisterParentCommandHandler(AppDbContext db, IPasswordHasherService passwordHasher)
+    public RegisterParentCommandHandler(AppDbContext db, IPasswordHasherService passwordHasher, IEmailService emailService)
     {
         _db = db;
         _passwordHasher = passwordHasher;
+        _emailService = emailService;
     }
 
     public async Task<RegisterParentResult> Handle(RegisterParentCommand command, CancellationToken cancellationToken)
@@ -62,6 +64,12 @@ public sealed class RegisterParentCommandHandler : IRequestHandler<RegisterParen
 
         _db.Users.Add(user);
         await _db.SaveChangesAsync(cancellationToken);
+
+        var emailService = _emailService;
+        _ = Task.Run(async () =>
+        {
+            try { await emailService.SendWelcomeToParentAsync(email, null); } catch { }
+        });
 
         return RegisterParentResult.Created(new AuthUserResponse(user.Id, user.Email, user.Role.ToString(), user.Email, null));
     }

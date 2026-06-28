@@ -19,11 +19,13 @@ public sealed class CreateParentChildCommandHandler : IRequestHandler<CreatePare
 {
     private readonly AppDbContext _db;
     private readonly IPasswordHasherService _passwordHasher;
+    private readonly IEmailService _emailService;
 
-    public CreateParentChildCommandHandler(AppDbContext db, IPasswordHasherService passwordHasher)
+    public CreateParentChildCommandHandler(AppDbContext db, IPasswordHasherService passwordHasher, IEmailService emailService)
     {
         _db = db;
         _passwordHasher = passwordHasher;
+        _emailService = emailService;
     }
 
     public async Task<CreateParentChildResult> Handle(CreateParentChildCommand command, CancellationToken cancellationToken)
@@ -40,11 +42,11 @@ public sealed class CreateParentChildCommandHandler : IRequestHandler<CreatePare
             return CreateParentChildResult.BadRequest("Grade must be between 1 and 12.");
         }
 
-        var parentExists = await _db.Users.AnyAsync(
+        var parentUser = await _db.Users.FirstOrDefaultAsync(
             x => x.Id == command.ParentId && (x.Role == UserRole.Parent || x.Role == UserRole.Admin),
             cancellationToken);
 
-        if (!parentExists)
+        if (parentUser is null)
         {
             return CreateParentChildResult.NotFound("Parent was not found.");
         }
@@ -76,6 +78,17 @@ public sealed class CreateParentChildCommandHandler : IRequestHandler<CreatePare
 
         _db.Children.Add(child);
         await _db.SaveChangesAsync(cancellationToken);
+
+        var childName = child.Name;
+        var childGrade = child.Grade;
+        var parentEmail = parentUser.Email;
+        var parentName = parentUser.DisplayName ?? parentUser.Email;
+        var emailService = _emailService;
+
+        _ = Task.Run(async () =>
+        {
+            try { await emailService.SendChildAddedToParentAsync(parentEmail, parentName, childName, childGrade); } catch { }
+        });
 
         var response = new CreatedChildResponse(
             new ChildResponse(child.Id, child.ParentId, child.Name, child.Grade, null),

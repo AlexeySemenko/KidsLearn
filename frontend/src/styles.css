@@ -46,6 +46,10 @@
   --shadow: 0 22px 60px rgba(18, 39, 68, 0.14);
 }
 
+a{
+  text-decoration: none;
+}
+
 :root[data-theme='light'] .select-trigger {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 251, 255, 0.94));
 }
@@ -1402,6 +1406,234 @@ select.admin-filter-input option {
 
   .kl-logo-rocket {
     font-size: 3rem;
+  }
+}
+
+/* ── Unified login entry (home state) ── */
+.kl-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+  width: min(360px, 100%);
+  position: relative;
+  z-index: 1;
+  animation: kl-logo-fadein 0.9s 0.5s ease both;
+}
+
+.kl-login-btn {
+  width: 100%;
+  padding: 0.9rem 1.5rem;
+  border-radius: 50px;
+  border: none;
+  background: linear-gradient(135deg, #60a5fa, #a78bfa);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 6px 28px rgba(96, 165, 250, 0.35);
+}
+
+.kl-login-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 36px rgba(96, 165, 250, 0.45);
+}
+
+.kl-login-btn:active {
+  transform: translateY(0);
+}
+
+.kl-google-entry-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.72rem 1.1rem;
+  border-radius: 50px;
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  backdrop-filter: blur(8px);
+}
+
+.kl-google-entry-btn:hover {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(255, 255, 255, 0.32);
+  transform: translateY(-1px);
+}
+
+/* ── Auth form card (login / register states) ── */
+.kl-form-card {
+  width: min(420px, 100%);
+  background: rgba(15, 23, 42, 0.55);
+  border: 1.5px solid rgba(96, 165, 250, 0.28);
+  border-radius: 24px;
+  backdrop-filter: blur(24px);
+  padding: 2.25rem 2.25rem;
+  position: relative;
+  z-index: 1;
+  animation: kl-logo-fadein 0.35s ease both;
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.08), 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+
+.kl-or-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1.1rem 0 0.9rem;
+  color: rgba(246, 248, 251, 0.28);
+  font-size: 0.8rem;
+}
+.kl-or-divider::before,
+.kl-or-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.kl-form-back {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: none;
+  color: rgba(246, 248, 251, 0.55);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 1.25rem;
+  transition: color 0.15s ease;
+}
+
+.kl-form-back:hover {
+  color: var(--text);
+}
+
+.kl-form-title {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin: 0 0 0.3rem;
+  color: var(--text);
+}
+
+.kl-form-sub {
+  font-size: 0.85rem;
+  color: rgba(246, 248, 251, 0.5);
+  margin: 0 0 1.5rem;
+}
+
+.kl-form-fields {
+  display: grid;
+  gap: 1rem;
+}
+
+.kl-field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.kl-field label {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: rgba(246, 248, 251, 0.7);
+}
+
+.kl-field input {
+  padding: 0.72rem 1rem;
+  border-radius: 12px;
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-size: 0.95rem;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.kl-field input:focus {
+  border-color: rgba(96, 165, 250, 0.6);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.kl-field input::placeholder {
+  color: rgba(246, 248, 251, 0.28);
+}
+
+.kl-form-submit {
+  width: 100%;
+  padding: 0.82rem 1.5rem;
+  border-radius: 50px;
+  border: none;
+  background: linear-gradient(135deg, #60a5fa, #a78bfa);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  box-shadow: 0 4px 20px rgba(96, 165, 250, 0.3);
+}
+
+.kl-form-submit:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-2px);
+}
+
+.kl-form-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.kl-form-error {
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin-top: 0.5rem;
+}
+
+.kl-form-footer {
+  text-align: center;
+  margin-top: 1.25rem;
+  font-size: 0.85rem;
+  color: rgba(246, 248, 251, 0.5);
+}
+
+.kl-form-link {
+  color: #60a5fa;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: inherit;
+  font-weight: 600;
+  padding: 0;
+  text-decoration: underline;
+  transition: color 0.15s ease;
+}
+
+.kl-form-link:hover {
+  color: #93c5fd;
+}
+
+@media (max-width: 480px) {
+  .kl-form-card {
+    padding: 1.5rem 1.25rem;
   }
 }
 

@@ -37,7 +37,7 @@ public static class ParentChildrenController
             };
         });
 
-        parentApi.MapPost("/children/with-gmail", async (ISender sender, ClaimsPrincipal user, CreateChildWithGmailRequest request) =>
+        parentApi.MapPost("/children/with-gmail", async (ISender sender, ClaimsPrincipal user, CreateChildWithEmailRequest request) =>
         {
             if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
             {

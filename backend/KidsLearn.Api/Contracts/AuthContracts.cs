@@ -1,5 +1,7 @@
 public sealed record RegisterRequest(string Email, string Password);
 
+public sealed record RegisterChildRequest(string Email, string Password);
+
 public sealed record LoginRequest(string Email, string Password);
 
 public sealed record ChildLoginRequest(Guid ChildId, string AccessCode);

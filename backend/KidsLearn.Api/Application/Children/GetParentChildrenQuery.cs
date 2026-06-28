@@ -19,7 +19,12 @@ public sealed class GetParentChildrenQueryHandler : IRequestHandler<GetParentChi
         return await _db.Children
             .AsNoTracking()
             .Where(x => scopedParentIds.Contains(x.ParentId))
-            .Select(x => new ChildResponse(x.Id, x.ParentId, x.Name, x.Grade, x.User != null ? x.User.Email : null))
+            .Select(x => new ChildResponse(
+                x.Id, x.ParentId, x.Name, x.Grade,
+                x.UserId != null && x.User != null && !x.User.Email.EndsWith("@kidslearn.local")
+                    ? x.User.Email
+                    : x.EnrollmentEmail,
+                x.UserId == null && x.EnrollmentEmail != null))
             .ToListAsync(cancellationToken);
     }
 }

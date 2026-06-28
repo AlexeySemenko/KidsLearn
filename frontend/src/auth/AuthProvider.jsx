@@ -2,8 +2,11 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import {
   finalizeGoogleParentAuth,
   finalizeGoogleChildAuth,
+  finalizeUnifiedGoogleAuth,
   loginChild,
   loginParent,
+  registerParent,
+  registerChild,
   refreshSession,
   revokeSession,
 } from '../lib/api'
@@ -124,6 +127,30 @@ export function AuthProvider({ children }) {
     return nextSession
   }
 
+  async function handleUnifiedGoogleFinalize(authCode) {
+    const response = await finalizeUnifiedGoogleAuth(authCode)
+    const nextSession = normalizeAuthResponse(response)
+    persistSession(nextSession)
+    setSession(nextSession)
+    return nextSession
+  }
+
+  async function handleParentRegister(credentials) {
+    await registerParent(credentials)
+    const nextSession = normalizeAuthResponse(await loginParent(credentials))
+    persistSession(nextSession)
+    setSession(nextSession)
+    return nextSession
+  }
+
+  async function handleChildRegister(credentials) {
+    const response = await registerChild(credentials)
+    const nextSession = normalizeAuthResponse(response)
+    persistSession(nextSession)
+    setSession(nextSession)
+    return nextSession
+  }
+
   async function handleLogout() {
     const refreshToken = session?.refreshToken
     persistSession(null)
@@ -160,8 +187,11 @@ export function AuthProvider({ children }) {
     isBootstrapping,
     loginParent: handleParentLogin,
     loginChild: handleChildLogin,
+    registerParent: handleParentRegister,
+    registerChild: handleChildRegister,
     finalizeParentGoogleLogin: handleGoogleParentFinalize,
     finalizeChildGoogleLogin: handleGoogleChildFinalize,
+    finalizeUnifiedGoogleLogin: handleUnifiedGoogleFinalize,
     logout: handleLogout,
     refreshSession: refreshCurrentSession,
   }

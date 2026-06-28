@@ -58,6 +58,11 @@ export interface ParentLoginRequest {
   password: string
 }
 
+export interface ParentRegisterRequest {
+  email: string
+  password: string
+}
+
 export interface ChildLoginRequest {
   childId: string
   accessCode: string
@@ -65,8 +70,11 @@ export interface ChildLoginRequest {
 
 export interface ChildSummary {
   id: string
+  parentId: string
   name: string
   grade: number
+  email?: string | null
+  isPending?: boolean
   accessCode?: string | null
 }
 
@@ -269,6 +277,25 @@ export async function loginParent(credentials: ParentLoginRequest): Promise<Auth
   })
 }
 
+export async function registerParent(data: ParentRegisterRequest): Promise<void> {
+  return request<void>('/api/v1/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export interface ChildRegisterRequest {
+  email: string
+  password: string
+}
+
+export async function registerChild(data: ChildRegisterRequest): Promise<AuthSessionResponse> {
+  return request<AuthSessionResponse>('/api/v1/auth/child/register', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
 export function getParentGoogleStartUrl(returnPath = '/parent'): string {
   const normalizedPath = returnPath.startsWith('/') && !returnPath.startsWith('//')
     ? returnPath
@@ -280,6 +307,22 @@ export function getParentGoogleStartUrl(returnPath = '/parent'): string {
 
 export async function finalizeGoogleParentAuth(authCode: string): Promise<AuthSessionResponse> {
   return request<AuthSessionResponse>('/api/v1/auth/google/finalize', {
+    method: 'POST',
+    body: JSON.stringify({ authCode }),
+  })
+}
+
+export function getUnifiedGoogleStartUrl(returnPath = '/parent'): string {
+  const normalizedPath = returnPath.startsWith('/') && !returnPath.startsWith('//')
+    ? returnPath
+    : '/parent'
+
+  const searchParams = new URLSearchParams({ returnPath: normalizedPath })
+  return `${API_BASE}/api/v1/auth/google/unified/start?${searchParams.toString()}`
+}
+
+export async function finalizeUnifiedGoogleAuth(authCode: string): Promise<AuthSessionResponse> {
+  return request<AuthSessionResponse>('/api/v1/auth/google/unified/finalize', {
     method: 'POST',
     body: JSON.stringify({ authCode }),
   })

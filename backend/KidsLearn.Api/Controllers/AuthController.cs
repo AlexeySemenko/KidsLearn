@@ -30,6 +30,21 @@ public static class AuthController
             };
         });
 
+        apiV1.MapPost("/auth/child/register", async (ISender sender, RegisterChildRequest request) =>
+        {
+            var result = await sender.Send(new RegisterChildCommand(request));
+            return result.StatusCode switch
+            {
+                StatusCodes.Status201Created when result.Response is not null
+                    => Results.Ok(result.Response),
+                StatusCodes.Status400BadRequest
+                    => Results.BadRequest(new { error = result.Error ?? "Bad request." }),
+                StatusCodes.Status409Conflict
+                    => Results.Conflict(new { error = result.Error ?? "Conflict." }),
+                _ => Results.Problem(result.Error ?? "Unexpected error.")
+            };
+        }).AllowAnonymous();
+
         apiV1.MapPost("/auth/login", async (ISender sender, LoginRequest request) =>
         {
             var result = await sender.Send(new LoginParentCommand(request));
@@ -211,6 +226,57 @@ public static class AuthController
 
             var adminEmails = configuration.GetSection("AdminEmails").Get<string[]>() ?? Array.Empty<string>();
             var isAdminEmail = adminEmails.Any(e => string.Equals(e.Trim(), normalizedEmail, StringComparison.OrdinalIgnoreCase));
+
+            // Unified flow: if the account belongs to a child, log them in and return early
+            if (authState.IsUnified)
+            {
+                AppUser? childAccount = null;
+                if (user?.Role == UserRole.Child)
+                {
+                    childAccount = user;
+                }
+                else if (user is null)
+                {
+                    childAccount = await db.Users.FirstOrDefaultAsync(
+                        x => x.Email == normalizedEmail && x.Role == UserRole.Child, cancellationToken);
+                }
+
+                if (childAccount is not null)
+                {
+                    var childRecord = await db.Children.AsNoTracking()
+                        .FirstOrDefaultAsync(x => x.UserId == childAccount.Id, cancellationToken);
+                    if (childRecord is null)
+                        return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "child_not_registered", null, returnPath));
+
+                    if (childAccount.ExternalProvider != GoogleProviderName || childAccount.ExternalSubject != profile.Sub
+                        || (!string.IsNullOrWhiteSpace(profile.Picture) && childAccount.AvatarUrl != profile.Picture))
+                    {
+                        childAccount.ExternalProvider = GoogleProviderName;
+                        childAccount.ExternalSubject = profile.Sub;
+                        childAccount.EmailVerified = true;
+                        if (!string.IsNullOrWhiteSpace(profile.Picture)) childAccount.AvatarUrl = profile.Picture;
+                        db.Users.Update(childAccount);
+                    }
+                    childAccount.LastAccessAt = DateTime.UtcNow;
+
+                    var cAccessToken = tokenService.CreateAccessToken(childAccount);
+                    var cRefreshToken = tokenService.CreateRefreshToken();
+                    var cRefreshDays = int.TryParse(configuration["Jwt:RefreshTokenExpirationDays"], out var crd) ? crd : 14;
+                    db.RefreshTokens.Add(new RefreshToken
+                    {
+                        UserId = childAccount.Id, Token = cRefreshToken,
+                        CreatedAt = DateTime.UtcNow, ExpiresAt = DateTime.UtcNow.AddDays(cRefreshDays)
+                    });
+                    await db.SaveChangesAsync(cancellationToken);
+
+                    var cExpiresIn = int.TryParse(configuration["Jwt:AccessTokenExpirationMinutes"], out var cam) ? cam * 60 : 1800;
+                    var cAuthResponse = new AuthTokenResponse(cAccessToken, cRefreshToken, cExpiresIn,
+                        new AuthUserResponse(childAccount.Id, childAccount.Email, childAccount.Role.ToString(), childRecord.Name, childAccount.AvatarUrl));
+                    var cAuthCode = CreateSignedAuthCode(cAuthResponse, jwtSigningKey);
+                    return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, null, cAuthCode, returnPath));
+                }
+                // No child found — fall through to parent / create-parent logic below
+            }
 
             if (user is not null && user.Role != UserRole.Parent && user.Role != UserRole.Admin)
             {
@@ -593,6 +659,78 @@ public static class AuthController
             return Results.Unauthorized();
         });
 
+        apiV1.MapGet("/auth/google/unified/start", (HttpContext httpContext, IConfiguration configuration) =>
+        {
+            var clientId = configuration["GoogleAuth:ClientId"];
+            // Reuse the parent redirect URI — no extra Google Console entry needed
+            var redirectUri = configuration["GoogleAuth:RedirectUri"];
+            var frontendCallbackUrl = configuration["GoogleAuth:UnifiedFrontendCallbackUrl"] ?? configuration["GoogleAuth:ParentFrontendCallbackUrl"];
+
+            if (string.IsNullOrWhiteSpace(clientId)
+                || string.IsNullOrWhiteSpace(redirectUri)
+                || string.IsNullOrWhiteSpace(frontendCallbackUrl))
+            {
+                return Results.Problem(
+                    title: "Google auth is not configured.",
+                    detail: "Set GoogleAuth:ClientId, GoogleAuth:RedirectUri, and GoogleAuth:UnifiedFrontendCallbackUrl.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+
+            var returnPath = httpContext.Request.Query["returnPath"].ToString();
+            if (!IsValidReturnPath(returnPath))
+            {
+                returnPath = "/parent";
+            }
+
+            var jwtSigningKey = configuration["Jwt:Key"];
+            if (string.IsNullOrWhiteSpace(jwtSigningKey) && string.Equals(configuration["ASPNETCORE_ENVIRONMENT"], "Development", StringComparison.OrdinalIgnoreCase))
+            {
+                jwtSigningKey = "dev-super-secret-key-change-in-production-32chars";
+            }
+
+            if (string.IsNullOrWhiteSpace(jwtSigningKey))
+            {
+                return Results.Problem("Jwt:Key is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+
+            var state = CreateSignedStateToken(new GoogleAuthStateContext(frontendCallbackUrl, returnPath, IsUnified: true), jwtSigningKey);
+
+            var authorizationUrl = QueryHelpers.AddQueryString("https://accounts.google.com/o/oauth2/v2/auth", new Dictionary<string, string?>
+            {
+                ["client_id"] = clientId,
+                ["redirect_uri"] = redirectUri,
+                ["response_type"] = "code",
+                ["scope"] = "openid email profile",
+                ["state"] = state,
+                ["prompt"] = "select_account",
+            });
+
+            return Results.Redirect(authorizationUrl);
+        });
+
+        apiV1.MapPost("/auth/google/unified/finalize", (GoogleFinalizeRequest request, IMemoryCache cache, IConfiguration configuration) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.AuthCode))
+            {
+                return Results.BadRequest(new { error = "Auth code is required." });
+            }
+
+            var jwtSigningKey = configuration["Jwt:Key"];
+            if (string.IsNullOrWhiteSpace(jwtSigningKey) && string.Equals(configuration["ASPNETCORE_ENVIRONMENT"], "Development", StringComparison.OrdinalIgnoreCase))
+            {
+                jwtSigningKey = "dev-super-secret-key-change-in-production-32chars";
+            }
+
+            if (!string.IsNullOrWhiteSpace(jwtSigningKey)
+                && TryReadSignedAuthCode(request.AuthCode, jwtSigningKey, out var signedResponse)
+                && signedResponse is not null)
+            {
+                return Results.Ok(signedResponse);
+            }
+
+            return Results.Unauthorized();
+        });
+
         return apiV1;
     }
 
@@ -821,7 +959,7 @@ public static class AuthController
         return await JsonSerializer.DeserializeAsync<GoogleUserProfile>(stream, cancellationToken: cancellationToken);
     }
 
-    private sealed record GoogleAuthStateContext(string FrontendCallbackUrl, string ReturnPath);
+    private sealed record GoogleAuthStateContext(string FrontendCallbackUrl, string ReturnPath, bool IsUnified = false);
 
     private sealed record GoogleAuthStatePayload(DateTime IssuedAtUtc, GoogleAuthStateContext Context);
 
