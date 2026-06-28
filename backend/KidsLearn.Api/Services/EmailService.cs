@@ -40,7 +40,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
               <p>Hi {recipientName},</p>
               <p><strong>{inviterName}</strong> has invited you to join <strong>KidsLearnAI</strong> — the smart learning platform for kids and parents.</p>
               <p style="margin-top:1.5rem;">
-                <a href="https://kidslearn.fly.dev/" style="background:#f4d35e;color:#0f2745;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;">
+                <a href="{config["FrontendBaseUrl"]?.TrimEnd('/') ?? "https://kidslearn.fly.dev"}" style="background:#f4d35e;color:#0f2745;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;">
                   Sign in with Google
                 </a>
               </p>
@@ -102,7 +102,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
               <p><strong>{linkedByEmail}</strong> has linked their KidsLearnAI parent account with yours.</p>
               <p>You now share the same workspace — you will both see and manage the same children, lessons, assignments, and reports together.</p>
               <p style="margin-top:1.5rem;">
-                <a href="https://kidslearn.fly.dev/" style="background:#f4d35e;color:#0f2745;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;">
+                <a href="{config["FrontendBaseUrl"]?.TrimEnd('/') ?? "https://kidslearn.fly.dev"}" style="background:#f4d35e;color:#0f2745;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;">
                   Open KidsLearnAI
                 </a>
               </p>
@@ -242,7 +242,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
               </table>
               """ : "")}
               <p style="margin-top:1.5rem;">
-                <a href="https://kidslearn.fly.dev/" style="background:#f4d35e;color:#0f2745;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;">
+                <a href="{config["FrontendBaseUrl"]?.TrimEnd('/') ?? "https://kidslearn.fly.dev"}" style="background:#f4d35e;color:#0f2745;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;">
                   View full report
                 </a>
               </p>
@@ -310,7 +310,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
               </div>
               {dueDateHtml}
               <p style="margin-top:1.5rem;">
-                <a href="https://kidslearn.fly.dev/" style="background:#f4d35e;color:#0f2745;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;">
+                <a href="{config["FrontendBaseUrl"]?.TrimEnd('/') ?? "https://kidslearn.fly.dev"}" style="background:#f4d35e;color:#0f2745;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;">
                   Start lesson 🚀
                 </a>
               </p>
@@ -368,7 +368,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
               <p>Hi {System.Net.WebUtility.HtmlEncode(recipientName)},</p>
               <p>Your parent account has been created. You can now add children, create lessons, assign work, and track progress — all in one place.</p>
               <p style="margin-top:1.5rem;">
-                <a href="https://kidslearn.fly.dev/" style="background:#f4d35e;color:#0f2745;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;">
+                <a href="{config["FrontendBaseUrl"]?.TrimEnd('/') ?? "https://kidslearn.fly.dev"}" style="background:#f4d35e;color:#0f2745;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;">
                   Go to dashboard
                 </a>
               </p>
@@ -429,7 +429,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
               </div>
               <p>You can now assign lessons and track their progress from your dashboard.</p>
               <p style="margin-top:1.5rem;">
-                <a href="https://kidslearn.fly.dev/" style="background:#f4d35e;color:#0f2745;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;">
+                <a href="{config["FrontendBaseUrl"]?.TrimEnd('/') ?? "https://kidslearn.fly.dev"}" style="background:#f4d35e;color:#0f2745;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;">
                   Open dashboard
                 </a>
               </p>

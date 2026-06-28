@@ -4,6 +4,9 @@ primary_region = "iad"
 [build]
   dockerfile = "backend/KidsLearn.Api/Dockerfile"
 
+[env]
+  FrontendBaseUrl = "https://kidslearn.fly.dev"
+
 [http_service]
   internal_port = 8080
   force_https = true
