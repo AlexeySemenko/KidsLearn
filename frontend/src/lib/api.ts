@@ -122,7 +122,7 @@ export interface LessonDetail {
   createdAt: string
   questions: LessonQuestion[]
   story?: string
-  storyImageUrl?: string | null
+  hasStoryImage?: boolean
 }
 
 export interface AssignmentResponse {
@@ -426,6 +426,10 @@ export async function getLessons(accessToken: string): Promise<LessonsListRespon
 
 export async function getLesson(accessToken: string, lessonId: string): Promise<LessonDetail> {
   return request<LessonDetail>(`/api/v1/lessons/${lessonId}`, withAuth(accessToken))
+}
+
+export async function getLessonStoryImage(accessToken: string, lessonId: string): Promise<{ storyImageUrl: string } | null> {
+  return request(`/api/v1/lessons/${lessonId}/story-image`, withAuth(accessToken))
 }
 
 export async function createLesson(accessToken: string, payload: RequestPayload) {

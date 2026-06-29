@@ -52,6 +52,21 @@ public static class ParentLessonsController
             };
         });
 
+        parentApi.MapGet("/lessons/{lessonId:guid}/story-image", async (AppDbContext db, ClaimsPrincipal user, Guid lessonId) =>
+        {
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))
+                return Results.Unauthorized();
+
+            var scopedParentIds = await ApiEndpointHelpers.ResolveParentScopeIdsAsync(db, parentId);
+            var imageUrl = await db.Lessons
+                .AsNoTracking()
+                .Where(x => x.Id == lessonId && scopedParentIds.Contains(x.CreatedBy))
+                .Select(x => x.StoryImageUrl)
+                .FirstOrDefaultAsync();
+
+            return imageUrl is null ? Results.NotFound() : Results.Ok(new { storyImageUrl = imageUrl });
+        });
+
         parentApi.MapPost("/lessons/{lessonId:guid}/duplicate", async (ISender sender, ClaimsPrincipal user, Guid lessonId) =>
         {
             if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))

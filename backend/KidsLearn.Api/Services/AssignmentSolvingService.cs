@@ -70,7 +70,7 @@ public class AssignmentSolvingService(AppDbContext db, IEmailService emailServic
                         .ToList()))
                 .ToList(),
             assignment.Lesson.Story,
-            assignment.Lesson.StoryImageUrl);
+            assignment.Lesson.StoryImageUrl != null);
 
         return ServiceResult<AssignmentForSolvingResponse>.Success(response);
     }

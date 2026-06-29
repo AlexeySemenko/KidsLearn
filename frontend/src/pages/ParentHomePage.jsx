@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
-import { getAssignments, getChildren, getLesson, getLessons, getParentChildResults, getParentAssignmentForSolving, getParentResultDetail } from '../lib/api'
+import { getAssignments, getChildren, getLesson, getLessons, getLessonStoryImage, getParentChildResults, getParentAssignmentForSolving, getParentResultDetail } from '../lib/api'
 import ChildStatsPanel, { SUBJECT_EMOJI, scoreEmoji, scoreVariant } from '../components/ChildStatsPanel'
 import LessonViewModal from '../components/LessonViewModal'
 
@@ -42,6 +42,7 @@ export default function ParentHomePage() {
   const [reviewAssignment, setReviewAssignment] = useState(null)
   const [reviewResult, setReviewResult] = useState(null)
   const [reviewLesson, setReviewLesson] = useState(null)
+  const [reviewImage, setReviewImage] = useState(null)
   const [isLoadingReview, setIsLoadingReview] = useState(false)
 
   useEffect(() => {
@@ -100,9 +101,15 @@ export default function ParentHomePage() {
   async function handleLessonReview(lesson) {
     if (!session?.accessToken) return
     setIsLoadingReview(true)
+    setReviewImage(null)
     try {
       const detail = await getLesson(session.accessToken, lesson.id)
       setReviewLesson(detail)
+      if (detail.hasStoryImage) {
+        getLessonStoryImage(session.accessToken, detail.id)
+          .then(result => setReviewImage(result?.storyImageUrl ?? null))
+          .catch(() => {})
+      }
     } catch (err) {
       setError(err.message)
     } finally {
@@ -113,6 +120,7 @@ export default function ParentHomePage() {
   async function handleReview(assignment) {
     if (!session?.accessToken) return
     setIsLoadingReview(true)
+    setReviewImage(null)
     try {
       if (assignment.resultId) {
         const result = await getParentResultDetail(session.accessToken, assignment.resultId)
@@ -120,6 +128,11 @@ export default function ParentHomePage() {
       } else {
         const detail = await getParentAssignmentForSolving(session.accessToken, assignment.id)
         setReviewAssignment(detail)
+        if (detail.hasLessonStoryImage) {
+          getLessonStoryImage(session.accessToken, detail.lessonId)
+            .then(result => setReviewImage(result?.storyImageUrl ?? null))
+            .catch(() => {})
+        }
       }
     } catch (err) {
       setError(err.message)
@@ -390,9 +403,9 @@ export default function ParentHomePage() {
           title={reviewLesson.title}
           subtitle={`${reviewLesson.questions.length} question${reviewLesson.questions.length !== 1 ? 's' : ''} · Grade ${reviewLesson.grade}`}
           story={reviewLesson.story}
-          storyImageUrl={reviewLesson.storyImageUrl}
+          storyImageUrl={reviewImage}
           questions={reviewLesson.questions}
-          onClose={() => setReviewLesson(null)}
+          onClose={() => { setReviewLesson(null); setReviewImage(null) }}
           renderQuestion={(question, index) => (
             <article key={question.id} className="assignment-row question-card">
               <div className="assignment-copy">
@@ -430,9 +443,9 @@ export default function ParentHomePage() {
           title={`Review: ${reviewAssignment.lessonTitle}`}
           subtitle={`${reviewAssignment.questions.length} question${reviewAssignment.questions.length !== 1 ? 's' : ''}`}
           story={reviewAssignment.lessonStory}
-          storyImageUrl={reviewAssignment.lessonStoryImageUrl}
+          storyImageUrl={reviewImage}
           questions={reviewAssignment.questions}
-          onClose={() => setReviewAssignment(null)}
+          onClose={() => { setReviewAssignment(null); setReviewImage(null) }}
           renderQuestion={(question, index) => (
             <article key={question.questionId} className="assignment-row question-card">
               <div className="assignment-copy">

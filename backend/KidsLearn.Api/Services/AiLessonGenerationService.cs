@@ -946,6 +946,7 @@ public sealed class AiLessonGenerationService(AppDbContext db, IAIProvider aiPro
                             .ToList()))
                     .ToList(),
                 lesson.Story,
+                lesson.StoryImageUrl != null,
                 lesson.StoryImageUrl),
             draft.ProviderMeta);
 

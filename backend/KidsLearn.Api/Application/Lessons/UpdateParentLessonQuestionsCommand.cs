@@ -150,7 +150,7 @@ public sealed class UpdateParentLessonQuestionsCommandHandler : IRequestHandler<
                     .ToList()
             )).ToList(),
             lesson.Story,
-            lesson.StoryImageUrl);
+            lesson.StoryImageUrl != null);
 
         return UpdateParentLessonQuestionsResult.Ok(response);
     }

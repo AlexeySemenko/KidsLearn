@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { createAssignment, createLesson, deleteLesson, duplicateLesson, getChildren, getLesson, getLessons, updateLesson, updateLessonQuestions } from '../lib/api'
+import { createAssignment, createLesson, deleteLesson, duplicateLesson, getChildren, getLesson, getLessons, getLessonStoryImage, updateLesson, updateLessonQuestions } from '../lib/api'
 import { useAuth } from '../auth/AuthProvider'
 import Toast from '../components/Toast'
 import AiLessonGenerationModal from '../components/AiLessonGenerationModal'
@@ -87,6 +87,7 @@ export default function ParentLessonsPage() {
   const [isCreatingLesson, setIsCreatingLesson] = useState(false)
   const [createError, setCreateError] = useState('')
   const [viewingLesson, setViewingLesson] = useState(null)
+  const [viewingLessonImage, setViewingLessonImage] = useState(null)
   const [isLoadingView, setIsLoadingView] = useState(false)
   const [viewError, setViewError] = useState('')
 
@@ -314,6 +315,7 @@ export default function ParentLessonsPage() {
 
   function closeViewModal() {
     setViewingLesson(null)
+    setViewingLessonImage(null)
     setViewError('')
   }
 
@@ -325,10 +327,16 @@ export default function ParentLessonsPage() {
     setViewError('')
     setIsLoadingView(true)
     setViewingLesson({ _loading: true })
+    setViewingLessonImage(null)
 
     try {
       const lesson = await getLesson(session.accessToken, lessonId)
       setViewingLesson(lesson)
+      if (lesson.hasStoryImage) {
+        getLessonStoryImage(session.accessToken, lesson.id)
+          .then(result => setViewingLessonImage(result?.storyImageUrl ?? null))
+          .catch(() => {})
+      }
     } catch (requestError) {
       setViewingLesson(null)
       setViewError(requestError.message)
@@ -535,7 +543,7 @@ export default function ParentLessonsPage() {
           title={viewingLesson.title}
           subtitle={`${viewingLesson.subject} · Grade ${viewingLesson.grade} · ${viewingLesson.topic} · ${viewingLesson.difficulty} · ${viewingLesson.questions.length} questions`}
           story={viewingLesson.story}
-          storyImageUrl={viewingLesson.storyImageUrl}
+          storyImageUrl={viewingLessonImage}
           questions={viewingLesson.questions}
           onClose={closeViewModal}
         />

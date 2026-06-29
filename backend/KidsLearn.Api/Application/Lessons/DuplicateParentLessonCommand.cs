@@ -102,7 +102,7 @@ public sealed class DuplicateParentLessonCommandHandler : IRequestHandler<Duplic
                         .ToList()))
                 .ToList(),
             duplicatedLesson.Story,
-            duplicatedLesson.StoryImageUrl);
+            duplicatedLesson.StoryImageUrl != null);
 
         return DuplicateParentLessonResult.Created(response);
     }

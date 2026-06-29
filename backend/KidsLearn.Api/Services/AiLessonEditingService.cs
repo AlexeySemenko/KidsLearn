@@ -168,6 +168,6 @@ public sealed class AiLessonEditingService(AppDbContext db) : IAiLessonEditingSe
                         .ToList()))
                 .ToList(),
             lesson.Story,
-            lesson.StoryImageUrl);
+            lesson.StoryImageUrl != null);
     }
 }

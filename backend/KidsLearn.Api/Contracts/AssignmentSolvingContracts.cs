@@ -53,4 +53,4 @@ public sealed record AssignmentForSolvingResponse(
     string LessonTitle,
     List<AssignmentQuestionResponse> Questions,
     string? LessonStory = null,
-    string? LessonStoryImageUrl = null);
+    bool HasLessonStoryImage = false);

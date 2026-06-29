@@ -50,4 +50,5 @@ public sealed record LessonDetailResponse(
     DateTime CreatedAt,
     List<QuestionResponse> Questions,
     string? Story = null,
+    bool HasStoryImage = false,
     string? StoryImageUrl = null);
