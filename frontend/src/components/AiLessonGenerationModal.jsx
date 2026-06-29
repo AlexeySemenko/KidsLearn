@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '../auth/AuthProvider'
-import { generateParentAiLesson } from '../lib/api'
+import { generateParentAiLesson, generateStory } from '../lib/api'
 
 const SUBJECTS = ['Math', 'English', 'Hebrew', 'Science', 'History', 'Biology', 'Art', 'Coding', 'Geography', 'Music']
 const DIFFICULTIES = ['Easy', 'Medium', 'Hard']
@@ -68,6 +68,8 @@ export default function AiLessonGenerationModal({
   const { session } = useAuth()
   const [form, setForm] = useState(emptyForm)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [loadingPhase, setLoadingPhase] = useState(null) // null | 'story' | 'story-preview' | 'questions'
+  const [storyPreview, setStoryPreview] = useState(null) // { story, storyImageUrl }
   const [error, setError] = useState('')
   const [providerMeta, setProviderMeta] = useState(null)
 
@@ -97,6 +99,8 @@ export default function AiLessonGenerationModal({
   function handleClose() {
     setForm(emptyForm)
     setIsGenerating(false)
+    setLoadingPhase(null)
+    setStoryPreview(null)
     setError('')
     setProviderMeta(null)
     onClose()
@@ -117,18 +121,45 @@ export default function AiLessonGenerationModal({
 
     setError('')
     setProviderMeta(null)
+    setStoryPreview(null)
     setIsGenerating(true)
 
+    const subject = resolveSubject(form)
+    const grade = Number(form.grade)
+    const topic = form.topic.trim()
+
     try {
+      let preGeneratedStory = null
+      let preGeneratedStoryImageUrl = null
+
+      if (form.includeStory) {
+        setLoadingPhase('story')
+        const storyResult = await generateStory(session.accessToken, {
+          subject,
+          grade,
+          topic,
+          difficulty: form.difficulty,
+          language: form.language,
+        })
+        preGeneratedStory = storyResult.story
+        preGeneratedStoryImageUrl = storyResult.storyImageUrl || null
+        setStoryPreview({ story: preGeneratedStory, storyImageUrl: preGeneratedStoryImageUrl })
+        setLoadingPhase('story-preview')
+      } else {
+        setLoadingPhase('questions')
+      }
+
       const response = await generateParentAiLesson(session.accessToken, {
-        subject: resolveSubject(form),
-        grade: Number(form.grade),
-        topic: form.topic.trim(),
+        subject,
+        grade,
+        topic,
         questionCount: Number(form.questionCount),
         difficulty: form.difficulty,
         language: form.language,
         questionTypes: resolveQuestionTypes(form.questionTypes),
         includeStory: form.includeStory || null,
+        preGeneratedStory,
+        preGeneratedStoryImageUrl,
       })
 
       setProviderMeta(response.providerMeta)
@@ -136,6 +167,8 @@ export default function AiLessonGenerationModal({
       if (typeof onGenerated === 'function') {
         onGenerated(response)
       }
+
+      handleClose()
     } catch (requestError) {
       if (requestError.status === 422) {
         setError(`AI validation failed: ${requestError.message}`)
@@ -144,6 +177,8 @@ export default function AiLessonGenerationModal({
       }
     } finally {
       setIsGenerating(false)
+      setLoadingPhase(null)
+      setStoryPreview(null)
     }
   }
 
@@ -165,18 +200,44 @@ export default function AiLessonGenerationModal({
 
         {isGenerating ? (
           <div className="ai-generating">
-            <div className="ai-generating-rings">
-              <div className="ai-ring" />
-              <div className="ai-ring" />
-              <div className="ai-ring" />
-              <div className="ai-orb">AI</div>
-            </div>
-            <p className="ai-generating-label">Generating AI lesson</p>
-            <p className="ai-generating-hint" style={{ marginTop: 0 }}>AI quality checks may take a few moments...</p>
-            <div className="ai-generating-dots">
-              <span /><span /><span />
-            </div>
-            {form.topic ? (
+            {loadingPhase === 'story-preview' && storyPreview ? (
+              <div className="story-preview-block">
+                {storyPreview.storyImageUrl ? (
+                  <img
+                    className="story-preview-image"
+                    src={storyPreview.storyImageUrl}
+                    alt="Story illustration"
+                  />
+                ) : null}
+                <p className="story-preview-text">{storyPreview.story}</p>
+              </div>
+            ) : (
+              <div className="ai-generating-rings">
+                <div className="ai-ring" />
+                <div className="ai-ring" />
+                <div className="ai-ring" />
+                <div className="ai-orb">AI</div>
+              </div>
+            )}
+            <p className="ai-generating-label">
+              {loadingPhase === 'story' && 'Generating story...'}
+              {loadingPhase === 'story-preview' && 'Story ready! Generating questions...'}
+              {loadingPhase === 'questions' && 'Generating questions...'}
+              {!loadingPhase && 'Generating AI lesson'}
+            </p>
+            {loadingPhase !== 'story-preview' ? (
+              <>
+                <p className="ai-generating-hint" style={{ marginTop: 0 }}>AI quality checks may take a few moments...</p>
+                <div className="ai-generating-dots">
+                  <span /><span /><span />
+                </div>
+              </>
+            ) : (
+              <div className="ai-generating-dots">
+                <span /><span /><span />
+              </div>
+            )}
+            {form.topic && loadingPhase !== 'story-preview' ? (
               <p className="ai-generating-hint">
                 {resolveSubject(form)} · Grade {form.grade}<br />{form.topic}
               </p>

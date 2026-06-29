@@ -7,6 +7,7 @@ public class Lesson
     public string Topic { get; set; } = string.Empty;
     public string Difficulty { get; set; } = "Medium";
     public string? Story { get; set; }
+    public string? StoryImageUrl { get; set; }
     public Guid CreatedBy { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

@@ -6,7 +6,18 @@ public sealed record GenerateAiLessonRequest(
     string? Difficulty,
     string? Language,
     List<string>? QuestionTypes,
-    bool? IncludeStory = null);
+    bool? IncludeStory = null,
+    string? PreGeneratedStory = null,
+    string? PreGeneratedStoryImageUrl = null);
+
+public sealed record GenerateStoryRequest(
+    string Subject,
+    int Grade,
+    string Topic,
+    string? Difficulty = null,
+    string? Language = null);
+
+public sealed record GenerateStoryResponse(string Story, string? StoryImageUrl);
 
 public sealed record AiProviderMetaResponse(
     string Provider,

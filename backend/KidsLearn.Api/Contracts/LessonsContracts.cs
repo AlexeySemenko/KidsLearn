@@ -49,4 +49,5 @@ public sealed record LessonDetailResponse(
     string Difficulty,
     DateTime CreatedAt,
     List<QuestionResponse> Questions,
-    string? Story = null);
+    string? Story = null,
+    string? StoryImageUrl = null);

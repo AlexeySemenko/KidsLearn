@@ -390,6 +390,7 @@ export default function ParentHomePage() {
           title={reviewLesson.title}
           subtitle={`${reviewLesson.questions.length} question${reviewLesson.questions.length !== 1 ? 's' : ''} · Grade ${reviewLesson.grade}`}
           story={reviewLesson.story}
+          storyImageUrl={reviewLesson.storyImageUrl}
           questions={reviewLesson.questions}
           onClose={() => setReviewLesson(null)}
           renderQuestion={(question, index) => (
@@ -429,6 +430,7 @@ export default function ParentHomePage() {
           title={`Review: ${reviewAssignment.lessonTitle}`}
           subtitle={`${reviewAssignment.questions.length} question${reviewAssignment.questions.length !== 1 ? 's' : ''}`}
           story={reviewAssignment.lessonStory}
+          storyImageUrl={reviewAssignment.lessonStoryImageUrl}
           questions={reviewAssignment.questions}
           onClose={() => setReviewAssignment(null)}
           renderQuestion={(question, index) => (

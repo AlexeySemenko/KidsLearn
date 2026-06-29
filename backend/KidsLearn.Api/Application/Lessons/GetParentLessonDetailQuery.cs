@@ -56,7 +56,8 @@ public sealed class GetParentLessonDetailQueryHandler : IRequestHandler<GetParen
                         .Select(a => new AnswerOptionResponse(a.Id, a.AnswerText, a.IsCorrect, a.Order))
                         .ToList()))
                 .ToList(),
-            lesson.Story);
+            lesson.Story,
+            lesson.StoryImageUrl);
 
         return GetParentLessonDetailResult.Success(response);
     }

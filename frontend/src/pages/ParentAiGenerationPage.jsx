@@ -446,6 +446,19 @@ export default function ParentAiGenerationPage() {
                   </div>
                 ) : null}
 
+                {result.lessonDraft.story ? (
+                  <div className="story-section">
+                    {result.lessonDraft.storyImageUrl ? (
+                      <img
+                        className="story-image"
+                        src={result.lessonDraft.storyImageUrl}
+                        alt="Story illustration"
+                      />
+                    ) : null}
+                    <p className="story-text">{result.lessonDraft.story}</p>
+                  </div>
+                ) : null}
+
                 <div className="button-row">
                   <Link className="button-secondary inline-link" to="/parent/lessons">
                     Open lessons workspace

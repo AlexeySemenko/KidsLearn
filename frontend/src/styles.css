@@ -2606,6 +2606,63 @@ select.input:invalid {
   line-height: 1.5;
 }
 
+/* ── Story + image layout ──────────────────────────────────── */
+.story-section {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-top: 0.75rem;
+}
+
+.story-image {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.story-text {
+  flex: 1;
+  line-height: 1.6;
+  font-size: 0.95rem;
+  color: var(--fg);
+  margin: 0;
+}
+
+/* Story preview inside the generation modal */
+.story-preview-block {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  background: var(--panel-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0.75rem;
+  max-width: 360px;
+  text-align: left;
+}
+
+.story-preview-image {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.story-preview-text {
+  flex: 1;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--fg);
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 /* ── Mission score bar ─────────────────────────────────────── */
 .mission-score-bar {
   display: flex;

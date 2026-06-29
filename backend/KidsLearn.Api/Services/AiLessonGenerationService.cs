@@ -6,6 +6,17 @@ public interface IAIProvider
     Task<GeneratedLessonDraft> GenerateLessonDraftAsync(GenerateAiLessonRequest request, string? validatorFeedback = null, CancellationToken cancellationToken = default);
     Task<DraftValidationResult?> ValidateDraftAsync(GenerateAiLessonRequest request, GeneratedLessonDraft draft, CancellationToken cancellationToken = default);
     Task<List<GeneratedQuestionDraft>?> RegenerateQuestionsAsync(GenerateAiLessonRequest request, GeneratedLessonDraft existingDraft, int[] questionIndices, string feedback, CancellationToken cancellationToken = default);
+    Task<string?> GenerateStoryAsync(GenerateStoryRequest request, CancellationToken cancellationToken = default);
+}
+
+public interface IImageProvider
+{
+    Task<string?> GenerateImageAsync(string topic, int grade, string storySummary, CancellationToken cancellationToken = default);
+}
+
+public interface IAiStoryService
+{
+    Task<GenerateStoryResponse> GenerateStoryAsync(GenerateStoryRequest request, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -63,7 +74,7 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
 
         try
         {
-            var prompt = BuildPrompt(request, validatorFeedback);
+            var prompt = BuildQuestionsPrompt(request, request.PreGeneratedStory, validatorFeedback);
             var payload = JsonSerializer.Serialize(new
             {
                 model,
@@ -91,6 +102,10 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
                 var body = await response.Content.ReadAsStringAsync(cancellationToken);
                 if (TryParseDraftFromResponse(body, request, model, out var draft, out var parseError))
                 {
+                    if (!string.IsNullOrWhiteSpace(request.PreGeneratedStory))
+                    {
+                        draft = draft with { Story = request.PreGeneratedStory };
+                    }
                     return draft;
                 }
 
@@ -169,6 +184,56 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
         {
             return null;
         }
+    }
+
+    public async Task<string?> GenerateStoryAsync(GenerateStoryRequest request, CancellationToken cancellationToken = default)
+    {
+        var apiKey = configuration["OpenAI:ApiKey"];
+        var model = configuration["OpenAI:Model"] ?? "gpt-4o-mini";
+
+        if (string.IsNullOrWhiteSpace(apiKey)) return null;
+
+        try
+        {
+            var prompt = BuildStoryPrompt(request);
+            var payload = JsonSerializer.Serialize(new { model, input = prompt });
+
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/responses");
+            requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+            requestMessage.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+            using var response = await httpClient.SendAsync(requestMessage, cancellationToken);
+            if (!response.IsSuccessStatusCode) return null;
+
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            using var doc = JsonDocument.Parse(body);
+            if (!TryExtractGeneratedText(doc.RootElement, out var text, out _) || string.IsNullOrWhiteSpace(text)) return null;
+            return text!.Trim();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string BuildStoryPrompt(GenerateStoryRequest request)
+    {
+        var grade = request.Grade;
+        var (minSentences, maxSentences, styleGuide) = grade switch
+        {
+            <= 2 => (4, 5, "Use very simple words and short sentences. One clear idea per sentence."),
+            <= 4 => (6, 8, "Use simple sentences with basic adjectives. Light humor is welcome."),
+            <= 6 => (8, 10, "Use compound sentences and varied vocabulary. Include a plot twist or surprise."),
+            <= 9 => (10, 13, "Use complex sentences and richer vocabulary. Build tension and humor."),
+            _ => (13, 17, "Use sophisticated language and nuanced ideas. Engage with wit and depth.")
+        };
+
+        return $"Write a short engaging story for a grade {grade} student about the topic \"{request.Topic}\" in the subject {request.Subject}. " +
+               $"The story must be between {minSentences} and {maxSentences} sentences long. " +
+               styleGuide + " " +
+               "The story should be age-appropriate, topic-relevant, and end with a moment of humor or surprise. " +
+               $"Language: {request.Language ?? "en"}. " +
+               "Output only the story text — no title, no headings, no markdown, no quotes.";
     }
 
     private static string BuildPartialRegenerationPrompt(GenerateAiLessonRequest request, GeneratedLessonDraft draft, int[] questionIndices, string feedback)
@@ -289,12 +354,17 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
             ? $"\nStory: {draft.Story}"
             : "\nStory: (none)";
 
-        var storyCheckInstruction = draft.Story is not null
-            ? "8. STORY ANSWER CHECK (CRITICAL): For each question, count how many of its answer options " +
-              "are NOT mentioned or derivable from the story. If MORE THAN 2 answers of a single question " +
-              "cannot be found in or inferred from the story, that question must be listed in 'questions_to_regenerate' " +
-              "(use the 1-based question_number). This check applies to every question individually.\n"
-            : "";
+        var isMath = string.Equals(request.Subject, "Math", StringComparison.OrdinalIgnoreCase);
+        var storyCheckInstruction = draft.Story is not null && !isMath
+            ? "8. STORY ANSWER CHECK (CRITICAL): For each question, check whether the CORRECT answer " +
+              "(the one marked isCorrect=true) is present in or directly inferable from the story. " +
+              "Wrong/distractor answers do NOT need to appear in the story — they are intentional distractors. " +
+              "If the correct answer of a question CANNOT be found in or inferred from the story, " +
+              "that question must be listed in 'questions_to_regenerate' (use the 1-based question_number).\n"
+            : draft.Story is not null
+              ? "8. This is a Math subject. Do NOT perform story-answer checking. Math questions require calculation " +
+                "and distractor answers are intentionally wrong numbers. Leave 'questions_to_regenerate' empty for this subject.\n"
+              : "";
 
         var jsonShape = draft.Story is not null
             ? """{"accepted": true/false, "score": <0-100>, "issues": ["issue1"], "feedback": "<instructions or empty>", "questions_to_regenerate": [1, 3]}"""
@@ -397,7 +467,7 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
         }
     }
 
-    private static string BuildPrompt(GenerateAiLessonRequest request, string? validatorFeedback = null)
+    private static string BuildQuestionsPrompt(GenerateAiLessonRequest request, string? story = null, string? validatorFeedback = null)
     {
         var types = request.QuestionTypes is { Count: > 0 }
             ? string.Join(", ", request.QuestionTypes).ToLowerInvariant()
@@ -417,19 +487,24 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
             answerInstruction = "Every question must have exactly 2-4 answer options, with exactly 1 marked isCorrect=true and the remaining 3 marked isCorrect=false.";
         }
 
-        var storyInstruction = request.IncludeStory == true
-            ? $"Also include a 'story' field: a short engaging narrative paragraph (number of sentences {request.Grade + 3} to  {request.Grade + 5}) that sets the scene for the lesson topic. Take into consideration the grade = {request.Grade} of the child, make a story difficulty according to grade. Add a twist of humor or surprise to make it engaging. All questions must be strictly related to facts in this story. An answer to each question MUST be present in or inferable from the story."
+        var storyInstruction = !string.IsNullOrWhiteSpace(story)
+            ? $"Base ALL questions strictly on the following story. The CORRECT answer to each question must be present in or directly inferable from the story. Wrong/distractor answers should be plausible but need not appear in the story: \"{story}\""
+            : "";
+
+        var mathInstruction = string.Equals(request.Subject, "Math", StringComparison.OrdinalIgnoreCase)
+            ? "IMPORTANT: Use mathematical symbols (+, -, ×, ÷, =, ²) in all questions and answers. Do not spell out operations as words (no 'add', 'subtract', 'multiply', 'divide')."
             : "";
 
         var feedbackSection = !string.IsNullOrWhiteSpace(validatorFeedback)
             ? $" IMPORTANT — a previous attempt was rejected by the quality validator. You MUST address these issues: {validatorFeedback}"
             : "";
 
-        return $"Generate a strict JSON object with fields: title, subject, grade, topic, difficulty, questions{(request.IncludeStory == true ? ", story" : "")}. " +
+        return $"Generate a strict JSON object with fields: title, subject, grade, topic, difficulty, questions. " +
                "Each question must include questionText, explanation, order, answers. " +
                "Each answer must include answerText, isCorrect (boolean), order. " +
                $"{answerInstruction} " +
-               $"{storyInstruction}" +
+               $"{storyInstruction} " +
+               $"{mathInstruction} " +
                "Output valid JSON only — no markdown, no code fences, no comments. " +
                $"Subject: {request.Subject}; Grade: {request.Grade}; Topic: {request.Topic}; Difficulty: {request.Difficulty ?? "Medium"}; " +
                $"QuestionCount: {request.QuestionCount}; Language: {request.Language ?? "en"}." +
@@ -643,6 +718,93 @@ public sealed class OpenAiProvider(IConfiguration configuration, HttpClient http
     }
 }
 
+public sealed class OpenAiImageProvider(IConfiguration configuration, HttpClient httpClient, ILogger<OpenAiImageProvider> logger) : IImageProvider
+{
+    public async Task<string?> GenerateImageAsync(string topic, int grade, string storySummary, CancellationToken cancellationToken = default)
+    {
+        var apiKey = configuration["OpenAI:ApiKey"];
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            logger.LogInformation("Image generation skipped: OpenAI API key not configured.");
+            return null;
+        }
+
+        var imageModel = configuration["OpenAI:ImageModel"] ?? "gpt-image-1-mini";
+
+        try
+        {
+            var prompt = $"Child-friendly colorful illustration for a grade {grade} lesson about {topic}. {storySummary} Flat cartoon style, bright colors, educational.";
+            var payload = JsonSerializer.Serialize(new
+            {
+                model = imageModel,
+                prompt,
+                n = 1,
+                size = "1024x1024"
+            });
+
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/images/generations");
+            requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+            requestMessage.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+            using var response = await httpClient.SendAsync(requestMessage, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                logger.LogWarning("Image generation failed: HTTP {StatusCode}. Body: {Body}", (int)response.StatusCode, errorBody);
+                return null;
+            }
+
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("data", out var dataEl) && dataEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in dataEl.EnumerateArray())
+                {
+                    // Prefer a direct URL if the model returns one
+                    if (item.TryGetProperty("url", out var urlEl) && urlEl.ValueKind == JsonValueKind.String)
+                    {
+                        logger.LogInformation("Image generated (URL) for topic: {Topic}", topic);
+                        return urlEl.GetString();
+                    }
+
+                    // gpt-image-1 / gpt-image-2 return base64; store as a data URI the browser can render directly
+                    if (item.TryGetProperty("b64_json", out var b64El) && b64El.ValueKind == JsonValueKind.String)
+                    {
+                        logger.LogInformation("Image generated (b64) for topic: {Topic}", topic);
+                        return $"data:image/png;base64,{b64El.GetString()}";
+                    }
+                }
+            }
+
+            logger.LogWarning("Image response had no url or b64_json. Body length: {Len}", body.Length);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Image generation threw an exception for topic: {Topic}", topic);
+            return null;
+        }
+    }
+}
+
+public sealed class AiStoryService(IAIProvider aiProvider, IImageProvider imageProvider) : IAiStoryService
+{
+    public async Task<GenerateStoryResponse> GenerateStoryAsync(GenerateStoryRequest request, CancellationToken cancellationToken = default)
+    {
+        var story = await aiProvider.GenerateStoryAsync(request, cancellationToken);
+        if (string.IsNullOrWhiteSpace(story))
+        {
+            story = $"Once upon a time, a curious student explored the topic of {request.Topic} in {request.Subject}.";
+        }
+
+        var firstSentence = story.Split('.').FirstOrDefault(s => s.Trim().Length > 0)?.Trim() ?? story;
+        var imageUrl = await imageProvider.GenerateImageAsync(request.Topic, request.Grade, firstSentence, cancellationToken);
+
+        return new GenerateStoryResponse(story, imageUrl);
+    }
+}
+
 public sealed class AiLessonGenerationService(AppDbContext db, IAIProvider aiProvider, ILogger<AiLessonGenerationService> logger) : IAiLessonGenerationService
 {
     public async Task<ServiceResult<GenerateAiLessonResponse>> GenerateAndPersistAsync(Guid parentId, GenerateAiLessonRequest request, CancellationToken cancellationToken = default)
@@ -687,7 +849,7 @@ public sealed class AiLessonGenerationService(AppDbContext db, IAIProvider aiPro
                         var badList = string.Join(", ", validation.QuestionsToRegenerate);
                         var storyRef = draft.Story is not null ? $" The story is: \"{draft.Story}\"." : "";
                         var extra = !string.IsNullOrWhiteSpace(validation.Feedback) ? $" Additionally: {validation.Feedback}" : "";
-                        var feedback = $"Questions {badList} have answers not present in or inferable from the story.{storyRef} Regenerate ONLY questions {badList} so every answer option is derivable from the story.{extra}";
+                        var feedback = $"Questions {badList} have correct answers not inferable from the story.{storyRef} Regenerate ONLY questions {badList} so that the CORRECT answer to each question is clearly derivable from the story. Wrong/distractor answers may be plausible numbers or options not in the story.{extra}";
 
                         var patched = await aiProvider.RegenerateQuestionsAsync(request, draft, validation.QuestionsToRegenerate, feedback, cancellationToken);
                         if (patched is { Count: > 0 })
@@ -728,7 +890,10 @@ public sealed class AiLessonGenerationService(AppDbContext db, IAIProvider aiPro
             Grade = request.Grade,
             Topic = request.Topic.Trim(),
             Difficulty = string.IsNullOrWhiteSpace(request.Difficulty) ? "Medium" : request.Difficulty.Trim(),
-            Story = string.IsNullOrWhiteSpace(draft.Story) ? null : draft.Story,
+            Story = !string.IsNullOrWhiteSpace(draft.Story) ? draft.Story
+                    : !string.IsNullOrWhiteSpace(request.PreGeneratedStory) ? request.PreGeneratedStory
+                    : null,
+            StoryImageUrl = string.IsNullOrWhiteSpace(request.PreGeneratedStoryImageUrl) ? null : request.PreGeneratedStoryImageUrl,
             CreatedBy = parentId,
             CreatedAt = DateTime.UtcNow
         };
@@ -780,7 +945,8 @@ public sealed class AiLessonGenerationService(AppDbContext db, IAIProvider aiPro
                             .Select(a => new AnswerOptionResponse(a.Id, a.AnswerText, a.IsCorrect, a.Order))
                             .ToList()))
                     .ToList(),
-                lesson.Story),
+                lesson.Story,
+                lesson.StoryImageUrl),
             draft.ProviderMeta);
 
         return ServiceResult<GenerateAiLessonResponse>.Success(response);

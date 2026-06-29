@@ -535,6 +535,7 @@ export default function ParentLessonsPage() {
           title={viewingLesson.title}
           subtitle={`${viewingLesson.subject} · Grade ${viewingLesson.grade} · ${viewingLesson.topic} · ${viewingLesson.difficulty} · ${viewingLesson.questions.length} questions`}
           story={viewingLesson.story}
+          storyImageUrl={viewingLesson.storyImageUrl}
           questions={viewingLesson.questions}
           onClose={closeViewModal}
         />

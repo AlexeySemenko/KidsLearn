@@ -32,6 +32,7 @@ export default function LessonViewModal({
   title,
   subtitle,
   story,
+  storyImageUrl,
   questions,
   onClose,
   renderQuestion,
@@ -67,7 +68,12 @@ export default function LessonViewModal({
         {story ? (
           <div className="lesson-story-block">
             <div className="lesson-story-label">📖 Story</div>
-            <p className="lesson-story-text">{story}</p>
+            <div className="story-section">
+              {storyImageUrl ? (
+                <img className="story-image" src={storyImageUrl} alt="Story illustration" />
+              ) : null}
+              <p className="story-text">{story}</p>
+            </div>
           </div>
         ) : null}
 

@@ -63,7 +63,8 @@ if (string.IsNullOrWhiteSpace(connectionString))
 
 connectionString = PostgresConnectionStringHelper.Normalize(connectionString);
 
-builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(connectionString));
+builder.Services.AddDbContext<AppDbContext>(opt =>
+    opt.UseNpgsql(connectionString, o => o.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 
 builder.Services.AddScoped<IPasswordHasherService, PasswordHasherService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
@@ -72,7 +73,9 @@ builder.Services.AddScoped<IAssignmentSolvingService, AssignmentSolvingService>(
 builder.Services.AddScoped<IAssignmentReadService, AssignmentReadService>();
 builder.Services.AddScoped<IAiLessonGenerationService, AiLessonGenerationService>();
 builder.Services.AddScoped<IAiLessonEditingService, AiLessonEditingService>();
+builder.Services.AddScoped<IAiStoryService, AiStoryService>();
 builder.Services.AddHttpClient<IAIProvider, OpenAiProvider>();
+builder.Services.AddHttpClient<IImageProvider, OpenAiImageProvider>();
 
 builder.Services.AddRateLimiter(options =>
 {

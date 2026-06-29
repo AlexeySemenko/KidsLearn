@@ -69,7 +69,8 @@ public class AssignmentSolvingService(AppDbContext db, IEmailService emailServic
                         .Select(a => new AssignmentQuestionAnswerResponse(a.Id, a.AnswerText, a.Order))
                         .ToList()))
                 .ToList(),
-            assignment.Lesson.Story);
+            assignment.Lesson.Story,
+            assignment.Lesson.StoryImageUrl);
 
         return ServiceResult<AssignmentForSolvingResponse>.Success(response);
     }

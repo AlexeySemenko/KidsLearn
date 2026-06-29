@@ -51,6 +51,7 @@ public sealed class DuplicateParentLessonCommandHandler : IRequestHandler<Duplic
             Topic = sourceLesson.Topic,
             Difficulty = sourceLesson.Difficulty,
             Story = sourceLesson.Story,
+            StoryImageUrl = sourceLesson.StoryImageUrl,
             CreatedBy = command.ParentId,
             CreatedAt = DateTime.UtcNow
         };
@@ -99,7 +100,9 @@ public sealed class DuplicateParentLessonCommandHandler : IRequestHandler<Duplic
                         .OrderBy(a => a.Order)
                         .Select(a => new AnswerOptionResponse(a.Id, a.AnswerText, a.IsCorrect, a.Order))
                         .ToList()))
-                .ToList());
+                .ToList(),
+            duplicatedLesson.Story,
+            duplicatedLesson.StoryImageUrl);
 
         return DuplicateParentLessonResult.Created(response);
     }

@@ -166,6 +166,8 @@ public sealed class AiLessonEditingService(AppDbContext db) : IAiLessonEditingSe
                         .OrderBy(a => a.Order)
                         .Select(a => new AnswerOptionResponse(a.Id, a.AnswerText, a.IsCorrect, a.Order))
                         .ToList()))
-                .ToList());
+                .ToList(),
+            lesson.Story,
+            lesson.StoryImageUrl);
     }
 }

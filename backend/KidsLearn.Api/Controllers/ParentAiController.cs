@@ -45,6 +45,24 @@ public static class ParentAiController
             };
         });
 
+        parentApi.MapPost("/ai/stories/generate", async (ClaimsPrincipal user, GenerateStoryRequest request, IAiStoryService storyService, CancellationToken cancellationToken) =>
+        {
+            if (!ApiEndpointHelpers.TryResolveUserId(user, out _))
+            {
+                return Results.Unauthorized();
+            }
+
+            try
+            {
+                var result = await storyService.GenerateStoryAsync(request, cancellationToken);
+                return Results.Ok(result);
+            }
+            catch
+            {
+                return Results.Problem("Story generation failed.");
+            }
+        });
+
         parentApi.MapGet("/ai/lessons/{lessonId:guid}/revisions", async (ISender sender, ClaimsPrincipal user, Guid lessonId, CancellationToken cancellationToken) =>
         {
             if (!ApiEndpointHelpers.TryResolveUserId(user, out var parentId))

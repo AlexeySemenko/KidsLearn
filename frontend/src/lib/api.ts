@@ -122,6 +122,7 @@ export interface LessonDetail {
   createdAt: string
   questions: LessonQuestion[]
   story?: string
+  storyImageUrl?: string | null
 }
 
 export interface AssignmentResponse {
@@ -163,6 +164,8 @@ export interface AiLessonDraft {
   difficulty: string
   createdAt: string
   questions: AiQuestion[]
+  story?: string | null
+  storyImageUrl?: string | null
 }
 
 export interface AiProviderMeta {
@@ -170,6 +173,19 @@ export interface AiProviderMeta {
   model: string
   fallbackUsed: boolean
   note?: string | null
+}
+
+export interface GenerateStoryRequest {
+  subject: string
+  grade: number
+  topic: string
+  difficulty?: string | null
+  language?: string | null
+}
+
+export interface GenerateStoryResponse {
+  story: string
+  storyImageUrl?: string | null
 }
 
 export interface GenerateAiLessonRequest {
@@ -181,6 +197,8 @@ export interface GenerateAiLessonRequest {
   language?: string | null
   questionTypes?: string[] | null
   includeStory?: boolean | null
+  preGeneratedStory?: string | null
+  preGeneratedStoryImageUrl?: string | null
 }
 
 export interface GenerateAiLessonResponse {
@@ -461,6 +479,13 @@ export async function getAssignments(accessToken: string): Promise<AssignmentRes
 
 export async function createAssignment(accessToken: string, payload: RequestPayload): Promise<AssignmentResponse> {
   return request<AssignmentResponse>('/api/v1/assignments', withAuth(accessToken, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }))
+}
+
+export async function generateStory(accessToken: string, payload: GenerateStoryRequest): Promise<GenerateStoryResponse> {
+  return request<GenerateStoryResponse>('/api/v1/ai/stories/generate', withAuth(accessToken, {
     method: 'POST',
     body: JSON.stringify(payload),
   }))
