@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   completeChildAssignment,
   getChildAssignmentForSolving,
+  getChildAssignmentStoryImage,
   submitChildAssignmentAnswers,
 } from '../lib/api'
 import { scoreEmoji } from './ChildStatsPanel'
@@ -29,6 +30,7 @@ export default function SolveMissionModal({ assignmentId, accessToken, onClose, 
   const navigate = useNavigate()
 
   const [assignment, setAssignment]         = useState(null)
+  const [storyImage, setStoryImage]         = useState(null)
   const [isLoading, setIsLoading]           = useState(false)
   const [selectedAnswers, setSelectedAnswers]   = useState({})
   const [instantCheckMap, setInstantCheckMap]   = useState({})
@@ -44,6 +46,7 @@ export default function SolveMissionModal({ assignmentId, accessToken, onClose, 
     let mounted = true
     setIsLoading(true)
     setAssignment(null)
+    setStoryImage(null)
     setSelectedAnswers({})
     setInstantCheckMap({})
     setPartialScore(null)
@@ -52,7 +55,16 @@ export default function SolveMissionModal({ assignmentId, accessToken, onClose, 
     setError('')
 
     getChildAssignmentForSolving(accessToken, assignmentId)
-      .then((data) => { if (mounted) { setAssignment(data); setIsLoading(false) } })
+      .then((data) => {
+        if (!mounted) return
+        setAssignment(data)
+        setIsLoading(false)
+        if (data.hasLessonStoryImage) {
+          getChildAssignmentStoryImage(accessToken, assignmentId)
+            .then((img) => { if (mounted) setStoryImage(img?.storyImageUrl ?? null) })
+            .catch(() => {})
+        }
+      })
       .catch((err) => { if (mounted) { setError(err.message); setIsLoading(false) } })
 
     return () => { mounted = false }
@@ -141,6 +153,7 @@ export default function SolveMissionModal({ assignmentId, accessToken, onClose, 
       title="Mission time!"
       subtitle={`${assignment.lessonTitle} · ${assignment.questions.length} questions`}
       story={assignment.lessonStory}
+      storyImageUrl={storyImage}
       questions={assignment.questions}
       onClose={onClose}
       renderQuestion={(question, index) => (

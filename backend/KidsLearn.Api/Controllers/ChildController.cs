@@ -40,6 +40,20 @@ public static class ChildController
             };
         });
 
+        childApi.MapGet("/assignments/{assignmentId:guid}/story-image", async (AppDbContext db, ClaimsPrincipal user, Guid assignmentId) =>
+        {
+            var childId = await ApiEndpointHelpers.ResolveChildIdAsync(db, user);
+            if (!childId.HasValue) return Results.Unauthorized();
+
+            var imageUrl = await db.Assignments
+                .AsNoTracking()
+                .Where(a => a.Id == assignmentId && a.ChildId == childId.Value)
+                .Select(a => a.Lesson.StoryImageUrl)
+                .FirstOrDefaultAsync();
+
+            return imageUrl is null ? Results.NotFound() : Results.Ok(new { storyImageUrl = imageUrl });
+        });
+
         childApi.MapPost("/assignments/{assignmentId:guid}/answers", async (AppDbContext db, ISender sender, ClaimsPrincipal user, Guid assignmentId, SubmitAssignmentAnswersRequest request) =>
         {
             var childId = await ApiEndpointHelpers.ResolveChildIdAsync(db, user);

@@ -529,6 +529,10 @@ export async function getChildAssignmentForSolving(accessToken: string, assignme
   return request(`/api/v1/child/assignments/${assignmentId}/for-solving`, withAuth(accessToken))
 }
 
+export async function getChildAssignmentStoryImage(accessToken: string, assignmentId: string): Promise<{ storyImageUrl: string } | null> {
+  return request(`/api/v1/child/assignments/${assignmentId}/story-image`, withAuth(accessToken))
+}
+
 export async function submitChildAssignmentAnswers(accessToken: string, assignmentId: string, payload: RequestPayload) {
   return request(`/api/v1/child/assignments/${assignmentId}/answers`, withAuth(accessToken, {
     method: 'POST',
