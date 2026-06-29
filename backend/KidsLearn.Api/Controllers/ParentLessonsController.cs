@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 public static class ParentLessonsController
 {
