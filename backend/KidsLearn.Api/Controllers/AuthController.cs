@@ -439,6 +439,9 @@ public static class AuthController
                 returnPath = "/child";
             }
 
+            var registrationTokenRaw = httpContext.Request.Query["registrationToken"].ToString();
+            var registrationToken = Guid.TryParse(registrationTokenRaw, out _) ? registrationTokenRaw : null;
+
             var jwtSigningKey = configuration["Jwt:Key"];
             if (string.IsNullOrWhiteSpace(jwtSigningKey) && string.Equals(configuration["ASPNETCORE_ENVIRONMENT"], "Development", StringComparison.OrdinalIgnoreCase))
             {
@@ -450,7 +453,7 @@ public static class AuthController
                 return Results.Problem("Jwt:Key is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
             }
 
-            var state = CreateSignedStateToken(new GoogleAuthStateContext(frontendCallbackUrl, returnPath), jwtSigningKey);
+            var state = CreateSignedStateToken(new GoogleAuthStateContext(frontendCallbackUrl, returnPath, RegistrationToken: registrationToken), jwtSigningKey);
 
             var authorizationUrl = QueryHelpers.AddQueryString("https://accounts.google.com/o/oauth2/v2/auth", new Dictionary<string, string?>
             {
@@ -541,6 +544,59 @@ public static class AuthController
             }
 
             var normalizedEmail = profile.Email.Trim().ToLowerInvariant();
+
+            // Registration flow: token in state means this is a new child completing registration via Google SSO
+            if (!string.IsNullOrWhiteSpace(authState.RegistrationToken))
+            {
+                var pendingChild = await db.Children
+                    .Include(x => x.User)
+                    .FirstOrDefaultAsync(x => x.RegistrationToken == authState.RegistrationToken, cancellationToken);
+
+                if (pendingChild is null)
+                    return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "registration_token_invalid", null, returnPath));
+
+                if (pendingChild.UserId is not null)
+                    return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "child_already_registered", null, returnPath));
+
+                if (!string.Equals(pendingChild.EnrollmentEmail, normalizedEmail, StringComparison.OrdinalIgnoreCase))
+                    return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, "google_email_mismatch", null, returnPath));
+
+                var newChildUser = new AppUser
+                {
+                    Email = normalizedEmail,
+                    DisplayName = string.IsNullOrWhiteSpace(profile.Name) ? null : profile.Name,
+                    AvatarUrl = string.IsNullOrWhiteSpace(profile.Picture) ? null : profile.Picture,
+                    PasswordHash = string.Empty,
+                    Role = UserRole.Child,
+                    CreatedAt = DateTime.UtcNow,
+                    LastAccessAt = DateTime.UtcNow,
+                    ExternalProvider = GoogleProviderName,
+                    ExternalSubject = profile.Sub,
+                    EmailVerified = true,
+                };
+                db.Users.Add(newChildUser);
+                pendingChild.UserId = newChildUser.Id;
+                pendingChild.User = newChildUser;
+
+                var regRefreshDays = int.TryParse(configuration["Jwt:RefreshTokenExpirationDays"], out var rrd) ? rrd : 14;
+                var regRefreshToken = tokenService.CreateRefreshToken();
+                db.RefreshTokens.Add(new RefreshToken
+                {
+                    UserId = newChildUser.Id,
+                    Token = regRefreshToken,
+                    CreatedAt = DateTime.UtcNow,
+                    ExpiresAt = DateTime.UtcNow.AddDays(regRefreshDays),
+                });
+
+                await db.SaveChangesAsync(cancellationToken);
+
+                var regAccessToken = tokenService.CreateAccessToken(newChildUser);
+                var regExpiresIn = int.TryParse(configuration["Jwt:AccessTokenExpirationMinutes"], out var ram) ? ram * 60 : 1800;
+                var regAuthResponse = new AuthTokenResponse(regAccessToken, regRefreshToken, regExpiresIn,
+                    new AuthUserResponse(newChildUser.Id, newChildUser.Email, newChildUser.Role.ToString(), pendingChild.Name, newChildUser.AvatarUrl));
+                var regAuthCode = CreateSignedAuthCode(regAuthResponse, jwtSigningKey);
+                return Results.Redirect(BuildFrontendCallbackUrl(frontendCallbackUrl, null, regAuthCode, returnPath));
+            }
 
             // Check if this email is a parent's email - reject child login attempt
             var parentUser = await db.Users.AsNoTracking()
@@ -959,7 +1015,7 @@ public static class AuthController
         return await JsonSerializer.DeserializeAsync<GoogleUserProfile>(stream, cancellationToken: cancellationToken);
     }
 
-    private sealed record GoogleAuthStateContext(string FrontendCallbackUrl, string ReturnPath, bool IsUnified = false);
+    private sealed record GoogleAuthStateContext(string FrontendCallbackUrl, string ReturnPath, bool IsUnified = false, string? RegistrationToken = null);
 
     private sealed record GoogleAuthStatePayload(DateTime IssuedAtUtc, GoogleAuthStateContext Context);
 

@@ -11,6 +11,9 @@ const errorMessages = {
   google_profile_invalid: 'Google account profile is missing required data.',
   google_email_not_verified: 'Google account email must be verified.',
   child_not_registered: 'You are not registered in KidsLearn. Ask your parent to add you.',
+  registration_token_invalid: 'This registration link is invalid or has expired. Ask your parent to resend the invitation.',
+  child_already_registered: 'This account is already set up. Please sign in.',
+  google_email_mismatch: 'The Google account email does not match the email your parent enrolled. Use the correct Google account.',
 }
 
 function normalizeReturnPath(input) {

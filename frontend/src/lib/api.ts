@@ -303,7 +303,7 @@ export async function registerParent(data: ParentRegisterRequest): Promise<void>
 }
 
 export interface ChildRegisterRequest {
-  email: string
+  token: string
   password: string
 }
 
@@ -352,6 +352,11 @@ export function getChildGoogleStartUrl(returnPath = '/child'): string {
     : '/child'
 
   const searchParams = new URLSearchParams({ returnPath: normalizedPath })
+  return `${API_BASE}/api/v1/auth/child/google/start?${searchParams.toString()}`
+}
+
+export function getChildRegisterGoogleStartUrl(registrationToken: string): string {
+  const searchParams = new URLSearchParams({ registrationToken })
   return `${API_BASE}/api/v1/auth/child/google/start?${searchParams.toString()}`
 }
 

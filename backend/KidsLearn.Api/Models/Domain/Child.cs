@@ -6,6 +6,7 @@ public class Child
     public string Name { get; set; } = string.Empty;
     public int Grade { get; set; }
     public string? EnrollmentEmail { get; set; }
+    public string? RegistrationToken { get; set; }
 
     public AppUser Parent { get; set; } = null!;
     public AppUser? User { get; set; }

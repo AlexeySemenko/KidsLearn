@@ -104,7 +104,7 @@ namespace KidsLearn.Api.EFMigration
                         new
                         {
                             Id = new Guid("00000000-0000-0000-0000-000000000001"),
-                            CreatedAt = new DateTime(2026, 6, 29, 12, 15, 56, 862, DateTimeKind.Utc).AddTicks(2929),
+                            CreatedAt = new DateTime(2026, 6, 30, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "parent@example.com",
                             EmailVerified = false,
                             PasswordHash = "",
@@ -230,12 +230,20 @@ namespace KidsLearn.Api.EFMigration
                     b.Property<Guid>("ParentId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("RegistrationToken")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)");
+
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ParentId");
+
+                    b.HasIndex("RegistrationToken")
+                        .IsUnique()
+                        .HasFilter("\"RegistrationToken\" IS NOT NULL");
 
                     b.HasIndex("UserId")
                         .IsUnique();

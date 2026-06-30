@@ -145,8 +145,9 @@ public class AuthCommandHandlersUnitTests
     public async Task RegisterChildCommand_CreatesUserAndLinksChild_WhenEnrolled()
     {
         await using var db = CreateDbContext();
+        var token = Guid.NewGuid().ToString();
         var parent = new AppUser { Email = "parent@example.com", PasswordHash = "hash", Role = UserRole.Parent, CreatedAt = DateTime.UtcNow };
-        var child = new Child { ParentId = parent.Id, Parent = parent, Name = "Mia", Grade = 4, EnrollmentEmail = "mia@example.com" };
+        var child = new Child { ParentId = parent.Id, Parent = parent, Name = "Mia", Grade = 4, EnrollmentEmail = "mia@example.com", RegistrationToken = token };
         db.Users.Add(parent);
         db.Children.Add(child);
         await db.SaveChangesAsync();
@@ -154,7 +155,7 @@ public class AuthCommandHandlersUnitTests
         var handler = new RegisterChildCommandHandler(db, new PasswordHasherService(), new FakeJwtTokenService(), CreateAuthConfiguration());
 
         var result = await handler.Handle(
-            new RegisterChildCommand(new RegisterChildRequest("mia@example.com", "Password1!")),
+            new RegisterChildCommand(new RegisterChildRequest(token, "Password1!")),
             CancellationToken.None);
 
         Assert.Equal(StatusCodes.Status201Created, result.StatusCode);
@@ -169,26 +170,27 @@ public class AuthCommandHandlersUnitTests
     }
 
     [Fact]
-    public async Task RegisterChildCommand_ReturnsBadRequest_WhenNotEnrolled()
+    public async Task RegisterChildCommand_ReturnsBadRequest_WhenTokenInvalid()
     {
         await using var db = CreateDbContext();
         var handler = new RegisterChildCommandHandler(db, new PasswordHasherService(), new FakeJwtTokenService(), CreateAuthConfiguration());
 
         var result = await handler.Handle(
-            new RegisterChildCommand(new RegisterChildRequest("unknown@example.com", "Password1!")),
+            new RegisterChildCommand(new RegisterChildRequest(Guid.NewGuid().ToString(), "Password1!")),
             CancellationToken.None);
 
         Assert.Equal(StatusCodes.Status400BadRequest, result.StatusCode);
-        Assert.Contains("parent", result.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("invalid", result.Error, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public async Task RegisterChildCommand_ReturnsConflict_WhenAlreadyRegistered()
     {
         await using var db = CreateDbContext();
+        var token = Guid.NewGuid().ToString();
         var parent = new AppUser { Email = "parent@example.com", PasswordHash = "hash", Role = UserRole.Parent, CreatedAt = DateTime.UtcNow };
         var childUser = new AppUser { Email = "mia@example.com", PasswordHash = "existing-hash", Role = UserRole.Child, CreatedAt = DateTime.UtcNow };
-        var child = new Child { ParentId = parent.Id, Parent = parent, User = childUser, UserId = childUser.Id, Name = "Mia", Grade = 4, EnrollmentEmail = "mia@example.com" };
+        var child = new Child { ParentId = parent.Id, Parent = parent, User = childUser, UserId = childUser.Id, Name = "Mia", Grade = 4, EnrollmentEmail = "mia@example.com", RegistrationToken = token };
         db.Users.AddRange(parent, childUser);
         db.Children.Add(child);
         await db.SaveChangesAsync();
@@ -196,7 +198,7 @@ public class AuthCommandHandlersUnitTests
         var handler = new RegisterChildCommandHandler(db, new PasswordHasherService(), new FakeJwtTokenService(), CreateAuthConfiguration());
 
         var result = await handler.Handle(
-            new RegisterChildCommand(new RegisterChildRequest("mia@example.com", "Password1!")),
+            new RegisterChildCommand(new RegisterChildRequest(token, "Password1!")),
             CancellationToken.None);
 
         Assert.Equal(StatusCodes.Status409Conflict, result.StatusCode);
@@ -207,8 +209,9 @@ public class AuthCommandHandlersUnitTests
     public async Task RegisterChildCommand_ReturnsBadRequest_WhenPasswordTooShort()
     {
         await using var db = CreateDbContext();
+        var token = Guid.NewGuid().ToString();
         var parent = new AppUser { Email = "parent@example.com", PasswordHash = "hash", Role = UserRole.Parent, CreatedAt = DateTime.UtcNow };
-        var child = new Child { ParentId = parent.Id, Parent = parent, Name = "Mia", Grade = 4, EnrollmentEmail = "mia@example.com" };
+        var child = new Child { ParentId = parent.Id, Parent = parent, Name = "Mia", Grade = 4, EnrollmentEmail = "mia@example.com", RegistrationToken = token };
         db.Users.Add(parent);
         db.Children.Add(child);
         await db.SaveChangesAsync();
@@ -216,7 +219,7 @@ public class AuthCommandHandlersUnitTests
         var handler = new RegisterChildCommandHandler(db, new PasswordHasherService(), new FakeJwtTokenService(), CreateAuthConfiguration());
 
         var result = await handler.Handle(
-            new RegisterChildCommand(new RegisterChildRequest("mia@example.com", "short")),
+            new RegisterChildCommand(new RegisterChildRequest(token, "short")),
             CancellationToken.None);
 
         Assert.Equal(StatusCodes.Status400BadRequest, result.StatusCode);

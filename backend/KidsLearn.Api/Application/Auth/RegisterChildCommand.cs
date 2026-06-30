@@ -38,24 +38,27 @@ public sealed class RegisterChildCommandHandler : IRequestHandler<RegisterChildC
     {
         var request = command.Request;
 
-        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
-            return RegisterChildResult.BadRequest("Email and password are required.");
+        if (string.IsNullOrWhiteSpace(request.Token) || string.IsNullOrWhiteSpace(request.Password))
+            return RegisterChildResult.BadRequest("Registration token and password are required.");
 
         if (request.Password.Length < 8)
             return RegisterChildResult.BadRequest("Password must be at least 8 characters.");
 
-        var email = request.Email.Trim().ToLowerInvariant();
-
-        // Find pending enrollment: a Child record with this email that has no linked user yet
+        // Find pending enrollment by the secure registration token
         var child = await _db.Children
             .Include(x => x.User)
-            .FirstOrDefaultAsync(x => x.EnrollmentEmail == email, cancellationToken);
+            .FirstOrDefaultAsync(x => x.RegistrationToken == request.Token, cancellationToken);
 
         if (child is null)
-            return RegisterChildResult.BadRequest("Your parent has to enroll you to the system first.");
+            return RegisterChildResult.BadRequest("This registration link is invalid or has already been used.");
 
         if (child.UserId is not null)
             return RegisterChildResult.Conflict("This account is already set up. Please sign in.");
+
+        if (string.IsNullOrWhiteSpace(child.EnrollmentEmail))
+            return RegisterChildResult.BadRequest("Enrollment record is missing an email address.");
+
+        var email = child.EnrollmentEmail;
 
         // Create the AppUser now
         var childUser = new AppUser

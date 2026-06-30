@@ -74,6 +74,7 @@ public sealed class CreateParentChildWithGmailCommandHandler : IRequestHandler<C
         if (existingUser is not null && existingUser.Role != UserRole.Child)
             return CreateParentChildWithGmailResult.BadRequest("This email is already used by a non-child account.");
 
+        var registrationToken = Guid.NewGuid().ToString();
         var child = new Child
         {
             ParentId = command.ParentId,
@@ -81,6 +82,7 @@ public sealed class CreateParentChildWithGmailCommandHandler : IRequestHandler<C
             Name = request.Name.Trim(),
             Grade = request.Grade,
             EnrollmentEmail = email,
+            RegistrationToken = registrationToken,
         };
 
         _db.Children.Add(child);
@@ -92,7 +94,7 @@ public sealed class CreateParentChildWithGmailCommandHandler : IRequestHandler<C
         var parentName = parentUser.DisplayName ?? parentUser.Email;
         var emailService = _emailService;
         var frontendBase = _configuration["FrontendBaseUrl"]?.TrimEnd('/') ?? "http://localhost:8080";
-        var registerUrl = $"{frontendBase}/register/child?email={Uri.EscapeDataString(email)}";
+        var registerUrl = $"{frontendBase}/register/child?token={Uri.EscapeDataString(registrationToken)}";
 
         _ = Task.Run(async () =>
         {
