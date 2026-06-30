@@ -152,7 +152,7 @@ public class AuthCommandHandlersUnitTests
         db.Children.Add(child);
         await db.SaveChangesAsync();
 
-        var handler = new RegisterChildCommandHandler(db, new PasswordHasherService(), new FakeJwtTokenService(), CreateAuthConfiguration());
+        var handler = new RegisterChildCommandHandler(db, new PasswordHasherService(), new FakeJwtTokenService(), CreateAuthConfiguration(), new NullEmailService());
 
         var result = await handler.Handle(
             new RegisterChildCommand(new RegisterChildRequest(token, "Password1!")),
@@ -173,7 +173,7 @@ public class AuthCommandHandlersUnitTests
     public async Task RegisterChildCommand_ReturnsBadRequest_WhenTokenInvalid()
     {
         await using var db = CreateDbContext();
-        var handler = new RegisterChildCommandHandler(db, new PasswordHasherService(), new FakeJwtTokenService(), CreateAuthConfiguration());
+        var handler = new RegisterChildCommandHandler(db, new PasswordHasherService(), new FakeJwtTokenService(), CreateAuthConfiguration(), new NullEmailService());
 
         var result = await handler.Handle(
             new RegisterChildCommand(new RegisterChildRequest(Guid.NewGuid().ToString(), "Password1!")),
@@ -195,7 +195,7 @@ public class AuthCommandHandlersUnitTests
         db.Children.Add(child);
         await db.SaveChangesAsync();
 
-        var handler = new RegisterChildCommandHandler(db, new PasswordHasherService(), new FakeJwtTokenService(), CreateAuthConfiguration());
+        var handler = new RegisterChildCommandHandler(db, new PasswordHasherService(), new FakeJwtTokenService(), CreateAuthConfiguration(), new NullEmailService());
 
         var result = await handler.Handle(
             new RegisterChildCommand(new RegisterChildRequest(token, "Password1!")),
@@ -216,7 +216,7 @@ public class AuthCommandHandlersUnitTests
         db.Children.Add(child);
         await db.SaveChangesAsync();
 
-        var handler = new RegisterChildCommandHandler(db, new PasswordHasherService(), new FakeJwtTokenService(), CreateAuthConfiguration());
+        var handler = new RegisterChildCommandHandler(db, new PasswordHasherService(), new FakeJwtTokenService(), CreateAuthConfiguration(), new NullEmailService());
 
         var result = await handler.Handle(
             new RegisterChildCommand(new RegisterChildRequest(token, "short")),
@@ -391,6 +391,7 @@ public class AuthCommandHandlersUnitTests
         public Task<bool> SendWelcomeToParentAsync(string toEmail, string? displayName) => Task.FromResult(true);
         public Task<bool> SendChildAddedToParentAsync(string toEmail, string? parentName, string childName, int grade) => Task.FromResult(true);
         public Task<bool> SendChildWelcomeAsync(string toEmail, string childName, string parentEmail, string registerUrl) => Task.FromResult(true);
+        public Task<bool> SendChildRegisteredToParentAsync(string toEmail, string parentName, string childName) => Task.FromResult(true);
     }
 
     private sealed class FakeJwtTokenService : IJwtTokenService

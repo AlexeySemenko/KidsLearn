@@ -11,6 +11,7 @@ public interface IEmailService
     Task<bool> SendWelcomeToParentAsync(string toEmail, string? displayName);
     Task<bool> SendChildAddedToParentAsync(string toEmail, string? parentName, string childName, int grade);
     Task<bool> SendChildWelcomeAsync(string toEmail, string childName, string parentEmail, string registerUrl);
+    Task<bool> SendChildRegisteredToParentAsync(string toEmail, string parentName, string childName);
 }
 
 public class EmailService(IConfiguration config, ILogger<EmailService> logger) : IEmailService
@@ -516,6 +517,57 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to send child welcome email to {Email}", toEmail);
+            return false;
+        }
+    }
+
+    public async Task<bool> SendChildRegisteredToParentAsync(string toEmail, string parentName, string childName)
+    {
+        var host = config["Email:SmtpHost"];
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            logger.LogInformation("Email not configured — child registered notification would be sent to {Email} for child {Child}", toEmail, childName);
+            return false;
+        }
+
+        var port = int.TryParse(config["Email:SmtpPort"], out var p) ? p : 587;
+        var username = config["Email:SmtpUsername"] ?? string.Empty;
+        var password = config["Email:SmtpPassword"] ?? string.Empty;
+        var fromAddress = config["Email:FromAddress"] ?? username;
+        var fromName = config["Email:FromName"] ?? "KidsLearnAI";
+
+        var body = $"""
+            <html><body style="font-family:sans-serif;color:#0f2745;max-width:520px;margin:0 auto;">
+              <h2 style="color:#0f2745;">{System.Net.WebUtility.HtmlEncode(childName)} has joined KidsLearnAI 🎉</h2>
+              <p>Hi {System.Net.WebUtility.HtmlEncode(parentName)},</p>
+              <p><strong>{System.Net.WebUtility.HtmlEncode(childName)}</strong> just completed their account setup and is ready to start learning!</p>
+              <p>You can now assign lessons and track their progress from your parent dashboard.</p>
+              <p style="color:#888;font-size:0.85rem;margin-top:2rem;">This is an automated notification from KidsLearnAI.</p>
+            </body></html>
+            """;
+
+        try
+        {
+            using var client = new SmtpClient(host, port)
+            {
+                Credentials = new NetworkCredential(username, password),
+                EnableSsl = true,
+            };
+            var message = new MailMessage
+            {
+                From = new MailAddress(fromAddress, fromName),
+                Subject = $"{childName} has joined KidsLearnAI 🎉",
+                Body = body,
+                IsBodyHtml = true,
+            };
+            message.To.Add(new MailAddress(toEmail, parentName));
+            await client.SendMailAsync(message);
+            logger.LogInformation("Child registered notification sent to parent {Email} for child {Child}", toEmail, childName);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to send child registered notification to {Email}", toEmail);
             return false;
         }
     }

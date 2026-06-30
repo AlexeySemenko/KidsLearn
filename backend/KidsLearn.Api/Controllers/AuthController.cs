@@ -477,6 +477,7 @@ public static class AuthController
             IHttpClientFactory httpClientFactory,
             AppDbContext db,
             IJwtTokenService tokenService,
+            IEmailService emailService,
             ILoggerFactory loggerFactory,
             CancellationToken cancellationToken) =>
         {
@@ -589,6 +590,29 @@ public static class AuthController
                 });
 
                 await db.SaveChangesAsync(cancellationToken);
+
+                var regChildName = pendingChild.Name;
+                var regParentId = pendingChild.ParentId;
+                var regLinkedParentIds = await db.ParentAccountLinks
+                    .AsNoTracking()
+                    .Where(x => x.ParentAId == regParentId || x.ParentBId == regParentId)
+                    .Select(x => x.ParentAId == regParentId ? x.ParentBId : x.ParentAId)
+                    .ToListAsync(cancellationToken);
+                var regAllParentIds = new HashSet<Guid>(regLinkedParentIds) { regParentId };
+                var regParentRecipients = await db.Users
+                    .AsNoTracking()
+                    .Where(u => regAllParentIds.Contains(u.Id))
+                    .Select(u => new { u.Email, Name = u.DisplayName ?? u.Email })
+                    .ToListAsync(cancellationToken);
+
+                _ = Task.Run(async () =>
+                {
+                    foreach (var p in regParentRecipients)
+                    {
+                        try { await emailService.SendChildRegisteredToParentAsync(p.Email, p.Name, regChildName); }
+                        catch { }
+                    }
+                });
 
                 var regAccessToken = tokenService.CreateAccessToken(newChildUser);
                 var regExpiresIn = int.TryParse(configuration["Jwt:AccessTokenExpirationMinutes"], out var ram) ? ram * 60 : 1800;

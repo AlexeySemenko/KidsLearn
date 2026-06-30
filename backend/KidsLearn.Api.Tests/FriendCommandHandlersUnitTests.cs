@@ -430,5 +430,6 @@ public class FriendCommandHandlersUnitTests
 
         public Task<bool> SendChildWelcomeAsync(string toEmail, string childName, string parentEmail, string registerUrl)
             => Task.FromResult(true);
+        public Task<bool> SendChildRegisteredToParentAsync(string toEmail, string parentName, string childName) => Task.FromResult(true);
     }
 }

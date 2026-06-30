@@ -21,17 +21,20 @@ public sealed class RegisterChildCommandHandler : IRequestHandler<RegisterChildC
     private readonly IPasswordHasherService _passwordHasher;
     private readonly IJwtTokenService _tokenService;
     private readonly IConfiguration _configuration;
+    private readonly IEmailService _emailService;
 
     public RegisterChildCommandHandler(
         AppDbContext db,
         IPasswordHasherService passwordHasher,
         IJwtTokenService tokenService,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IEmailService emailService)
     {
         _db = db;
         _passwordHasher = passwordHasher;
         _tokenService = tokenService;
         _configuration = configuration;
+        _emailService = emailService;
     }
 
     public async Task<RegisterChildResult> Handle(RegisterChildCommand command, CancellationToken cancellationToken)
@@ -93,6 +96,31 @@ public sealed class RegisterChildCommandHandler : IRequestHandler<RegisterChildC
 
         var expiresIn = int.TryParse(_configuration["Jwt:AccessTokenExpirationMinutes"], out var mins)
             ? mins * 60 : 1800;
+
+        // Pre-fetch before fire-and-forget so DbContext is not accessed after request ends
+        var childName = child.Name;
+        var parentId = child.ParentId;
+        var linkedParentIds = await _db.ParentAccountLinks
+            .AsNoTracking()
+            .Where(x => x.ParentAId == parentId || x.ParentBId == parentId)
+            .Select(x => x.ParentAId == parentId ? x.ParentBId : x.ParentAId)
+            .ToListAsync(cancellationToken);
+        var allParentIds = new HashSet<Guid>(linkedParentIds) { parentId };
+        var parentRecipients = await _db.Users
+            .AsNoTracking()
+            .Where(u => allParentIds.Contains(u.Id))
+            .Select(u => new { u.Email, Name = u.DisplayName ?? u.Email })
+            .ToListAsync(cancellationToken);
+        var emailService = _emailService;
+
+        _ = Task.Run(async () =>
+        {
+            foreach (var parent in parentRecipients)
+            {
+                try { await emailService.SendChildRegisteredToParentAsync(parent.Email, parent.Name, childName); }
+                catch { }
+            }
+        });
 
         return RegisterChildResult.Created(new AuthTokenResponse(
             accessToken, refreshToken, expiresIn,
