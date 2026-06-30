@@ -1,0 +1,7 @@
+User-agent: *
+Disallow: /parent
+Disallow: /admin
+Disallow: /child
+Disallow: /api/
+
+Sitemap: https://kidslearn.fly.dev/sitemap.xml

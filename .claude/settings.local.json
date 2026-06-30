@@ -5,7 +5,10 @@
       "Bash(git add:*)",
       "Bash(git push:*)",
       "Bash(docker exec:*)",
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(netstat -ano)",
+      "Bash(findstr \"LISTEN\")",
+      "Bash(findstr \":3\")"
     ]
   }
 }
