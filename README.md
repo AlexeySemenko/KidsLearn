@@ -40,7 +40,7 @@ Responsive full-stack learning platform for kids and parents. Runs locally with 
 ### Option A — Docker Compose (recommended)
 
 ```bash
-docker compose up --build
+docker compose  up -d --build backend
 ```
 
 - App (frontend + backend) → http://localhost:8080  
